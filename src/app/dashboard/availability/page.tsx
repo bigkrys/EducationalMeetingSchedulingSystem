@@ -1,0 +1,254 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, Button, message, Alert, Modal, Form, Select, TimePicker, Switch, Space, Row, Col, Typography } from 'antd'
+import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined } from '@ant-design/icons'
+import { format, parseISO } from 'date-fns'
+import { httpClient } from '@/lib/api/http-client'
+import { getCurrentUserId } from '@/lib/api/auth'
+import TeacherAvailabilityCalendar from '@/components/teacher/TeacherAvailabilityCalendar'
+
+const { Option } = Select
+const { Title, Text } = Typography
+
+interface TeacherAvailability {
+  id: string
+  teacherId: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  isRecurring: boolean
+  createdAt: string
+}
+
+interface Teacher {
+  id: string
+  name: string
+  email: string
+  subjects: string[]
+  maxDailyMeetings: number
+  bufferMinutes: number
+}
+
+export default function TeacherAvailability() {
+  const [teacher, setTeacher] = useState<Teacher | null>(null)
+  const [availabilities, setAvailabilities] = useState<TeacherAvailability[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string>('')
+  const [addModalVisible, setAddModalVisible] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [selectedAvailability, setSelectedAvailability] = useState<TeacherAvailability | null>(null)
+  const [form] = Form.useForm()
+  
+  const router = useRouter()
+
+  useEffect(() => {
+    fetchTeacherInfo()
+  }, [])
+
+  useEffect(() => {
+    if (teacher) {
+      fetchAvailabilities()
+    }
+  }, [teacher])
+
+  const fetchTeacherInfo = async () => {
+    try {
+      const userId = getCurrentUserId()
+      if (!userId) {
+        message.error('请先登录')
+        router.push('/')
+        return
+      }
+
+      const response = await fetch('/api/users/me', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      })
+
+      if (response.ok) {
+        const userData = await response.json()
+        if (userData.teacher && userData.teacher.id) {
+          setTeacher({
+            id: userData.teacher.id,
+            name: userData.name,
+            email: userData.email,
+            subjects: userData.teacher.subjects ? userData.teacher.subjects.split(', ') : [],
+            maxDailyMeetings: userData.teacher.maxDailyMeetings || 6,
+            bufferMinutes: userData.teacher.bufferMinutes || 15
+          })
+        } else {
+          setError('用户不是教师或教师信息不完整')
+        }
+      } else {
+        setError('获取教师信息失败')
+      }
+    } catch (err) {
+      setError('网络错误')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAvailabilities = async () => {
+    if (!teacher) return
+    
+    setLoading(true)
+    setError('') // 清除之前的错误
+    
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        setError('未登录')
+        return
+      }
+      
+      const response = await fetch(`/api/teachers/${teacher.id}/availability`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('API返回的可用性数据:', data)
+        console.log('数据类型:', typeof data)
+        console.log('是否为数组:', Array.isArray(data))
+        
+        // 处理不同的API返回格式
+        let availabilityArray = []
+        if (Array.isArray(data)) {
+          // 直接返回数组的情况
+          availabilityArray = data
+        } else if (data && data.availability && Array.isArray(data.availability)) {
+          // 返回 {availability: [...], ...} 格式的情况
+          availabilityArray = data.availability
+        } else {
+          console.warn('API返回的可用性数据格式不支持:', data)
+          availabilityArray = []
+        }
+        
+        setAvailabilities(availabilityArray)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.message || '获取可用性数据失败')
+      }
+    } catch (err) {
+      setError('获取可用性数据失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 安全的统计数据计算函数
+  const getSafeStats = () => {
+    if (!Array.isArray(availabilities)) {
+      return { count: 0, hours: '0.0', status: '建议设置可用时间' }
+    }
+    
+    const count = availabilities.length
+    let totalHours = 0
+    
+    if (count > 0) {
+      totalHours = availabilities.reduce((total, item) => {
+        try {
+          const start = new Date(`2000-01-01T${item.startTime}:00`)
+          const end = new Date(`2000-01-01T${item.endTime}:00`)
+          const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+          return total + hours
+        } catch (error) {
+          console.warn('时间计算错误:', error, item)
+          return total
+        }
+      }, 0)
+    }
+    
+    return {
+      count,
+      hours: totalHours.toFixed(1),
+      status: count > 0 ? '配置完成' : '建议设置可用时间'
+    }
+  }
+
+  if (!teacher) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white shadow rounded-lg p-6">
+            <div className="text-center py-4">
+              {loading ? '加载教师信息中...' : error || '加载教师信息中...'}
+            </div>
+            {error && (
+              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* 顶部导航栏 */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            {/* 返回按钮 */}
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              返回
+            </button>
+            
+            <h1 className="text-2xl font-bold text-gray-900">设置可用性</h1>
+          </div>
+        </div>
+
+        {teacher && (
+          <div className="space-y-6">
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">可用性管理</h2>
+              <p className="text-gray-600 mb-4">管理您的可用时间和阻塞时间</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {getSafeStats().count}
+                  </div>
+                  <div className="text-sm text-blue-600">总时间段</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {getSafeStats().hours}
+                  </div>
+                  <div className="text-sm text-green-600">总小时数</div>
+                </div>
+              </div>
+            </div>
+
+            <TeacherAvailabilityCalendar
+              teacherId={teacher.id}
+              teacherName={`${teacher.name.slice(0, 8)}`}
+              onRefresh={fetchAvailabilities}
+            />
+          </div>
+        )}
+
+        {/* 错误和成功消息 */}
+        {error && (
+          <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

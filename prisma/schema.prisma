@@ -1,0 +1,219 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         String   // student, teacher, admin
+  status       String   @default("pending") // pending, active, frozen
+  name         String
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  student      Student?
+  teacher      Teacher?
+  admin        Admin?
+  tokens       RefreshToken[]
+  audits       AuditLog[]
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique // 科目代码，如 MATH, PHYSICS
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // 关联关系
+  studentSubjects StudentSubject[]
+  teacherSubjects TeacherSubject[]
+  appointments    Appointment[]
+}
+
+model Student {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id])
+  serviceLevel        String   // level1, level2, premium
+  monthlyMeetingsUsed Int      @default(0)
+  lastQuotaReset      DateTime @default(now())
+  gradeLevel          Int?
+  appointments        Appointment[]
+  waitlistEntries     Waitlist[]
+  
+  // 多对多关系：学生-科目
+  studentSubjects StudentSubject[]
+}
+
+model Teacher {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  maxDailyMeetings Int      @default(6)
+  bufferMinutes    Int      @default(15)
+  timezone         String   @default("Asia/Shanghai")
+  availability     TeacherAvailability[]
+  blockedTimes     BlockedTime[]
+  appointments     Appointment[]
+  waitlistEntries  Waitlist[]
+  
+  // 多对多关系：教师-科目
+  teacherSubjects TeacherSubject[]
+}
+
+// 学生-科目关联表
+model StudentSubject {
+  id         String   @id @default(uuid())
+  studentId  String
+  subjectId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  subject    Subject  @relation(fields: [subjectId], references: [id])
+  createdAt  DateTime @default(now())
+  
+  @@unique([studentId, subjectId])
+  @@index([studentId])
+  @@index([subjectId])
+}
+
+// 教师-科目关联表
+model TeacherSubject {
+  id         String   @id @default(uuid())
+  teacherId  String
+  subjectId  String
+  teacher    Teacher  @relation(fields: [teacherId], references: [id])
+  subject    Subject  @relation(fields: [subjectId], references: [id])
+  createdAt  DateTime @default(now())
+  
+  @@unique([teacherId, subjectId])
+  @@index([teacherId])
+  @@index([subjectId])
+}
+
+model Admin { 
+  id String @id @default(uuid())
+  userId String @unique
+  user User @relation(fields:[userId], references:[id])
+  scope String? // JSON as string
+}
+
+model TeacherAvailability {
+  id String @id @default(uuid())
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  
+  // 只支持周循环模式
+  dayOfWeek Int // 星期几（0-6，0=周日）
+  
+  startTime String // 开始时间 HH:MM
+  endTime   String // 结束时间 HH:MM
+  
+  isActive Boolean @default(true) // 是否激活
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // 索引
+  @@index([teacherId, dayOfWeek])
+  @@index([teacherId, isActive])
+}
+
+model BlockedTime {
+  id String @id @default(uuid())
+  teacherId String
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  startTime DateTime
+  endTime   DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  
+  @@index([teacherId, startTime, endTime])
+}
+
+model Appointment {
+  id String @id @default(uuid())
+  studentId String
+  teacherId String
+  subjectId String
+  student Student @relation(fields: [studentId], references: [id])
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  scheduledTime DateTime
+  durationMinutes Int @default(30)
+  status String // pending, approved, completed, cancelled, no_show, expired
+  approvalRequired Boolean
+  approvedAt DateTime?
+  idempotencyKey String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([teacherId, scheduledTime])
+  @@index([studentId, scheduledTime])
+  @@index([status, scheduledTime])
+  @@index([subjectId])
+}
+
+model Waitlist {
+  id String @id @default(uuid())
+  teacherId String
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  date String // YYYY-MM-DD format
+  slot DateTime
+  priority Int @default(0) // Higher number = higher priority
+  status String @default("waiting") // waiting, promoted, expired
+  createdAt DateTime @default(now())
+  
+  @@index([teacherId, date, slot])
+  @@index([priority, createdAt])
+}
+
+model ServicePolicy {
+  id String @id @default(uuid())
+  level String // level1, level2, premium
+  monthlyAutoApprove Int @default(0)
+  priority Boolean @default(false)
+  expireHours Int @default(48)
+  reminderOffsets String @default("24,1") // Comma-separated hours
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([level])
+}
+
+model RefreshToken { 
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId], references:[id])
+  tokenHash String @unique
+  revoked Boolean @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  
+  @@index([userId, revoked])
+}
+
+model AuditLog { 
+  id String @id @default(uuid())
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id])
+  action String
+  targetId String?
+  details String? // JSON as string
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  @@index([actorId, action])
+  @@index([createdAt])
+}

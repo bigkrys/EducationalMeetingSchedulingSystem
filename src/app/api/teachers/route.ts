@@ -1,0 +1,183 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/api/db'
+import { withRole, withRoles, AuthenticatedRequest } from '@/lib/api/middleware'
+
+// 获取教师列表
+async function getTeachersHandler(request: AuthenticatedRequest, context?: any) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const subject = searchParams.get('subject')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = parseInt(searchParams.get('offset') || '0')
+
+    const where: Record<string, unknown> = {}
+    
+    // 如果指定了科目，过滤教师
+    if (subject) {
+      where.teacherSubjects = {
+        some: {
+          subject: {
+            name: {
+              contains: subject
+            }
+          }
+        }
+      }
+    }
+    
+    // 只返回有可用时间的教师
+    where.availability = {
+      some: {
+        isActive: true
+      }
+    }
+
+    const teachers = await prisma.teacher.findMany({
+      where,
+      select: {
+        id: true,
+        maxDailyMeetings: true,
+        bufferMinutes: true,
+        user: {
+          select: {
+            name: true
+          }
+        },
+        teacherSubjects: {
+          select: {
+            subject: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      },
+      take: limit,
+      skip: offset,
+      orderBy: {
+        user: {
+          name: 'asc'
+        }
+      }
+    })
+
+    // 格式化返回数据
+    const formattedTeachers = teachers.map((teacher: any) => ({
+      id: teacher.id,
+      name: teacher.user.name,
+      subjects: teacher.teacherSubjects.map((ts: any) => ts.subject.name),
+      maxDailyMeetings: teacher.maxDailyMeetings,
+      bufferMinutes: teacher.bufferMinutes
+    }))
+
+    return NextResponse.json({
+      teachers: formattedTeachers,
+      total: formattedTeachers.length,
+      limit,
+      offset
+    })
+
+  } catch (error) {
+    console.error('Get teachers error:', error)
+    return NextResponse.json(
+      { error: 'BAD_REQUEST', message: 'Failed to fetch teachers' },
+      { status: 500 }
+    )
+  }
+}
+
+// 创建教师（仅管理员）
+async function createTeacherHandler(request: AuthenticatedRequest, context?: any) {
+  try {
+    const user = request.user!
+    
+    // 检查权限
+    if (user.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'FORBIDDEN', message: 'Only admins can create teachers' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    
+    // 验证必需字段
+    if (!body.userId || !body.subjects) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'userId and subjects are required' },
+        { status: 400 }
+      )
+    }
+
+    // 检查用户是否存在且是教师角色
+    const existingUser = await prisma.user.findUnique({
+      where: { id: body.userId }
+    })
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    if (existingUser.role !== 'teacher') {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'User is not a teacher' },
+        { status: 400 }
+      )
+    }
+
+    // 检查是否已经是教师
+    const existingTeacher = await prisma.teacher.findUnique({
+      where: { userId: body.userId }
+    })
+
+    if (existingTeacher) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'Teacher already exists for this user' },
+        { status: 409 }
+      )
+    }
+
+    // 创建教师记录
+    const teacher = await prisma.teacher.create({
+      data: {
+        userId: body.userId,
+        subjects: body.subjects,
+        maxDailyMeetings: body.maxDailyMeetings || 8,
+        bufferMinutes: body.bufferMinutes || 15
+      }
+    })
+
+    // 记录审计日志
+    await prisma.auditLog.create({
+      data: {
+        actorId: user.userId,
+        action: 'create_teacher',
+        targetId: teacher.id,
+        details: JSON.stringify(body),
+        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown'
+      }
+    })
+
+    return NextResponse.json({
+      ok: true,
+      teacher,
+      message: 'Teacher created successfully'
+    }, { status: 201 })
+
+  } catch (error) {
+    console.error('Create teacher error:', error)
+    return NextResponse.json(
+      { error: 'BAD_REQUEST', message: 'Failed to create teacher' },
+      { status: 500 }
+    )
+  }
+}
+
+// 导出处理函数
+export const GET = withRoles(['student', 'teacher', 'admin'])(getTeachersHandler)
+export const POST = withRole('admin')(createTeacherHandler)
