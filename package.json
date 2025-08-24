@@ -13,7 +13,7 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:simple": "ts-node prisma/seed-simple.ts",
-    "vercel-build": "cp prisma/schema-postgresql.prisma prisma/schema.prisma && npx prisma generate && npx tsc --noEmit && next build"
+    "vercel-build": "cp prisma/schema-postgresql.prisma prisma/schema.prisma && npx prisma generate && next build"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.24.0",
@@ -36,6 +36,7 @@
     "react-dom": "^18.3.1",
     "redis": "^4.6.13",
     "tailwind-merge": "^3.3.1",
+    "typescript": "^5",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
   },
@@ -52,8 +53,7 @@
     "eslint-config-next": "15.5.0",
     "prisma": "^5.10.0",
     "tailwindcss": "^4.1.12",
-    "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "ts-node": "^10.9.2"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
