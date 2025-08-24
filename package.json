@@ -13,7 +13,7 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:simple": "ts-node prisma/seed-simple.ts",
-    "vercel-build": "pnpm install && cp prisma/schema-postgresql.prisma prisma/schema.prisma && npx prisma generate && next build"
+    "vercel-build": "pnpm install && npx prisma generate && next build"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.24.0",
