@@ -72,22 +72,28 @@ export default function TeacherAvailability() {
 
       if (response.ok) {
         const userData = await response.json()
+        console.log('用户数据:', userData) // 添加调试日志
+        
         if (userData.teacher && userData.teacher.id) {
           setTeacher({
             id: userData.teacher.id,
             name: userData.name,
             email: userData.email,
-            subjects: userData.teacher.subjects ? userData.teacher.subjects.split(', ') : [],
+            subjects: userData.teacher.subjects || [],
             maxDailyMeetings: userData.teacher.maxDailyMeetings || 6,
             bufferMinutes: userData.teacher.bufferMinutes || 15
           })
         } else {
+          console.error('教师信息不完整:', userData) // 添加调试日志
           setError('用户不是教师或教师信息不完整')
         }
       } else {
+        const errorText = await response.text()
+        console.error('获取用户信息失败:', response.status, errorText) // 添加调试日志
         setError('获取教师信息失败')
       }
     } catch (err) {
+      console.error('获取教师信息网络错误:', err) // 添加调试日志
       setError('网络错误')
     } finally {
       setLoading(false)
@@ -107,14 +113,20 @@ export default function TeacherAvailability() {
         return
       }
       
+      console.log('正在获取教师可用性，教师ID:', teacher.id) // 添加调试日志
+      
       const response = await fetch(`/api/teachers/${teacher.id}/availability`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       })
 
+      console.log('API响应状态:', response.status) // 添加调试日志
+
       if (response.ok) {
         const data = await response.json()
+        console.log('API返回的原始数据:', data) // 添加调试日志
+        
         // 处理不同的API返回格式
         let availabilityArray = []
         if (Array.isArray(data)) {
@@ -123,17 +135,23 @@ export default function TeacherAvailability() {
         } else if (data && data.availability && Array.isArray(data.availability)) {
           // 返回 {availability: [...], ...} 格式的情况
           availabilityArray = data.availability
+        } else if (data && Array.isArray(data.items)) {
+          // 返回 {items: [...], ...} 格式的情况
+          availabilityArray = data.items
         } else {
           console.warn('API返回的可用性数据格式不支持:', data)
           availabilityArray = []
         }
         
+        console.log('处理后的可用性数组:', availabilityArray) // 添加调试日志
         setAvailabilities(availabilityArray)
       } else {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ message: '未知错误' }))
+        console.error('获取可用性失败:', errorData) // 添加调试日志
         setError(errorData.message || '获取可用性数据失败')
       }
     } catch (err) {
+      console.error('获取可用性数据网络错误:', err) // 添加调试日志
       setError('获取可用性数据失败')
     } finally {
       setLoading(false)

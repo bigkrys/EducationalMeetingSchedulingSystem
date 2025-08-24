@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Modal, Form, Select, TimePicker, Button, Space, Card, Tag, Switch } from 'antd'
+import { Modal, Form, Select, TimePicker, Button, Alert, Card, Tag, Switch } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import { message } from 'antd'
 
@@ -43,7 +43,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
 
   const handleTimeSlotChange = (id: string, field: 'startTime' | 'endTime', value: any) => {
     if (value && typeof value.format === 'function') {
-      setTimeSlots(timeSlots.map(slot => 
+      setTimeSlots(timeSlots.map(slot =>
         slot.id === id ? { ...slot, [field]: value.format('HH:mm') } : slot
       ))
     }
@@ -52,10 +52,10 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
   const handleSubmit = () => {
     form.validateFields().then((values: any) => {
       // 验证时间段数据
-      const validTimeSlots = timeSlots.filter(slot => 
+      const validTimeSlots = timeSlots.filter(slot =>
         slot.startTime && slot.endTime && slot.startTime.trim() !== '' && slot.endTime.trim() !== ''
       )
-      
+
       if (validTimeSlots.length === 0) {
         message.error('请至少设置一个有效的时间段')
         return
@@ -65,7 +65,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
       for (const slot of validTimeSlots) {
         const start = new Date(`2000-01-01T${slot.startTime}:00`)
         const end = new Date(`2000-01-01T${slot.endTime}:00`)
-        
+
         if (start >= end) {
           message.error('结束时间必须晚于开始时间')
           return
@@ -79,15 +79,15 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
           endTime: slot.endTime
         }))
       }
-      
+
       console.log('提交的可用性数据:', availabilityData)
       console.log('isRecurring 字段值:', values.isRecurring, '类型:', typeof values.isRecurring)
-      
+
       // 显示确认信息
       const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
       const selectedDay = dayNames[values.dayOfWeek]
       const recurringText = values.isRecurring ? '每周重复' : '仅此一次'
-      
+
       console.log(`准备设置：${selectedDay} ${recurringText}`)
       console.log(`dayOfWeek 值: ${values.dayOfWeek} (${selectedDay})`)
       console.log(`isRecurring 值: ${values.isRecurring}`)
@@ -95,7 +95,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
       validTimeSlots.forEach((slot, index) => {
         console.log(`时间段 ${index + 1}: ${slot.startTime} - ${slot.endTime}`)
       })
-      
+
       onSubmit(availabilityData)
     })
   }
@@ -142,14 +142,28 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
           name="isRecurring"
           label="重复设置"
         >
-          <Switch 
-            checkedChildren="每周重复" 
+          <Switch
+            checkedChildren="每周重复"
             unCheckedChildren="仅此一次"
             defaultChecked={true}
           />
         </Form.Item>
 
-        <Form.Item label="时间段设置">
+        <Form.Item label="时间段设置"
+        >
+          <Alert 
+            message="时间段设置说明" 
+            description={
+              <div className="text-sm">
+                <p>• 时间段重叠检测仅在同一个星期几内进行</p>
+                <p>• 不同星期几的相同时间段不会被认为是重叠的</p>
+                <p>• 每个时间段最大跨度8小时</p>
+                <p>• 建议设置合理的时间段，避免过短或过长</p>
+              </div>
+            }
+            type="info" 
+            showIcon
+          />
           <div className="space-y-3">
             {timeSlots.map((slot, index) => (
               <Card key={slot.id} size="small">
@@ -157,21 +171,22 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
                   <span className="text-sm font-medium text-gray-700 min-w-[60px]">
                     时间段 {index + 1}
                   </span>
-                  
-                                     <TimePicker
-                     format="HH:mm"
-                     placeholder="开始时间"
-                     onChange={(time) => handleTimeSlotChange(slot.id, 'startTime', time)}
-                   />
-                   
-                   <span className="text-gray-500">至</span>
-                   
-                   <TimePicker
-                     format="HH:mm"
-                     placeholder="结束时间"
-                     onChange={(time) => handleTimeSlotChange(slot.id, 'endTime', time)}
-                   />
-                  
+
+
+                  <TimePicker
+                    format="HH:mm"
+                    placeholder="开始时间"
+                    onChange={(time) => handleTimeSlotChange(slot.id, 'startTime', time)}
+                  />
+
+                  <span className="text-gray-500">至</span>
+
+                  <TimePicker
+                    format="HH:mm"
+                    placeholder="结束时间"
+                    onChange={(time) => handleTimeSlotChange(slot.id, 'endTime', time)}
+                  />
+
                   {timeSlots.length > 1 && (
                     <Button
                       type="text"
@@ -184,7 +199,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
                 </div>
               </Card>
             ))}
-            
+
             <Button
               type="dashed"
               icon={<PlusOutlined />}

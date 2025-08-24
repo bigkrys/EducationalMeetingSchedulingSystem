@@ -48,11 +48,11 @@ async function handler(request: AuthenticatedRequest) {
         id: user.student.id,
         serviceLevel: user.student.serviceLevel,
         monthlyMeetingsUsed: user.student.monthlyMeetingsUsed,
-        enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name).join(', ')
+        enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name)
       } : undefined,
       teacher: user.teacher ? {
         id: user.teacher.id,
-        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name).join(', '),
+        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name),
         maxDailyMeetings: user.teacher.maxDailyMeetings,
         bufferMinutes: user.teacher.bufferMinutes
       } : undefined

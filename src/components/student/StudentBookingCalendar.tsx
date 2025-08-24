@@ -33,6 +33,7 @@ export default function StudentBookingCalendar({
   const [selectedSubject, setSelectedSubject] = useState<string>('')
   const [timeSlots, setTimeSlots] = useState<CalendarSlot[]>([])
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true) // 添加初始加载状态
   const [bookingModalVisible, setBookingModalVisible] = useState(false)
   const [allTeachers, setAllTeachers] = useState<any[]>([])
   const [studentSubjects, setStudentSubjects] = useState<string[]>([])
@@ -164,20 +165,25 @@ export default function StudentBookingCalendar({
     // 学生可选的科目是：学生已注册的科目
     const availableSubjects = [...subjects]
 
-
-
     setFilteredTeachers(availableTeachers)
     setAvailableSubjects(availableSubjects)
   }
 
   useEffect(() => {
     const loadData = async () => {
-      const [teachers, subjects] = await Promise.all([
-        fetchTeachers(),
-        fetchStudentSubjects()
-      ])
-      
-      filterTeachersAndSubjects(teachers, subjects)
+      setInitialLoading(true) // 开始初始加载
+      try {
+        const [teachers, subjects] = await Promise.all([
+          fetchTeachers(),
+          fetchStudentSubjects()
+        ])
+        
+        filterTeachersAndSubjects(teachers, subjects)
+      } catch (error) {
+        console.error('初始数据加载失败:', error)
+      } finally {
+        setInitialLoading(false) // 完成初始加载
+      }
     }
     
     loadData()
@@ -252,7 +258,7 @@ export default function StudentBookingCalendar({
     if (teacherId) {
       const teacher = filteredTeachers.find(t => t.id === teacherId)
       if (teacher && teacher.subjects && Array.isArray(teacher.subjects)) {
-        // 获取该教师可以教授的且学生已注册的科目
+        // 获取该教师可以教授的且学生ç
         const teacherStudentCommonSubjects = teacher.subjects.filter(
           (subject: string) => studentSubjects.includes(subject)
         )
@@ -380,6 +386,20 @@ export default function StudentBookingCalendar({
 
   // 显示用户提示信息
   const renderUserInfo = () => {
+    if (initialLoading) {
+      return (
+        <Card title="加载中...">
+          <div className="text-center py-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">正在加载您的预约信息</h3>
+            <p className="text-gray-500">请稍候，正在获取您的科目和教师列表...</p>
+          </div>
+        </Card>
+      )
+    }
+
     if (!studentSubjects.length) {
       return (
         <Card title="无法预约">
@@ -428,7 +448,7 @@ export default function StudentBookingCalendar({
       {renderUserInfo()}
       
       {/* 选择器 */}
-      {studentSubjects.length > 0 && filteredTeachers.length > 0 && (
+      {!initialLoading && studentSubjects.length > 0 && filteredTeachers.length > 0 && (
         <Card title="选择教师和科目">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -503,7 +523,7 @@ export default function StudentBookingCalendar({
       )}
 
       {/* 可用时间列表 */}
-      {selectedDate && selectedTeacher && selectedSubject && (
+      {!initialLoading && selectedDate && selectedTeacher && selectedSubject && (
         <Card 
           title={
             <div className="flex items-center space-x-2">

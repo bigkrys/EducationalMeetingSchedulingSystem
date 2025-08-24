@@ -351,6 +351,15 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       {/* 每周可用性 */}
       <Card title="每周可用性" className="mb-6">
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="text-sm text-blue-800">
+            <p className="font-medium mb-1">📅 可用性设置说明：</p>
+            <p>• 时间段重叠检测仅在同一个星期几内进行</p>
+            <p>• 不同星期几的相同时间段不会被认为是重叠的</p>
+            <p>• 例如：周一 09:00-10:00 和周二 09:00-10:00 可以同时存在</p>
+          </div>
+        </div>
+        
         {!Array.isArray(availability) || Object.keys(groupedAvailability).length === 0 ? (
           <Empty description="暂无可用性设置" />
         ) : (

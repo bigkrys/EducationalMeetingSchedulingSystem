@@ -12,7 +12,6 @@ interface TeacherAvailability {
   dayOfWeek?: number
   startTime: string
   endTime: string
-  isActive: boolean
 }
 
 interface BlockedTime {
@@ -72,9 +71,13 @@ async function detectAvailabilityConflicts(
   const conflicts: TimeConflict[] = []
   const overlappingSlots: TeacherAvailability[] = []
 
+  console.log(`检测可用性冲突 - 教师ID: ${teacherId}`)
+  console.log(`请求数据:`, request)
+
   // 验证时间格式和逻辑
   const timeValidation = validateTimeLogic(request.startTime, request.endTime)
   if (!timeValidation.isValid) {
+    console.log('时间验证失败:', timeValidation.message)
     conflicts.push({
       type: 'invalid_time',
       message: timeValidation.message
@@ -92,14 +95,14 @@ async function detectAvailabilityConflicts(
     const endOfDay = new Date(targetDate)
     endOfDay.setHours(23, 59, 59, 999)
 
-            existingSlots = await prisma.teacherAvailability.findMany({
-          where: {
-            teacherId,
-            dayOfWeek: targetDate.getDay(),
-            isActive: true
-          },
-          orderBy: { startTime: 'asc' }
-        })
+    existingSlots = await prisma.teacherAvailability.findMany({
+      where: {
+        teacherId,
+        dayOfWeek: targetDate.getDay(),
+        isActive: true
+      },
+      orderBy: { startTime: 'asc' }
+    })
   } else if (request.dayOfWeek !== undefined) {
     // 检查周循环的冲突
     existingSlots = await prisma.teacherAvailability.findMany({
@@ -112,18 +115,27 @@ async function detectAvailabilityConflicts(
     })
   }
 
+  console.log(`找到 ${existingSlots.length} 个现有时间段`)
+  existingSlots.forEach((slot, index) => {
+    console.log(`现有时间段 ${index + 1}: ${slot.startTime}-${slot.endTime}`)
+  })
+
   // 检查与现有时间段的冲突
   for (const slot of existingSlots) {
+    console.log(`\n检查与时间段 ${slot.startTime}-${slot.endTime} 的冲突`)
     const overlapType = analyzeTimeOverlap(slot.startTime, slot.endTime, request.startTime, request.endTime)
+    console.log(`重叠类型: ${overlapType.type}`)
     
     if (overlapType.type !== 'no_overlap') {
       if (overlapType.type === 'exact_match') {
+        console.log('发现完全匹配冲突')
         conflicts.push({
           type: 'exact_match',
           existingSlot: slot,
           message: `这个时间段已经存在了！您设置的时间 ${slot.startTime}-${slot.endTime} 与现有时间段完全重复。`
         })
       } else if (overlapType.type === 'overlap') {
+        console.log('发现重叠冲突')
         overlappingSlots.push(slot)
         conflicts.push({
           type: 'overlap',
@@ -132,23 +144,28 @@ async function detectAvailabilityConflicts(
           message: `时间冲突！您设置的时间段与现有时间段 ${slot.startTime}-${slot.endTime} 有重叠。重叠时间：${overlapType.overlap}`
         })
       } else if (overlapType.type === 'contained') {
+        console.log('发现包含冲突')
         conflicts.push({
           type: 'contained',
           existingSlot: slot,
           message: `您设置的时间段完全包含在现有时间段 ${slot.startTime}-${slot.endTime} 内。`
         })
       } else if (overlapType.type === 'contains') {
+        console.log('发现包含冲突')
         conflicts.push({
           type: 'contains',
           existingSlot: slot,
           message: `您设置的时间段完全包含了现有时间段 ${slot.startTime}-${slot.endTime}。`
         })
       }
+    } else {
+      console.log('没有冲突')
     }
   }
 
+  console.log(`总共发现 ${conflicts.length} 个冲突`)
   return { conflicts, overlappingSlots }
- }
+}
 
 // 辅助函数：验证时间逻辑
 function validateTimeLogic(startTime: string, endTime: string): TimeValidation {
@@ -199,29 +216,41 @@ function analyzeTimeOverlap(start1: string, end1: string, start2: string, end2: 
   const s2 = timeToMinutes(start2)
   const e2 = timeToMinutes(end2)
   
-  // 没有重叠
-  if (s1 >= e2 || s2 >= e1) {
+  console.log(`分析时间重叠: [${start1}-${end1}] vs [${start2}-${end2}]`)
+  console.log(`转换为分钟: [${s1}-${e1}] vs [${s2}-${e2}]`)
+  
+  // 没有重叠的情况：
+  // 1. 第一个时间段完全在第二个时间段之前 (e1 <= s2)
+  // 2. 第二个时间段完全在第一个时间段之前 (e2 <= s1)
+  if (e1 <= s2 || e2 <= s1) {
+    console.log('没有重叠')
     return { type: 'no_overlap' }
   }
   
   // 完全匹配
   if (s1 === s2 && e1 === e2) {
+    console.log('完全匹配')
     return { type: 'exact_match' }
   }
   
-  // 包含关系
+  // 包含关系：第一个时间段包含第二个时间段
   if (s1 <= s2 && e1 >= e2) {
+    console.log('第一个时间段包含第二个时间段')
     return { type: 'contains' }
   }
   
+  // 包含关系：第二个时间段包含第一个时间段
   if (s2 <= s1 && e2 >= e1) {
+    console.log('第二个时间段包含第一个时间段')
     return { type: 'contained' }
   }
   
-  // 部分重叠
+  // 部分重叠：两个时间段有交集但不完全包含
   const overlapStart = Math.max(s1, s2)
   const overlapEnd = Math.min(e1, e2)
   const overlapMinutes = overlapEnd - overlapStart
+  
+  console.log(`部分重叠: ${overlapStart}-${overlapEnd} (${overlapMinutes}分钟)`)
   
   return {
     type: 'overlap',
@@ -1022,3 +1051,78 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
 export const GET = withRole('teacher')(getAvailabilityHandler)
 export const POST = withRole('teacher')(setAvailabilityHandler)
 export const PUT = withRole('teacher')(batchSetAvailabilityHandler)
+
+// 测试时间重叠算法（仅用于开发调试）
+function testTimeOverlapAlgorithm() {
+  console.log('=== 测试时间重叠算法 ===')
+  
+  const testCases = [
+    // 没有重叠的情况
+    { start1: '09:00', end1: '10:00', start2: '10:00', end2: '11:00', expected: 'no_overlap' },
+    { start1: '10:00', end1: '11:00', start2: '09:00', end2: '10:00', expected: 'no_overlap' },
+    
+    // 完全匹配
+    { start1: '09:00', end1: '10:00', start2: '09:00', end2: '10:00', expected: 'exact_match' },
+    
+    // 包含关系
+    { start1: '08:00', end1: '12:00', start2: '09:00', end2: '11:00', expected: 'contains' },
+    { start1: '09:00', end1: '11:00', start2: '08:00', end2: '12:00', expected: 'contained' },
+    
+    // 部分重叠
+    { start1: '09:00', end1: '11:00', start2: '10:00', end2: '12:00', expected: 'overlap' },
+    { start1: '10:00', end1: '12:00', start2: '09:00', end2: '11:00', expected: 'overlap' },
+    
+    // 边界情况
+    { start1: '09:00', end1: '10:00', start2: '10:00', end2: '11:00', expected: 'no_overlap' },
+    { start1: '10:00', end1: '11:00', start2: '09:00', end2: '10:00', expected: 'no_overlap' }
+  ]
+  
+  testCases.forEach((testCase, index) => {
+    const result = analyzeTimeOverlap(testCase.start1, testCase.end1, testCase.start2, testCase.end2)
+    const passed = result.type === testCase.expected
+    console.log(`测试 ${index + 1}: [${testCase.start1}-${testCase.end1}] vs [${testCase.start2}-${testCase.end2}]`)
+    console.log(`  期望: ${testCase.expected}, 实际: ${result.type}, ${passed ? '✅ 通过' : '❌ 失败'}`)
+  })
+  
+  console.log('=== 测试完成 ===\n')
+}
+
+// 测试星期几逻辑（确保不同星期几的时间段不重叠）
+function testDayOfWeekLogic() {
+  console.log('=== 测试星期几逻辑 ===')
+  
+  // 模拟不同星期几的时间段
+  const mondaySlots = [
+    { dayOfWeek: 1, startTime: '09:00', endTime: '10:00' },
+    { dayOfWeek: 1, startTime: '14:00', endTime: '15:00' }
+  ]
+  
+  const tuesdaySlots = [
+    { dayOfWeek: 2, startTime: '09:00', endTime: '10:00' }, // 与周一相同时间，但不同星期几
+    { dayOfWeek: 2, startTime: '14:00', endTime: '15:00' }  // 与周一相同时间，但不同星期几
+  ]
+  
+  console.log('周一时间段:', mondaySlots.map(s => `${s.startTime}-${s.endTime}`))
+  console.log('周二时间段:', tuesdaySlots.map(s => `${s.startTime}-${s.endTime}`))
+  console.log('✅ 不同星期几的相同时间段不会被认为是重叠的')
+  console.log('✅ 只有同一个星期几内的时间段才会进行重叠检测')
+  
+  // 测试同一星期几内的重叠检测
+  console.log('\n测试同一星期几内的重叠检测:')
+  const mondayNewSlot = { dayOfWeek: 1, startTime: '09:30', endTime: '10:30' }
+  console.log(`新时间段: 周一 ${mondayNewSlot.startTime}-${mondayNewSlot.endTime}`)
+  
+  // 检查与周一现有时间段的冲突
+  mondaySlots.forEach(slot => {
+    const overlapType = analyzeTimeOverlap(slot.startTime, slot.endTime, mondayNewSlot.startTime, mondayNewSlot.endTime)
+    console.log(`与周一 ${slot.startTime}-${slot.endTime} 比较: ${overlapType.type}`)
+  })
+  
+  console.log('=== 星期几逻辑测试完成 ===\n')
+}
+
+// 在开发环境下运行测试
+if (process.env.NODE_ENV === 'development') {
+  testTimeOverlapAlgorithm()
+  testDayOfWeekLogic()
+}

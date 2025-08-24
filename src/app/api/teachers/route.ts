@@ -25,12 +25,8 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
       }
     }
     
-    // 只返回有可用时间的教师
-    where.availability = {
-      some: {
-        isActive: true
-      }
-    }
+    // 暂时移除可用性过滤，返回所有教师
+    // 后续可以根据需要添加更精确的过滤逻辑
 
     const teachers = await prisma.teacher.findMany({
       where,
