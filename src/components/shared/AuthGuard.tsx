@@ -33,12 +33,8 @@ export default function AuthGuard({
         if (requiredRole) {
           const userRole = localStorage.getItem('userRole')
           if (!userRole || userRole !== requiredRole) {
-            // 角色不匹配，跳转到适当的页面
-            if (userRole === 'admin') {
-              router.push('/admin')
-            } else {
-              router.push('/dashboard')
-            }
+            // 角色不匹配，跳转到主控制台
+            router.push('/dashboard')
             return
           }
         }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AuthListener from "@/components/shared/AuthListener";
 import StyledComponentsRegistry from '@/components/shared/StyledComponentsRegistry';
+import RouteProgress from '@/components/shared/RouteProgress';
 
 export const metadata: Metadata = {
   title: "教育会议调度系统",
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="zh">
       <body className="antialiased">
         <StyledComponentsRegistry>
+          <RouteProgress />
           <AuthListener>
             {children}
           </AuthListener>

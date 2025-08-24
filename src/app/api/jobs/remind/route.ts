@@ -128,14 +128,7 @@ async function sendReminder(appointment: any, offsetHours: number): Promise<void
   
   // 这里可以集成实际的提醒系统
   // 例如：发送邮件、短信、推送通知等
-  
-  console.log(`📧 发送${reminderType}提醒:`, {
-    to: appointment.student.user.name,
-    subject: appointment.subject.name,
-    teacher: appointment.teacher.user.name,
-    time: appointment.scheduledTime.toISOString(),
-    type: reminderType
-  })
+ 
 
   // 模拟网络延迟
   await new Promise(resolve => setTimeout(resolve, 100))

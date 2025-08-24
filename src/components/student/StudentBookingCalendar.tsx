@@ -57,7 +57,6 @@ export default function StudentBookingCalendar({
 
       if (response.ok) {
         const data = await response.json()
-        console.log('获取到的教师数据:', data)
         
         // 确保数据是数组
         let teachersData = []
@@ -103,7 +102,6 @@ export default function StudentBookingCalendar({
 
       if (response.ok) {
         const userData = await response.json()
-        console.log('获取到的学生数据:', userData)
         
         let subjects = []
         if (userData.student && userData.student.enrolledSubjects) {
@@ -115,15 +113,15 @@ export default function StudentBookingCalendar({
             // 如果是字符串，转换为数组（支持逗号分隔或单个科目）
             subjects = userData.student.enrolledSubjects
               .split(',')
-              .map(s => s.trim())
-              .filter(s => s.length > 0)
-            console.log('将科目字符串转换为数组:', userData.student.enrolledSubjects, '→', subjects)
+              .map((s: string) => s.trim())
+              .filter((s: string) => s.length > 0)
+
           } else {
             console.warn('学生科目数据格式不支持:', userData.student.enrolledSubjects, '类型:', typeof userData.student.enrolledSubjects)
             subjects = []
           }
         } else {
-          console.log('学生没有注册科目或科目数据不完整')
+
           subjects = []
         }
         
@@ -143,12 +141,7 @@ export default function StudentBookingCalendar({
 
   // 过滤教师和科目
   const filterTeachersAndSubjects = (teachers: any[], subjects: string[]) => {
-    console.log('=== 教师科目匹配开始 ===')
-    console.log('学生已注册科目:', subjects)
-    console.log('系统中的所有教师数量:', teachers.length)
-    
     if (!subjects.length) {
-      console.log('学生未注册任何科目，无法预约')
       setFilteredTeachers([])
       setAvailableSubjects([])
       return
@@ -157,7 +150,6 @@ export default function StudentBookingCalendar({
     // 只显示能教授学生已注册科目的教师
     const availableTeachers = teachers.filter(teacher => {
       if (!teacher.subjects || !Array.isArray(teacher.subjects)) {
-        console.log(`教师 ${teacher.name} 无科目信息，跳过`)
         return false
       }
       
@@ -166,23 +158,13 @@ export default function StudentBookingCalendar({
         subjects.includes(teacherSubject)
       )
       
-      if (canTeach) {
-        console.log(`✓ 教师 ${teacher.name} 可以教授: ${teacher.subjects.filter(s => subjects.includes(s)).join(', ')}`)
-      } else {
-        console.log(`✗ 教师 ${teacher.name} 的科目 [${teacher.subjects.join(', ')}] 与学生科目不匹配`)
-      }
-      
       return canTeach
     })
 
     // 学生可选的科目是：学生已注册的科目
     const availableSubjects = [...subjects]
 
-    console.log('=== 过滤结果 ===')
-    console.log(`匹配的教师数量: ${availableTeachers.length}`)
-    console.log('可预约的教师:', availableTeachers.map(t => t.name))
-    console.log('学生可选科目:', availableSubjects)
-    console.log('==================')
+
 
     setFilteredTeachers(availableTeachers)
     setAvailableSubjects(availableSubjects)
@@ -228,7 +210,6 @@ export default function StudentBookingCalendar({
 
       if (response.ok) {
         const data = await response.json()
-        console.log('获取到的时间槽数据:', data)
         
         // 转换API数据格式
         const slots: CalendarSlot[] = data.slots.map((slot: string, index: number) => {
@@ -276,7 +257,7 @@ export default function StudentBookingCalendar({
           (subject: string) => studentSubjects.includes(subject)
         )
         
-        console.log('教师和学生共同的科目:', teacherStudentCommonSubjects)
+
         
         if (teacherStudentCommonSubjects.length === 0) {
           console.warn('警告：选择的教师与学生没有共同科目，这不应该发生！')
@@ -288,7 +269,7 @@ export default function StudentBookingCalendar({
         // 如果只有一个共同科目，自动选择
         if (teacherStudentCommonSubjects.length === 1) {
           setSelectedSubject(teacherStudentCommonSubjects[0])
-          console.log('自动选择唯一科目:', teacherStudentCommonSubjects[0])
+
         }
         // 如果有多个科目，保持为空让用户选择
       }
@@ -349,7 +330,6 @@ export default function StudentBookingCalendar({
         idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`  // 添加幂等性键
       }
 
-      console.log('发送预约数据:', appointmentData)
 
       const response = await fetch('/api/appointments', {
         method: 'POST',
@@ -492,7 +472,7 @@ export default function StudentBookingCalendar({
                       (subject: string) => studentSubjects.includes(subject)
                     )
                     
-                    return commonSubjects.map(subject => (
+                    return commonSubjects.map((subject: string) => (
                       <Option key={subject} value={subject}>
                         {subject}
                       </Option>

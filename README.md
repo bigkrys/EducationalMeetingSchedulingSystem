@@ -1054,13 +1054,74 @@ edu-scheduler/
 
 ---
 
-**感谢使用教育会议调度系统！** 🎓✨
+# 十一、当前已实现功能如下
 
 
-当前测试如下：
-1、level1学生预约，前两个appointment自动通过，第三个appointment需要教师手动审批
-2、level2学生预约，全部需要教师手动审批
-3、premium学生预约，全部自动审批
+✅ 学生登录（JWT 模拟）
 
-4、邮件通知功能验证已通过，如下：
-5、
+✅ 查看可用时段（基于教师可用性、缓冲时间、冲突检测）
+
+✅ 创建预约：
+
+Level1 学生前 2 次自动批准，之后 pending
+
+Level2 学生全部 pending
+
+Premium 学生全部自动批准
+
+✅ 科目限制校验（只能预约自己注册科目的教师）
+
+✅ 月度配额检查与自动重置（懒触发逻辑）
+
+✅ 我的预约列表（状态：pending / approved / expired / cancelled）
+
+2. 教师端
+
+✅ 教师登录（JWT 模拟）
+
+✅ 管理每周可用时间窗口
+
+✅ 新增/管理不可用时间（blocked times）
+
+✅ 审批预约（pending → approved / rejected）
+
+✅ 并发控制（简单版本，避免重复审批）
+
+✅ 查看日程列表（已批准 / 已过期等）
+
+3. 系统逻辑
+
+✅ 自动冲突检测（预约时间 + 缓冲区 vs 已有预约/blocked）
+
+✅ 状态机：pending → approved / cancelled / expired
+
+✅ 48h 超时处理（批处理扫描 → 自动标记 expired）
+
+✅ 月初配额重置（批处理逻辑）
+
+✅ 幂等检查（防止重复提交同一预约）
+
+4. 通知与日志
+
+✅ 邮件通知：
+
+预约成功（学生 + 教师）
+
+审批通过/拒绝（通知学生）
+
+48h 超时（通知双方）
+
+✅ 审计日志（预约创建 / 审批 / 超时 / 配额重置等事件记录）
+
+✅ 已生成通知截图（email_notification_screenshot.png）
+
+5. 工程化 & 文档
+
+✅ 数据建模（Prisma schema 与迁移）
+
+✅ README（项目概述 + 安装运行 + 测试账号 + TODO）
+
+✅ API 文档（已补充 /docs/api-documentation.md）
+
+✅ 部署准备（.env.example, Supabase/Railway 兼容）
+

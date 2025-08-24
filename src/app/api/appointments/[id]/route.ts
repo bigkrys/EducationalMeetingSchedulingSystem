@@ -295,7 +295,6 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
 
               if (response.ok) {
                 const result = await response.json()
-                console.log('Waitlist promotion result:', result)
                 
                 // 如果成功提升，清除相关缓存
                 if (result.promoted > 0) {

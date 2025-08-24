@@ -65,10 +65,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       if (response.ok) {
         const data = await response.json()
-        console.log('API返回的可用性数据:', data)
-        console.log('数据类型:', typeof data)
-        console.log('是否为数组:', Array.isArray(data))
-        
+
         // 处理不同的API返回格式
         let availabilityArray = []
         if (Array.isArray(data)) {
@@ -85,7 +82,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         // 确保数据是数组
         if (availabilityArray.length > 0) {
           const availabilityData = availabilityArray.map((item: any) => {
-            console.log('原始可用性数据项:', item)
             return {
               id: item.id,
               dayOfWeek: item.dayOfWeek,
@@ -94,10 +90,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
               isActive: item.isRecurring === true || item.isActive === true
             }
           })
-          console.log('处理后的可用性数据:', availabilityData)
           setAvailability(availabilityData)
         } else {
-          console.log('设置空数组')
           setAvailability([])
         }
       } else {
@@ -128,9 +122,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       if (response.ok) {
         const data = await response.json()
-        console.log('API返回的阻塞时间数据:', data)
-        console.log('数据类型:', typeof data)
-        console.log('是否为数组:', Array.isArray(data))
         
         // 处理不同的API返回格式
         let blockedTimesArray = []
@@ -147,7 +138,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         
         // 过滤当前教师的阻塞时间
         const teacherBlockedTimes = blockedTimesArray.filter((item: any) => item.teacherId === teacherId)
-        console.log('过滤后的教师阻塞时间:', teacherBlockedTimes)
         setBlockedTimes(teacherBlockedTimes)
       } else {
         const errorData = await response.json()
@@ -172,7 +162,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         return
       }
 
-      console.log('添加可用性的表单数据:', values)
 
       // 处理多个时间段
       if (values.timeSlots && Array.isArray(values.timeSlots)) {
@@ -189,11 +178,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             endTime: slot.endTime,
             isRecurring: values.isRecurring
           }
-
-          console.log('发送的可用性数据:', availabilityData)
-          console.log('isRecurring 字段值:', values.isRecurring, '类型:', typeof values.isRecurring)
-          console.log('dayOfWeek 字段值:', values.dayOfWeek, '类型:', typeof values.dayOfWeek)
-          console.log('星期名称:', ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][values.dayOfWeek])
 
           // 使用新的HTTP客户端，它会自动处理错误
           const response = await api.post(`/api/teachers/${teacherId}/availability`, availabilityData)

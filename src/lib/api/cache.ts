@@ -63,7 +63,6 @@ export async function initRedis() {
     try {
       redisClient = Redis.createClient({ url: process.env.REDIS_URL })
       await redisClient.connect()
-      console.log('Redis connected')
     } catch (error) {
       console.warn('Redis connection failed, falling back to memory cache:', error)
       redisClient = null

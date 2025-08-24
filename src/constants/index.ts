@@ -127,11 +127,11 @@ export const ROUTES = {
   TEACHER_AVAILABILITY: '/dashboard/availability',
   TEACHER_APPOINTMENTS: '/dashboard/appointments',
   
-  // 管理员路由
-  ADMIN_DASHBOARD: '/admin',
-  ADMIN_USERS: '/admin/users',
-  ADMIN_POLICIES: '/admin/policies',
-  ADMIN_AUDIT_LOGS: '/admin/audit-logs',
+  // 管理员路由 (暂时禁用)
+  // ADMIN_DASHBOARD: '/admin',
+  // ADMIN_USERS: '/admin/users',
+  // ADMIN_POLICIES: '/admin/policies',
+  // ADMIN_AUDIT_LOGS: '/admin/audit-logs',
   
   // API路由
   API_AUTH: '/api/auth',

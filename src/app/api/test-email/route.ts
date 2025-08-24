@@ -11,7 +11,6 @@ export async function GET(request: NextRequest) {
       pass: process.env.SMTP_PASS ? 'SET' : 'NOT_SET'
     }
 
-    console.log('Testing email with config:', config)
 
     // 测试邮件服务器连接
     const connectionOk = await testEmailConnection()

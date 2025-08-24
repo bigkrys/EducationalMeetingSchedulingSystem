@@ -137,17 +137,6 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
       take: take + 1, // 多取一个来判断是否有下一页
       skip
     })
-
-    console.log('Query conditions:', where)
-    console.log('Found appointments:', appointments.length)
-    console.log('Appointments data:', appointments.map(apt => ({
-      id: apt.id,
-      studentId: apt.studentId,
-      teacherId: apt.teacherId,
-      subjectId: apt.subjectId,
-      status: apt.status
-    })))
-
     // 判断是否有下一页
     const hasNext = appointments.length > take
     const items = appointments.slice(0, take)
@@ -449,13 +438,6 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       }
     })
 
-    console.log('Appointment created successfully:', {
-      id: appointment.id,
-      studentId: appointment.studentId,
-      teacherId: appointment.teacherId,
-      subjectId: appointment.subjectId,
-      status: appointment.status
-    })
 
     // 更新学生月度使用次数
     await prisma.student.update({

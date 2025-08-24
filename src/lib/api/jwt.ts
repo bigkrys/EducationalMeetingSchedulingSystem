@@ -25,11 +25,7 @@ export function verifyAccessToken(token: string): JWTPayload | null {
     const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload
     return decoded
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      console.log('Token expired at:', error.expiredAt)
-    } else if (error instanceof jwt.JsonWebTokenError) {
-      console.log('Invalid token signature')
-    }
+    
     return null
   }
 }

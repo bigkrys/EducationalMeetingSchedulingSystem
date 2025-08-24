@@ -18,13 +18,6 @@ const emailConfig = {
   socketTimeout: 60000      // socket超时60秒
 }
 
-// 添加调试信息
-console.log('Email configuration:', {
-  host: emailConfig.host,
-  port: emailConfig.port,
-  user: emailConfig.auth.user,
-  pass: emailConfig.auth.pass ? '***' : 'NOT_SET'
-})
 
 // 创建邮件传输器
 const transporter = nodemailer.createTransport(emailConfig)

@@ -33,7 +33,6 @@ export function initializeGlobalErrorHandler() {
     rtl: false,
   })
 
-  console.log('✅ 全局API错误处理器已初始化')
 }
 
 // 临时禁用全局错误处理（用于特殊情况）

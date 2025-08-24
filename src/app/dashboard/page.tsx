@@ -2,10 +2,10 @@
 
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { userService, User } from '@/lib/api/user-service'
-import PageLoader, { PageSkeleton } from '@/components/shared/PageLoader'
+import PageLoader from '@/components/shared/PageLoader'
+import NavigationButton from '@/components/shared/NavigationButton'
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null)
@@ -142,107 +142,132 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {user.role === 'student' && (
             <>
-              <Link href="/dashboard/book-appointment" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      预约会议
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      查看教师可用时间并预约会议
-                    </p>
-                  </div>
+              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    预约会议
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    查看教师可用时间并预约会议
+                  </p>
+                  <NavigationButton 
+                    href="/dashboard/book-appointment" 
+                    type="primary" 
+                    size="large"
+                    className="w-full"
+                    loadingText="正在进入预约..."
+                  >
+                    开始预约
+                  </NavigationButton>
                 </div>
-              </Link>
+              </div>
 
-              <Link href="/dashboard/my-appointments" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      我的预约
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      查看和管理您的所有预约
-                    </p>
-                  </div>
+              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    我的预约
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    查看和管理您的所有预约
+                  </p>
+                  <NavigationButton 
+                    href="/dashboard/my-appointments" 
+                    type="default" 
+                    size="large"
+                    className="w-full"
+                    loadingText="正在加载..."
+                  >
+                    查看预约
+                  </NavigationButton>
                 </div>
-              </Link>
+              </div>
 
-              <Link href="/dashboard/waitlist" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      候补队列
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      加入热门时段的候补队列
-                    </p>
-                  </div>
+              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    候补队列
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    加入热门时段的候补队列
+                  </p>
+                  <NavigationButton 
+                    href="/dashboard/waitlist" 
+                    type="default" 
+                    size="large"
+                    className="w-full"
+                    loadingText="正在加载..."
+                  >
+                    查看候补
+                  </NavigationButton>
                 </div>
-              </Link>
+              </div>
             </>
           )}
 
           {user.role === 'teacher' && (
             <>
-              <Link href="/dashboard/availability" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      设置可用性
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      设置您的每周可用时间
-                    </p>
-                  </div>
+              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    设置可用性
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    设置您的每周可用时间
+                  </p>
+                  <NavigationButton 
+                    href="/dashboard/availability" 
+                    type="primary" 
+                    size="large"
+                    className="w-full"
+                    loadingText="正在加载..."
+                  >
+                    管理可用性
+                  </NavigationButton>
                 </div>
-              </Link>
+              </div>
 
-              <Link href="/dashboard/appointments" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      预约管理
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      查看和审批学生预约
-                    </p>
-                  </div>
+              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    预约管理
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    查看和审批学生预约
+                  </p>
+                  <NavigationButton 
+                    href="/dashboard/appointments" 
+                    type="default" 
+                    size="large"
+                    className="w-full"
+                    loadingText="正在加载..."
+                  >
+                    查看预约
+                  </NavigationButton>
                 </div>
-              </Link>
-
-            
+              </div>
             </>
           )}
 
           {user.role === 'admin' && (
-            <>
-              <Link href="/admin/policies" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      服务策略
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      管理系统服务级别策略
-                    </p>
-                  </div>
-                </div>
-              </Link>
-
-              <Link href="/admin" className="block">
-                <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                  <div className="px-4 py-5 sm:p-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                      系统任务
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      执行系统维护任务
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            </>
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6 text-center">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+                  管理员功能
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  管理员功能正在开发中，敬请期待...
+                </p>
+                <NavigationButton 
+                  href="/dashboard" 
+                  type="default" 
+                  size="large"
+                  className="w-full"
+                  disabled
+                >
+                  暂未开放
+                </NavigationButton>
+              </div>
+            </div>
           )}
         </div>
       </div>

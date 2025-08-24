@@ -125,7 +125,6 @@ export class ApiClient {
 
       // 如果返回401，可能是token过期，尝试刷新
       if (response.status === 401) {
-        console.log('Token expired, attempting refresh...')
         
         try {
           // 尝试刷新token
@@ -144,7 +143,6 @@ export class ApiClient {
                 localStorage.setItem('refreshToken', refreshData.refreshToken)
               }
               
-              console.log('Token refreshed successfully, retrying request...')
               
               // 使用新token重试原请求
               const newHeaders = this.getAuthHeaders()
@@ -164,7 +162,6 @@ export class ApiClient {
               
               return retryResponse
             } else {
-              console.log('Token refresh failed, redirecting to login...')
             }
           }
         } catch (error) {

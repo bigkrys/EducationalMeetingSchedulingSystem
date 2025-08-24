@@ -77,38 +77,14 @@ export default function LoginForm() {
         }
       }
       
-      // 调试日志
-      console.log('=== 注册调试信息 ===')
-      console.log('原始表单数据:', formData)
-      console.log('转换后的请求数据:', requestBody)
-      console.log('====================')
-      
-      // 打印请求信息
-      console.log('=== 发送请求 ===')
-      console.log('请求URL:', endpoint)
-      console.log('请求方法:', 'POST')
-      console.log('请求头:', { 'Content-Type': 'application/json' })
-      console.log('请求体:', JSON.stringify(requestBody, null, 2))
-      console.log('================')
-      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       })
       
-      // 打印响应信息
-      console.log('=== 收到响应 ===')
-      console.log('响应状态:', response.status)
-      console.log('响应状态文本:', response.statusText)
-      console.log('响应头:', Object.fromEntries(response.headers.entries()))
-      console.log('================')
-      
       if (response.ok) {
         const data = await response.json()
-        console.log('=== 响应数据 ===')
-        console.log('响应体:', JSON.stringify(data, null, 2))
-        console.log('================')
         
         if (isLogin) {
           // 登录成功，存储 token
@@ -131,21 +107,10 @@ export default function LoginForm() {
         }
       } else {
         const errorData = await response.json()
-        console.log('=== 注册失败调试信息 ===')
-        console.log('响应状态:', response.status)
-        console.log('错误数据:', JSON.stringify(errorData, null, 2))
-        console.log('=======================')
         setError(errorData.message || '操作失败')
       }
     } catch (error) {
-      console.log('=== 注册异常调试信息 ===')
-      console.log('异常类型:', error?.constructor?.name)
-      console.log('异常详情:', error)
-      if (error instanceof Error) {
-        console.log('异常消息:', error.message)
-        console.log('异常堆栈:', error.stack)
-      }
-      console.log('=======================')
+      console.error('请求失败:', error)
       setError('网络错误，请重试')
     } finally {
       if (!redirecting) {

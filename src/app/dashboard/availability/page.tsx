@@ -115,10 +115,6 @@ export default function TeacherAvailability() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('API返回的可用性数据:', data)
-        console.log('数据类型:', typeof data)
-        console.log('是否为数组:', Array.isArray(data))
-        
         // 处理不同的API返回格式
         let availabilityArray = []
         if (Array.isArray(data)) {

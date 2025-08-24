@@ -127,9 +127,9 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     // 初始化全局错误处理器
     try {
       initializeGlobalErrorHandler()
-      console.log('✅ 全局错误处理器已在AuthListener中初始化')
+
     } catch (error) {
-      console.error('❌ 全局错误处理器初始化失败:', error)
+      console.error('全局错误处理器初始化失败:', error)
     }
 
     // 使用节流的事件监听，减少性能开销
