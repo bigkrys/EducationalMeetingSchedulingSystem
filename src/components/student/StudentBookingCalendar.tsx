@@ -191,9 +191,20 @@ export default function StudentBookingCalendar({
     
     if (teacherId) {
       const teacher = teachers.find(t => t.id === teacherId)
-      if (teacher && teacher.subjects.length > 0) {
+      if (teacher && teacher.subjects && Array.isArray(teacher.subjects) && teacher.subjects.length > 0) {
+        // 更新科目列表为教师教授的科目
+        setSubjects(teacher.subjects)
+        // 自动选择第一个科目
         setSelectedSubject(teacher.subjects[0])
+      } else {
+        // 如果教师没有科目信息，清空科目列表
+        setSubjects([])
+        setSelectedSubject('')
       }
+    } else {
+      // 如果没有选择教师，恢复为学生已注册的科目
+      fetchStudentSubjects()
+      setSelectedSubject('')
     }
   }
 
@@ -203,11 +214,20 @@ export default function StudentBookingCalendar({
   }
 
   const handleSlotClick = (slot: CalendarSlot) => {
+    // 只有可预约的时间槽才能点击
+    if (slot.status !== 'available') {
+      return
+    }
+    
+    // 将ISO时间字符串转换为dayjs对象
+    const dayjs = require('dayjs')
+    const scheduledTime = dayjs(slot.startTime)
+    
     form.setFieldsValue({
       teacherId: selectedTeacher,
       subject: selectedSubject,
-      scheduledTime: slot.startTime,
-      durationMinutes: 30
+      scheduledTime: scheduledTime,
+      durationMinutes: 30  // 固定为30分钟
     })
     setBookingModalVisible(true)
   }
@@ -222,12 +242,24 @@ export default function StudentBookingCalendar({
         return
       }
 
+      // 确保时间数据正确转换
+      let scheduledTime = values.scheduledTime
+      if (values.scheduledTime && typeof values.scheduledTime.toISOString === 'function') {
+        scheduledTime = values.scheduledTime.toISOString()
+      } else if (typeof values.scheduledTime === 'string') {
+        scheduledTime = values.scheduledTime
+      } else {
+        message.error('预约时间格式错误')
+        return
+      }
+
       const appointmentData = {
         studentId: studentId,
         teacherId: values.teacherId,
         subject: values.subject,
-        scheduledTime: values.scheduledTime,
-        durationMinutes: values.durationMinutes
+        scheduledTime: scheduledTime,
+        durationMinutes: 30,  // 固定为30分钟，与时间槽保持一致
+        idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`  // 添加幂等性键
       }
 
       console.log('发送预约数据:', appointmentData)
@@ -250,7 +282,22 @@ export default function StudentBookingCalendar({
         onBookingSuccess?.()
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '预约失败，请重试')
+        console.error('预约失败详情:', errorData)
+        
+        // 显示更详细的错误信息
+        let errorMessage = '预约失败，请重试'
+        if (errorData.error && errorData.message) {
+          errorMessage = `${errorData.error}: ${errorData.message}`
+        } else if (errorData.message) {
+          errorMessage = errorData.message
+        }
+        
+        message.error(errorMessage)
+        
+        // 如果是验证错误，显示详细信息
+        if (errorData.details) {
+          console.error('验证错误详情:', errorData.details)
+        }
       }
     } catch (error) {
       console.error('预约失败:', error)
@@ -325,40 +372,68 @@ export default function StudentBookingCalendar({
 
       {/* 可用时间列表 */}
       {selectedDate && selectedTeacher && selectedSubject && (
-        <Card title={`${selectedDate} 可用时间`}>
+        <Card 
+          title={
+            <div className="flex items-center space-x-2">
+              <CalendarOutlined className="text-blue-600" />
+              <span className="text-lg font-semibold text-gray-900">
+                {selectedDate} 可用时间
+              </span>
+            </div>
+          }
+          className="shadow-sm border-gray-200"
+        >
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-500">加载中...</p>
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">正在加载可用时间</h3>
+              <p className="text-gray-500">请稍候，正在查询教师的可用时间...</p>
             </div>
           ) : timeSlots.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {Array.isArray(timeSlots) && timeSlots.map(slot => (
                 <Button
                   key={slot.id}
-                  type="default"
-                  className="h-16 text-sm hover:bg-blue-50"
+                  type={slot.status === 'available' ? 'default' : 'dashed'}
+                  disabled={slot.status !== 'available'}
+                  className={`h-20 w-full text-sm transition-all duration-200 shadow-sm ${
+                    slot.status === 'available' 
+                      ? 'bg-white hover:bg-blue-50 hover:border-blue-300 border-gray-200' 
+                      : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
+                  }`}
                   onClick={() => handleSlotClick(slot)}
                 >
-                  <div className="flex flex-col items-center">
-                    <ClockCircleOutlined className="mb-1 text-blue-600" />
-                    <span className="font-medium">
-                      {new Date(slot.startTime).toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                      })}
-                    </span>
-                    <span className="text-xs text-gray-500 mt-1">可预约</span>
+                  <div className="flex flex-col items-center justify-center h-full space-y-2">
+                    <div className="text-center">
+                      <div className={`font-semibold text-base leading-tight `}>
+                        {new Date(slot.startTime).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false
+                        })}
+                      </div>
+                      <span className={`text-xs font-medium mt-1 `}>
+                        {slot.status === 'available' ? '可预约' : '不可预约'}
+                      </span>
+                    </div>
                   </div>
                 </Button>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <ClockCircleOutlined className="text-4xl text-gray-300 mb-4" />
-              <p className="text-gray-500">该日期暂无可用时间</p>
-              <p className="text-sm text-gray-400 mt-2">请选择其他日期或联系教师</p>
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                <ClockCircleOutlined className="text-2xl text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">暂无可用时间</h3>
+              <p className="text-gray-500 mb-4">该日期暂无可用时间，请选择其他日期或联系教师</p>
+              <div className="text-sm text-gray-400">
+                <p>• 教师可能还没有设置该日期的可用时间</p>
+                <p>• 该日期的可用时间可能已被预约</p>
+                <p>• 请尝试选择其他日期</p>
+              </div>
             </div>
           )}
         </Card>
@@ -366,7 +441,7 @@ export default function StudentBookingCalendar({
 
       {/* 预约弹窗 */}
       <Modal
-        title="预约会议"
+        title="预约30分钟会议"
         open={bookingModalVisible}
         onCancel={() => setBookingModalVisible(false)}
         footer={null}
@@ -409,25 +484,26 @@ export default function StudentBookingCalendar({
             name="scheduledTime"
             label="预约时间"
             rules={[{ required: true, message: '请选择预约时间' }]}
+            help="请选择具体的预约时间，系统会自动填充您选择的时间段"
           >
             <DatePicker
               showTime
               format="YYYY-MM-DD HH:mm:ss"
               placeholder="请选择预约时间"
               className="w-full"
+              minuteStep={30}
+              showNow={false}
             />
           </Form.Item>
 
           <Form.Item
             name="durationMinutes"
-            label="时长（分钟）"
-            rules={[{ required: true, message: '请输入时长' }]}
+            label="预约时长"
+            initialValue={30}
           >
-            <Select defaultValue={30}>
-              <Option value={30}>30分钟</Option>
-              <Option value={60}>60分钟</Option>
-              <Option value={90}>90分钟</Option>
-            </Select>
+            <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded text-gray-700">
+              30分钟（固定时长）
+            </div>
           </Form.Item>
 
           <Form.Item className="mb-0">

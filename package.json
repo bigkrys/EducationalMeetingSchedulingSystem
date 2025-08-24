@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "echo \"No tests specified\" && exit 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
-    "db:seed:simple": "ts-node prisma/seed-simple.ts"
+    "db:seed:simple": "ts-node prisma/seed-simple.ts",
+    "vercel-build": "prisma generate && prisma db push && next build"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",

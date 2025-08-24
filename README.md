@@ -936,3 +936,122 @@ A->>E: 通知候补成功/保留时长
 - **审计与RBAC**
     - 所有敏感操作写 `audit_logs`。
     - 严格基于 `role + scope` 做 API 权限校验。
+
+---
+
+# 七、本地开发与部署
+
+## 7.1 本地开发环境
+
+### 快速开始
+```bash
+# 克隆项目
+git clone https://github.com/bigkrys/EducationalMeetingSchedulingSystem.git
+cd EducationalMeetingSchedulingSystem
+
+# 使用自动化脚本设置（推荐）
+./scripts/setup-local.sh        # macOS/Linux
+scripts\setup-local.bat         # Windows
+
+# 或手动设置
+pnpm install
+cp env.local.example .env.local
+node scripts/generate-secrets.js
+pnpm db:generate
+pnpm db:push
+pnpm db:seed
+pnpm dev
+```
+
+### 环境要求
+- **Node.js**: 18.x+
+- **pnpm**: 8.x+
+- **数据库**: SQLite (开发) 或 PostgreSQL (生产)
+
+### 详细文档
+- 📚 [本地开发指南](LOCAL_DEVELOPMENT.md) - 完整的本地环境搭建教程
+- 🔑 [密钥生成脚本](scripts/generate-secrets.js) - 自动生成安全密钥
+- 🚀 [部署指南](DEPLOYMENT.md) - Vercel部署详细步骤
+
+## 7.2 生产环境部署
+
+### Vercel部署（推荐）
+```bash
+# 安装Vercel CLI
+npm i -g vercel
+
+# 部署
+vercel --prod
+```
+
+### 环境变量配置
+```bash
+# 必需环境变量
+DATABASE_URL="postgresql://username:password@host:port/database"
+JWT_SECRET="your-super-secret-jwt-key-here-32-chars-min"
+JWT_REFRESH_SECRET="your-super-secret-refresh-key-here-32-chars-min"
+NEXTAUTH_SECRET="your-nextauth-secret-here-32-chars-min"
+NEXTAUTH_URL="https://your-project.vercel.app"
+NODE_ENV="production"
+NEXT_PUBLIC_APP_URL="https://your-project.vercel.app"
+```
+
+### 数据库推荐
+- **开发**: SQLite (本地文件)
+- **生产**: Supabase 或 Neon (PostgreSQL)
+
+## 7.3 项目结构
+```
+edu-scheduler/
+├── src/                    # 源代码
+│   ├── app/               # Next.js App Router
+│   ├── components/        # React组件
+│   ├── lib/              # 工具库
+│   └── types/            # TypeScript类型
+├── prisma/               # 数据库配置
+├── scripts/              # 工具脚本
+├── docs/                 # 文档
+├── LOCAL_DEVELOPMENT.md  # 本地开发指南
+├── DEPLOYMENT.md         # 部署指南
+└── README.md             # 项目说明
+```
+
+---
+
+# 八、贡献指南
+
+## 8.1 开发流程
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 8.2 代码规范
+- 使用 TypeScript 严格模式
+- 遵循 ESLint 规则
+- 编写清晰的注释和文档
+- 添加适当的测试用例
+
+## 8.3 问题反馈
+- 使用 [GitHub Issues](https://github.com/bigkrys/EducationalMeetingSchedulingSystem/issues) 报告问题
+- 提供详细的错误信息和复现步骤
+- 标注问题类型（bug/feature/enhancement）
+
+---
+
+# 九、许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+---
+
+# 十、联系方式
+
+- **项目地址**: [https://github.com/bigkrys/EducationalMeetingSchedulingSystem](https://github.com/bigkrys/EducationalMeetingSchedulingSystem)
+- **在线演示**: [https://EducationalMeetingSchedulingSystem-git-develop-bigkrys.vercel.app](https://EducationalMeetingSchedulingSystem-git-develop-bigkrys.vercel.app)
+- **问题反馈**: [GitHub Issues](https://github.com/bigkrys/EducationalMeetingSchedulingSystem/issues)
+
+---
+
+**感谢使用教育会议调度系统！** 🎓✨
