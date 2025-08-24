@@ -1111,17 +1111,17 @@ async function calculateAvailableSlots(teacher: any, date: string, duration: num
 - 批量查询：一次性获取所有相关数据
 - 内存过滤：在应用层进行时间冲突计算
 
-## 12.2 检查重叠的预约和阻塞时间
+## 12.2 教师可用性冲突检测算法
 
 ### 核心算法：`detectAvailabilityConflicts()`
 
-**功能描述**：检测教师设置可用时间时与现有预约、阻塞时间的冲突情况。
+**功能描述**：检测教师设置可用时间时与现有预约、阻塞时间的冲突情况。**重要：冲突检测仅在同一个星期几内进行，不同星期几的相同时间段不会被认为是重叠的。**
 
 **冲突类型分类**：
 
 ```typescript
 interface TimeConflict {
-  type: 'exact_match' | 'overlap' | 'contained' | 'contains' | 'blocked_time' | 'appointment'
+  type: 'exact_match' | 'overlap' | 'contained' | 'contains' | 'blocked_time' | 'appointment' | 'invalid_time'
   message: string
   existingSlot?: TeacherAvailability
   blockedTime?: BlockedTime
@@ -1132,21 +1132,73 @@ interface TimeConflict {
 
 **冲突检测算法**：
 
-1. **时间重叠分析**：
+1. **时间重叠分析**（修正后的准确算法）：
    ```typescript
    function analyzeTimeOverlap(start1: string, end1: string, start2: string, end2: string) {
-     const s1 = parseTime(start1), e1 = parseTime(end1)
-     const s2 = parseTime(start2), e2 = parseTime(end2)
+     const s1 = timeToMinutes(start1), e1 = timeToMinutes(end1)
+     const s2 = timeToMinutes(start2), e2 = timeToMinutes(end2)
      
-     if (s1 === s2 && e1 === e2) return { type: 'exact_match' }
-     if (s1 < e2 && s2 < e1) return { type: 'overlap', overlap: calculateOverlap(s1, e1, s2, e2) }
-     if (s1 <= s2 && e1 >= e2) return { type: 'contains' }
-     if (s1 >= s2 && e1 <= e2) return { type: 'contained' }
-     return { type: 'no_overlap' }
+     // 没有重叠的情况：
+     // 1. 第一个时间段完全在第二个时间段之前 (e1 <= s2)
+     // 2. 第二个时间段完全在第一个时间段之前 (e2 <= s1)
+     if (e1 <= s2 || e2 <= s1) {
+       return { type: 'no_overlap' }
+     }
+     
+     // 完全匹配
+     if (s1 === s2 && e1 === e2) {
+       return { type: 'exact_match' }
+     }
+     
+     // 包含关系：第一个时间段包含第二个时间段
+     if (s1 <= s2 && e1 >= e2) {
+       return { type: 'contains' }
+     }
+     
+     // 包含关系：第二个时间段包含第一个时间段
+     if (s2 <= s1 && e2 >= e1) {
+       return { type: 'contained' }
+     }
+     
+     // 部分重叠：两个时间段有交集但不完全包含
+     const overlapStart = Math.max(s1, s2)
+     const overlapEnd = Math.min(e1, e2)
+     const overlapMinutes = overlapEnd - overlapStart
+     
+     return {
+       type: 'overlap',
+       overlap: `${minutesToTime(overlapStart)}-${minutesToTime(overlapEnd)}`,
+       overlapMinutes
+     }
    }
    ```
 
-2. **预约冲突检测**：
+2. **星期几逻辑**（关键特性）：
+   ```typescript
+   // 冲突检测仅在同一个星期几内进行
+   if (request.specificDate) {
+     // 检查具体日期的冲突
+     const targetDate = new Date(request.specificDate)
+     existingSlots = await prisma.teacherAvailability.findMany({
+       where: {
+         teacherId,
+         dayOfWeek: targetDate.getDay(), // 只查询同一天
+         isActive: true
+       }
+     })
+   } else if (request.dayOfWeek !== undefined) {
+     // 检查周循环的冲突
+     existingSlots = await prisma.teacherAvailability.findMany({
+       where: {
+         teacherId,
+         dayOfWeek: request.dayOfWeek, // 只查询同一个星期几
+         isActive: true
+       }
+     })
+   }
+   ```
+
+3. **预约冲突检测**（设置可用性时）：
    ```typescript
    async function checkAppointmentConflicts(teacherId: string, request: AvailabilityRequest) {
      const appointments = await prisma.appointment.findMany({
@@ -1156,29 +1208,55 @@ interface TimeConflict {
        }
      })
      
-     // 检查每个预约的时间重叠
-     return appointments.filter(appointment => {
-       const overlap = analyzeTimeOverlap(
-         appointment.startTime, appointment.endTime,
-         request.startTime, request.endTime
-       )
-       return overlap.type !== 'no_overlap'
-     })
+     // 只检查同一星期几的预约冲突
+     for (const appointment of appointments) {
+       let shouldCheck = false
+       
+       if (request.dayOfWeek !== undefined) {
+         const appointmentDay = appointment.scheduledTime.getDay()
+         shouldCheck = appointmentDay === request.dayOfWeek
+       }
+       
+       if (shouldCheck) {
+         // 使用 analyzeTimeOverlap 进行时间重叠分析
+         const overlapAnalysis = analyzeTimeOverlap(
+           appointmentStart, appointmentEnd, 
+           request.startTime, request.endTime
+         )
+         
+         if (overlapAnalysis.type !== 'no_overlap') {
+           // 记录冲突
+         }
+       }
+     }
    }
    ```
 
-3. **阻塞时间冲突检测**：
+4. **阻塞时间冲突检测**：
    ```typescript
    async function checkBlockedTimeConflicts(teacherId: string, request: AvailabilityRequest) {
      const blockedTimes = await prisma.blockedTime.findMany({ where: { teacherId } })
      
-     return blockedTimes.filter(blocked => {
-       const overlap = analyzeTimeOverlap(
-         blocked.startTime, blocked.endTime,
-         request.startTime, request.endTime
-       )
-       return overlap.type !== 'no_overlap'
-     })
+     // 检查是否与阻塞时间冲突（按星期几分组）
+     for (const blocked of blockedTimes) {
+       let shouldCheck = false
+       
+       if (request.dayOfWeek !== undefined) {
+         const blockedDay = blocked.startTime.getDay()
+         shouldCheck = blockedDay === request.dayOfWeek
+       }
+       
+       if (shouldCheck) {
+         const overlapAnalysis = analyzeTimeOverlap(
+           blockedStart, blockedEnd, 
+           request.startTime, request.endTime
+         )
+         
+         if (overlapAnalysis.type !== 'no_overlap') {
+           // 记录冲突
+         }
+       }
+     }
    }
    ```
 
@@ -1188,60 +1266,131 @@ interface TimeConflict {
 function generateConflictSuggestions(conflicts: TimeConflict[], request: AvailabilityRequest) {
   const suggestions = []
   
-  if (conflicts.some(c => c.type === 'overlap')) {
-    suggestions.push('建议调整时间段，避免与现有时间重叠')
+  for (const conflict of conflicts) {
+    if (conflict.type === 'overlap' && conflict.existingSlot) {
+      // 计算合并后的时间段
+      const mergedStart = minutesToTime(Math.min(
+        timeToMinutes(existing.startTime), 
+        timeToMinutes(request.startTime)
+      ))
+      const mergedEnd = minutesToTime(Math.max(
+        timeToMinutes(existing.endTime), 
+        timeToMinutes(request.endTime)
+      ))
+      
+      suggestions.push({
+        action: 'merge',
+        description: `合并时间段：将您的时间与现有时间合并`,
+        result: `${mergedStart}-${mergedEnd}`,
+        recommendation: '推荐：这样可以最大化您的可用时间，避免时间碎片化'
+      })
+    } else if (conflict.type === 'exact_match') {
+      suggestions.push({
+        action: 'update',
+        description: `更新现有时间段：修改重复时间段的设置`,
+        recommendation: '您可以更新现有时间段的重复设置或其他属性'
+      })
+    }
   }
   
-  if (conflicts.some(c => c.type === 'exact_match')) {
-    suggestions.push('该时间段已存在，请选择其他时间')
-  }
-  
-  if (conflicts.some(c => c.type === 'blocked_time')) {
-    suggestions.push('建议先移除阻塞时间，或选择其他时间段')
-  }
-  
-  return suggestions
+  return suggestions.sort((a, b) => (a.priority || 999) - (b.priority || 999))
 }
 ```
 
-## 12.3 预约冲突检测算法
+## 12.3 学生预约冲突检测算法
 
-### 核心算法：`checkAppointmentConflicts()`
+### 核心算法：预约创建时的冲突检测
 
-**功能描述**：在创建新预约时，检测与现有预约的时间冲突。
+**功能描述**：在创建新预约时，检测与教师可用性、阻塞时间和已有预约的时间冲突。
 
 **冲突检测流程**：
 
-1. **时间范围计算**：
+1. **教师可用性检查**：
    ```typescript
-   const scheduledTime = new Date(validatedData.scheduledTime)
-   const slotEnd = addMinutes(scheduledTime, validatedData.durationMinutes)
+   // 检查教师在该日期是否有可用时间
+   const dayOfWeek = appointmentDate.getDay()
+   const dayAvailability = teacher.availability.find(
+     avail => avail.dayOfWeek === dayOfWeek && avail.isActive
+   )
    
-   // 包含缓冲时间的完整范围
-   const bufferStart = addMinutes(scheduledTime, -teacher.bufferMinutes)
-   const bufferEnd = addMinutes(slotEnd, teacher.bufferMinutes)
+   if (!dayAvailability) {
+     throw new Error('教师在该日期没有可用时间')
+   }
+   
+   // 检查预约时间是否在可用时间范围内
+   const appointmentStart = appointment.scheduledTime.toTimeString().slice(0, 5)
+   const appointmentEnd = addMinutes(appointment.scheduledTime, duration).toTimeString().slice(0, 5)
+   
+   if (appointmentStart < dayAvailability.startTime || 
+       appointmentEnd > dayAvailability.endTime) {
+     throw new Error('预约时间超出教师的可用时间范围')
+   }
    ```
 
-2. **冲突查询**：
+2. **阻塞时间冲突检测**：
    ```typescript
-   const conflictingAppointments = await prisma.appointment.findMany({
-     where: {
-       teacherId: validatedData.teacherId,
-       scheduledTime: { lt: bufferEnd },
-       status: { in: ['pending', 'approved'] }
-     }
+   const blockedTimes = await prisma.blockedTime.findMany({
+     where: { teacherId: teacher.id }
+   })
+   
+   const hasBlockedTimeConflict = blockedTimes.some(blocked => {
+     const blockStart = blocked.startTime
+     const blockEnd = blocked.endTime
+     const appointmentEnd = addMinutes(appointment.scheduledTime, duration)
+     
+     // 检查时间重叠
+     return appointment.scheduledTime < blockEnd && appointmentEnd > blockStart
    })
    ```
 
-3. **重叠判断**：
+3. **已有预约冲突检测**（包含缓冲时间）：
    ```typescript
-   const hasConflict = conflictingAppointments.some(appointment => {
-     const appointmentEnd = addMinutes(appointment.scheduledTime, appointment.durationMinutes)
-     return bufferStart < appointmentEnd && bufferEnd > appointment.scheduledTime
+   const existingAppointments = await prisma.appointment.findMany({
+     where: {
+       teacherId: teacher.id,
+       scheduledTime: {
+         gte: startOfDay(appointmentDate),
+         lt: endOfDay(appointmentDate)
+       },
+       status: { in: ['pending', 'approved'] }
+     }
+   })
+   
+   const hasConflict = existingAppointments.some(existing => {
+     const existingEnd = addMinutes(existing.scheduledTime, existing.durationMinutes)
+     const appointmentEnd = addMinutes(appointment.scheduledTime, duration)
+     
+     // 包含缓冲时间的冲突检测
+     const bufferStart = addMinutes(appointment.scheduledTime, -teacher.bufferMinutes)
+     const bufferEnd = addMinutes(appointmentEnd, teacher.bufferMinutes)
+     
+     return bufferStart < existingEnd && bufferEnd > existing.scheduledTime
    })
    ```
 
 **边界情况处理**：
-- 缓冲时间：教师设置的 `bufferMinutes` 确保预约间有足够间隔
-- 状态过滤：只检查 `pending` 和 `approved` 状态的预约
-- 时间精度：使用毫秒级精度进行时间比较
+- **缓冲时间**：教师设置的 `bufferMinutes` 确保预约间有足够间隔
+- **状态过滤**：只检查 `pending` 和 `approved` 状态的预约
+- **时间精度**：使用毫秒级精度进行时间比较
+- **星期几逻辑**：预约时间必须与教师的可用性设置匹配
+
+## 12.4 时间重叠检测算法总结
+
+### 核心特性
+
+1. **星期几隔离**：不同星期几的时间段不会被认为是重叠的
+2. **精确重叠检测**：使用修正后的算法准确判断时间重叠类型
+3. **缓冲时间支持**：支持教师自定义的缓冲时间设置
+4. **智能冲突解决**：提供合并、分割等冲突解决建议
+
+### 算法复杂度
+
+- **时间复杂度**：O(n²) 其中 n 是时间段数量
+- **空间复杂度**：O(n) 用于存储时间段和冲突信息
+- **缓存优化**：热门查询结果缓存5分钟，显著提升性能
+
+### 实际应用场景
+
+1. **教师设置可用性**：检测与现有时间段的冲突
+2. **学生预约**：检测与教师可用性和阻塞时间的冲突
+3. **系统维护**：自动过期处理、配额重置等定时任务
