@@ -1,41 +1,56 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+
+import React, { useState, useEffect } from 'react'
 import { 
   Card, 
   Button, 
-  Input, 
+  Form, 
+  Input,
+  InputNumber, 
   Switch, 
   Typography, 
   Space, 
   Row, 
   Col, 
   Spin,
+  message,
   Divider,
-  Alert
+  Tag
 } from 'antd'
 import { 
   SettingOutlined, 
   SaveOutlined, 
   ReloadOutlined
 } from '@ant-design/icons'
+import { ServicePolicy } from '@/lib/types'
 
 const { Title, Text } = Typography
-const { TextArea } = Input
 
-interface ServicePolicy {
-  id: string
-  level: 'level1' | 'level2' | 'premium'
-  monthlyAutoApprove: number
-  priority: boolean
-  expireHours: number
-  reminderOffsets: string
+interface PolicyFormData {
+  level1: {
+    monthlyAutoApprove: number
+    expireHours: number
+    reminderOffsets: string
+  }
+  level2: {
+    monthlyAutoApprove: number
+    expireHours: number
+    reminderOffsets: string
+  }
+  premium: {
+    monthlyAutoApprove: number
+    priority: boolean
+    expireHours: number
+    reminderOffsets: string
+  }
 }
 
-export default function PolicyManagement() {
-  const [policies, setPolicies] = useState<ServicePolicy[]>([])
+export default function AdminPolicies() {
+  const [form] = Form.useForm()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [policies, setPolicies] = useState<ServicePolicy[]>([])
 
   useEffect(() => {
     fetchPolicies()
@@ -43,193 +58,324 @@ export default function PolicyManagement() {
 
   const fetchPolicies = async () => {
     try {
+      setLoading(true)
       const response = await fetch('/api/policies')
       if (response.ok) {
         const data = await response.json()
-        setPolicies(data.policies || [])
+        setPolicies(data.policies)
+        
+        // 设置表单初始值
+        const formData: any = {}
+        data.policies.forEach((policy: ServicePolicy) => {
+          formData[policy.level] = {
+            monthlyAutoApprove: policy.monthlyAutoApprove,
+            priority: policy.priority,
+            expireHours: policy.expireHours,
+            reminderOffsets: policy.reminderOffsets
+          }
+        })
+        form.setFieldsValue(formData)
+      } else {
+        message.error('获取策略配置失败')
       }
     } catch (error) {
       console.error('Failed to fetch policies:', error)
+      message.error('获取策略配置失败')
     } finally {
       setLoading(false)
     }
   }
 
-  const updatePolicy = async (policyId: string, updates: Partial<ServicePolicy>) => {
+  const handleSave = async (values: PolicyFormData) => {
     try {
-      const response = await fetch(`/api/policies/${policyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      })
+      setSaving(true)
       
-      if (response.ok) {
-        // 更新本地状态
-        setPolicies(prev => prev.map(p => 
-          p.id === policyId ? { ...p, ...updates } : p
-        ))
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error('Failed to update policy:', error)
-      return false
-    }
-  }
+      const policiesData = [
+        {
+          level: 'level1',
+          monthlyAutoApprove: values.level1.monthlyAutoApprove,
+          priority: false,
+          expireHours: values.level1.expireHours,
+          reminderOffsets: values.level1.reminderOffsets
+        },
+        {
+          level: 'level2',
+          monthlyAutoApprove: values.level2.monthlyAutoApprove,
+          priority: false,
+          expireHours: values.level2.expireHours,
+          reminderOffsets: values.level2.reminderOffsets
+        },
+        {
+          level: 'premium',
+          monthlyAutoApprove: values.premium.monthlyAutoApprove,
+          priority: values.premium.priority,
+          expireHours: values.premium.expireHours,
+          reminderOffsets: values.premium.reminderOffsets
+        }
+      ]
 
-  const handleSaveAll = async () => {
-    setSaving(true)
-    try {
-      // 这里可以实现批量保存逻辑
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟保存
-      alert('所有策略已保存')
+      const response = await fetch('/api/policies', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ policies: policiesData })
+      })
+
+      if (response.ok) {
+        message.success('策略配置保存成功')
+        fetchPolicies() // 重新获取最新数据
+      } else {
+        const error = await response.json()
+        message.error(error.message || '保存失败')
+      }
     } catch (error) {
-      alert('保存失败')
+      console.error('Failed to save policies:', error)
+      message.error('保存失败')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleReset = () => {
-    if (confirm('确定要重置所有策略到默认值吗？')) {
-      fetchPolicies()
-    }
-  }
-
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '50vh' 
-      }}>
+      <div className="flex items-center justify-center min-h-screen">
         <Spin size="large" />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <Title level={2}>服务策略管理</Title>
-        <Text type="secondary">配置不同服务级别的预约策略</Text>
+    <div className="container mx-auto px-4 py-8">
+      {/* 顶部标题 */}
+      <div className="mb-8">
+        <Title level={2}>
+          <SettingOutlined className="mr-3" />
+          服务级别策略管理
+        </Title>
+        <Text type="secondary">
+          配置不同服务级别的预约策略和限制
+        </Text>
       </div>
 
-      {/* 操作按钮 */}
-      <Space style={{ marginBottom: '24px' }}>
-        <Button 
-          type="primary" 
-          icon={<SaveOutlined />} 
-          onClick={handleSaveAll} 
-          loading={saving}
-        >
-          {saving ? '保存中...' : '保存所有'}
-        </Button>
-        <Button 
-          icon={<ReloadOutlined />} 
-          onClick={handleReset}
-        >
-          重置
-        </Button>
-      </Space>
-
-      {/* 策略配置 */}
-      <Row gutter={[16, 16]}>
-        {policies.map((policy) => (
-          <Col xs={24} lg={8} key={policy.id}>
-            <Card
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSave}
+        className="max-w-4xl"
+      >
+        <Row gutter={[24, 24]}>
+          {/* Level1 配置 */}
+          <Col xs={24} lg={8}>
+            <Card 
               title={
                 <Space>
-                  <SettingOutlined />
-                  {policy.level === 'level1' && '一级服务'}
-                  {policy.level === 'level2' && '二级服务'}
-                  {policy.level === 'premium' && '高级服务'}
+                  <Tag color="blue">Level 1</Tag>
+                  <span>基础服务</span>
                 </Space>
               }
-              size="small"
+              className="h-full"
             >
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                <div>
-                  <Text strong>月度自动批准次数</Text>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="999"
-                    value={policy.monthlyAutoApprove}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 0
-                      updatePolicy(policy.id, { monthlyAutoApprove: value })
-                    }}
-                    style={{ marginTop: '8px' }}
-                  />
-                  <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                    每月自动批准的预约数量
-                  </Text>
-                </div>
+              <Form.Item
+                name={['level1', 'monthlyAutoApprove']}
+                label="每月自动批准次数"
+                rules={[{ required: true, message: '请输入每月自动批准次数' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  max={10}
+                  className="w-full"
+                  placeholder="例如：2"
+                />
+              </Form.Item>
 
-                <div>
-                  <Text strong>过期时间（小时）</Text>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="168"
-                    value={policy.expireHours}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 48
-                      updatePolicy(policy.id, { expireHours: value })
-                    }}
-                    style={{ marginTop: '8px' }}
-                  />
-                  <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                    待审批预约的过期时间
-                  </Text>
-                </div>
+              <Form.Item
+                name={['level1', 'expireHours']}
+                label="预约过期时间（小时）"
+                rules={[{ required: true, message: '请输入过期时间' }]}
+              >
+                <InputNumber 
+                  min={1} 
+                  max={168}
+                  className="w-full"
+                  placeholder="例如：48"
+                />
+              </Form.Item>
 
-                <div>
-                  <Text strong>提醒时间偏移</Text>
-                  <TextArea
-                    placeholder="24,1"
-                    value={policy.reminderOffsets}
-                    onChange={(e) => {
-                      updatePolicy(policy.id, { reminderOffsets: e.target.value })
-                    }}
-                    style={{ marginTop: '8px' }}
-                    rows={2}
-                  />
-                  <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                    会议前的提醒时间（小时），用逗号分隔
-                  </Text>
-                </div>
+              <Form.Item
+                name={['level1', 'reminderOffsets']}
+                label="提醒时间偏移（小时，逗号分隔）"
+                rules={[{ required: true, message: '请输入提醒时间' }]}
+              >
+                <Input placeholder="例如：24,1" />
+              </Form.Item>
 
-                <div>
-                  <Space>
-                    <Text strong>优先权</Text>
-                    <Switch
-                      checked={policy.priority}
-                      onChange={(checked) => {
-                        updatePolicy(policy.id, { priority: checked })
-                      }}
-                    />
-                  </Space>
-                  <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                    是否具有预约优先权
-                  </Text>
-                </div>
-              </Space>
+              <div className="text-sm text-gray-500 mt-4">
+                <p>• 基础用户享受有限的自动批准次数</p>
+                <p>• 超出次数后需要人工审批</p>
+              </div>
             </Card>
           </Col>
-        ))}
-      </Row>
 
-      {policies.length === 0 && (
-        <Alert
-          message="暂无策略配置"
-          description="请先创建服务级别策略"
-          type="info"
-          showIcon
-        />
-      )}
+          {/* Level2 配置 */}
+          <Col xs={24} lg={8}>
+            <Card 
+              title={
+                <Space>
+                  <Tag color="orange">Level 2</Tag>
+                  <span>标准服务</span>
+                </Space>
+              }
+              className="h-full"
+            >
+              <Form.Item
+                name={['level2', 'monthlyAutoApprove']}
+                label="每月自动批准次数"
+                rules={[{ required: true, message: '请输入每月自动批准次数' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  max={10}
+                  className="w-full"
+                  placeholder="例如：0"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name={['level2', 'expireHours']}
+                label="预约过期时间（小时）"
+                rules={[{ required: true, message: '请输入过期时间' }]}
+              >
+                <InputNumber 
+                  min={1} 
+                  max={168}
+                  className="w-full"
+                  placeholder="例如：48"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name={['level2', 'reminderOffsets']}
+                label="提醒时间偏移（小时，逗号分隔）"
+                rules={[{ required: true, message: '请输入提醒时间' }]}
+              >
+                <Input placeholder="例如：24,1" />
+              </Form.Item>
+
+              <div className="text-sm text-gray-500 mt-4">
+                <p>• 标准用户所有预约都需要人工审批</p>
+                <p>• 提供基础的提醒服务</p>
+              </div>
+            </Card>
+          </Col>
+
+          {/* Premium 配置 */}
+          <Col xs={24} lg={8}>
+            <Card 
+              title={
+                <Space>
+                  <Tag color="gold">Premium</Tag>
+                  <span>高级服务</span>
+                </Space>
+              }
+              className="h-full"
+            >
+              <Form.Item
+                name={['premium', 'monthlyAutoApprove']}
+                label="每月自动批准次数"
+                rules={[{ required: true, message: '请输入每月自动批准次数' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  className="w-full"
+                  placeholder="例如：999"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name={['premium', 'priority']}
+                label="优先级处理"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+              </Form.Item>
+
+              <Form.Item
+                name={['premium', 'expireHours']}
+                label="预约过期时间（小时）"
+                rules={[{ required: true, message: '请输入过期时间' }]}
+              >
+                <InputNumber 
+                  min={1} 
+                  max={168}
+                  className="w-full"
+                  placeholder="例如：48"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name={['premium', 'reminderOffsets']}
+                label="提醒时间偏移（小时，逗号分隔）"
+                rules={[{ required: true, message: '请输入提醒时间' }]}
+              >
+                <Input placeholder="例如：24,1" />
+              </Form.Item>
+
+              <div className="text-sm text-gray-500 mt-4">
+                <p>• 高级用户享受优先处理</p>
+                <p>• 无限制自动批准次数</p>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+
+        <Divider />
+
+        {/* 操作按钮 */}
+        <Row justify="center">
+          <Space size="large">
+            <Button 
+              icon={<ReloadOutlined />}
+              onClick={fetchPolicies}
+              disabled={saving}
+            >
+              重置
+            </Button>
+            <Button 
+              type="primary" 
+              htmlType="submit"
+              icon={<SaveOutlined />}
+              loading={saving}
+              size="large"
+            >
+              保存配置
+            </Button>
+          </Space>
+        </Row>
+      </Form>
+
+      {/* 说明文档 */}
+      <Card title="配置说明" className="mt-8 max-w-4xl">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={12}>
+            <Title level={5}>服务级别说明：</Title>
+            <ul className="text-sm text-gray-600">
+              <li><strong>Level 1（基础服务）：</strong>适合普通用户，有限的自动批准次数</li>
+              <li><strong>Level 2（标准服务）：</strong>所有预约需要人工审批</li>
+              <li><strong>Premium（高级服务）：</strong>享受最高优先级和无限制服务</li>
+            </ul>
+          </Col>
+          <Col xs={24} md={12}>
+            <Title level={5}>参数说明：</Title>
+            <ul className="text-sm text-gray-600">
+              <li><strong>自动批准次数：</strong>每月无需审批的预约数量</li>
+              <li><strong>过期时间：</strong>待审批预约的超时时间</li>
+              <li><strong>提醒偏移：</strong>会议前多久发送提醒（24,1表示24小时和1小时前）</li>
+            </ul>
+          </Col>
+        </Row>
+      </Card>
     </div>
   )
 }

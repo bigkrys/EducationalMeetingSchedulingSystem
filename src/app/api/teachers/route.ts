@@ -145,11 +145,20 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
     const teacher = await prisma.teacher.create({
       data: {
         userId: body.userId,
-        subjects: body.subjects,
         maxDailyMeetings: body.maxDailyMeetings || 8,
         bufferMinutes: body.bufferMinutes || 15
       }
     })
+
+    // 创建教师-科目关联
+    if (Array.isArray(body.subjects) && body.subjects.length > 0) {
+      await prisma.teacherSubject.createMany({
+        data: body.subjects.map((subjectId: string) => ({
+          teacherId: teacher.id,
+          subjectId
+        }))
+      })
+    }
 
     // 记录审计日志
     await prisma.auditLog.create({

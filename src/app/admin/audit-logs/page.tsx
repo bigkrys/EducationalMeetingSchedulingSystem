@@ -1,5 +1,6 @@
 'use client'
 
+
 import { useState, useEffect } from 'react'
 import { 
   Card, 
@@ -23,6 +24,8 @@ import {
   DownloadOutlined,
   CalendarOutlined
 } from '@ant-design/icons'
+
+const { Option } = Select
 
 const { Title, Text } = Typography
 const { Search } = Input
@@ -206,14 +209,14 @@ export default function AuditLogs() {
               style={{ width: '100%' }}
               allowClear
             >
-              <Select.Option value="WAITLIST_ADDED">候补队列添加</Select.Option>
-              <Select.Option value="APPOINTMENT_CREATED">预约创建</Select.Option>
-              <Select.Option value="APPOINTMENT_APPROVED">预约批准</Select.Option>
-              <Select.Option value="APPOINTMENT_REJECTED">预约拒绝</Select.Option>
-              <Select.Option value="APPOINTMENT_CANCELLED">预约取消</Select.Option>
-              <Select.Option value="APPOINTMENT_EXPIRED">预约过期</Select.Option>
-              <Select.Option value="USER_LOGIN">用户登录</Select.Option>
-              <Select.Option value="USER_REGISTERED">用户注册</Select.Option>
+              <Option value="WAITLIST_ADDED">候补队列添加</Option>
+              <Option value="APPOINTMENT_CREATED">预约创建</Option>
+              <Option value="APPOINTMENT_APPROVED">预约批准</Option>
+              <Option value="APPOINTMENT_REJECTED">预约拒绝</Option>
+              <Option value="APPOINTMENT_CANCELLED">预约取消</Option>
+              <Option value="APPOINTMENT_EXPIRED">预约过期</Option>
+              <Option value="USER_LOGIN">用户登录</Option>
+              <Option value="USER_REGISTERED">用户注册</Option>
             </Select>
           </Col>
 

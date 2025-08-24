@@ -36,6 +36,7 @@ export default function LoginForm() {
     bufferMinutes: 15
   })
   const [loading, setLoading] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,12 +111,19 @@ export default function LoginForm() {
         console.log('================')
         
         if (isLogin) {
-          // 登录成功，存储 token 并跳转
+          // 登录成功，存储 token
           localStorage.setItem('accessToken', data.accessToken)
           localStorage.setItem('refreshToken', data.refreshToken)
           localStorage.setItem('userRole', data.role)
-          // 使用 router.push 避免页面闪烁
-          router.push('/dashboard')
+          
+          // 显示跳转状态
+          setLoading(false)
+          setRedirecting(true)
+          
+          // 短暂延迟后跳转，让用户看到成功反馈
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 800)
         } else {
           // 注册成功，切换到登录模式
           setIsLogin(true)
@@ -140,7 +148,9 @@ export default function LoginForm() {
       console.log('=======================')
       setError('网络错误，请重试')
     } finally {
-      setLoading(false)
+      if (!redirecting) {
+        setLoading(false)
+      }
     }
   }
 
@@ -148,18 +158,28 @@ export default function LoginForm() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  // 如果正在加载，显示加载状态
-  if (loading) {
+  // 如果正在加载或跳转，显示加载状态
+  if (loading || redirecting) {
     return (
       <div className="bg-white rounded-lg shadow-xl p-8">
-        <div className="text-center mb-6">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4"></div>
-            <div className="h-6 bg-gray-200 rounded mb-2"></div>
-            <div className="h-6 bg-gray-200 rounded mb-2"></div>
-            <div className="h-6 bg-gray-200 rounded mb-4"></div>
-            <div className="h-10 bg-gray-200 rounded"></div>
-          </div>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {redirecting ? '登录成功！' : (isLogin ? '正在登录...' : '正在注册...')}
+          </h3>
+          <p className="text-gray-500">
+            {redirecting ? '正在跳转到主页面，请稍候...' : '请稍候'}
+          </p>
+          {redirecting && (
+            <div className="mt-4">
+              <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                </svg>
+                验证通过
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )

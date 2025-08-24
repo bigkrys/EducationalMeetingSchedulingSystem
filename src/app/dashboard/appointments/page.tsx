@@ -17,6 +17,8 @@ import {
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
+import AuthGuard from '@/components/shared/AuthGuard'
+import PageLoader from '@/components/shared/PageLoader'
 
 const { Option } = Select
 const { TextArea } = Input
@@ -72,7 +74,8 @@ export default function AppointmentsManagement() {
         ? `/api/appointments?role=teacher&teacherId=${userId}`
         : `/api/appointments?role=admin`
       
-      const data = await httpClient.get<{ items: Appointment[] }>(endpoint)
+      const response = await httpClient.get(endpoint)
+      const data = await response.json()
       setAppointments(data.items || [])
     } catch (error: any) {
       setError(error.message || '获取预约列表失败')
@@ -173,7 +176,7 @@ export default function AppointmentsManagement() {
     {
       title: isTeacher ? '学生' : '学生/教师',
       key: 'participants',
-      render: (_, record: Appointment) => (
+      render: (_: any, record: Appointment) => (
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <UserOutlined className="text-blue-600" />
@@ -248,7 +251,7 @@ export default function AppointmentsManagement() {
     {
       title: '操作',
       key: 'action',
-      render: (_, record: Appointment) => (
+      render: (_: any, record: Appointment) => (
         <Space>
           {record.status === 'pending' && isTeacher && (
             <>
@@ -289,14 +292,16 @@ export default function AppointmentsManagement() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">加载中...</div>
-      </div>
+      <PageLoader 
+        message="正在加载预约数据" 
+        description="正在获取预约列表和状态信息"
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 页面头部 */}
         <div className="mb-6">
@@ -510,6 +515,7 @@ export default function AppointmentsManagement() {
           )}
         </Modal>
       </div>
-    </div>
+      </div>
+    </AuthGuard>
   )
 }

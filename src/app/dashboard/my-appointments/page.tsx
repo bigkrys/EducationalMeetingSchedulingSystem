@@ -15,6 +15,8 @@ import {
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId } from '@/lib/api/auth'
+import { StudentGuard } from '@/components/shared/AuthGuard'
+import PageLoader from '@/components/shared/PageLoader'
 
 const { Option } = Select
 
@@ -58,9 +60,10 @@ export default function MyAppointments() {
         return
       }
 
-      const data = await httpClient.get<{ items: Appointment[] }>(
+      const response = await httpClient.get(
         `/api/appointments?role=student&studentId=${userId}`
       )
+      const data = await response.json()
       
       setAppointments(data.items || [])
     } catch (error: any) {
@@ -223,14 +226,16 @@ export default function MyAppointments() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">加载中...</div>
-      </div>
+      <PageLoader 
+        message="正在加载预约记录" 
+        description="正在获取您的所有预约信息和状态更新"
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <StudentGuard>
+      <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 页面头部 */}
         <div className="mb-6">
@@ -391,6 +396,7 @@ export default function MyAppointments() {
           )}
         </Modal>
       </div>
-    </div>
+      </div>
+    </StudentGuard>
   )
 }

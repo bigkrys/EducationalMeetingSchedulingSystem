@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthListener from "@/components/shared/AuthListener";
+import StyledComponentsRegistry from '@/components/shared/StyledComponentsRegistry';
 
 export const metadata: Metadata = {
   title: "教育会议调度系统",
@@ -15,9 +16,11 @@ export default function RootLayout({
   return (
     <html lang="zh">
       <body className="antialiased">
-        <AuthListener>
-          {children}
-        </AuthListener>
+        <StyledComponentsRegistry>
+          <AuthListener>
+            {children}
+          </AuthListener>
+        </StyledComponentsRegistry>
       </body>
     </html>
   );

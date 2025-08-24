@@ -101,7 +101,7 @@ export interface BlockedTime {
   teacherId: string
   startTime: Date
   endTime: Date
-  reason?: string
+  reason: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -254,4 +254,19 @@ export interface PaginatedResponse<T> {
   limit: number
   totalPages: number
   nextCursor?: string
+}
+
+// 组件相关类型
+export interface SubjectListProps {
+  subjects: Subject[]
+  selectedSubjectIds: string[]
+  onSubjectToggle: (subjectId: string) => void
+  onBlur?: () => void
+  disabled?: boolean
+}
+
+export interface SubjectSelectAllProps {
+  isAllSelected: boolean
+  onSelectAll: (event: React.ChangeEvent<HTMLInputElement>) => void
+  disabled?: boolean
 }

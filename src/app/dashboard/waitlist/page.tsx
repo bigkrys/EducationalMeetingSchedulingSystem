@@ -63,9 +63,10 @@ export default function Waitlist() {
         return
       }
 
-      const data = await httpClient.get<{ items: WaitlistEntry[] }>(
+      const response = await httpClient.get(
         `/api/waitlist?studentId=${userId}`
       )
+      const data = await response.json()
       
       setWaitlist(data.items || [])
     } catch (error: any) {

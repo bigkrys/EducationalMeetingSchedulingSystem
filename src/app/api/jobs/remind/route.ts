@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
         return { success: true, appointmentId: appointment.id }
       } catch (error) {
         console.error(`Failed to send reminder for appointment ${appointment.id}:`, error)
-        return { success: false, appointmentId: appointment.id, error: error.message }
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        return { success: false, appointmentId: appointment.id, error: errorMessage }
       }
     })
 
@@ -118,7 +119,7 @@ async function getAlreadyRemindedAppointments(offsetHours: number): Promise<stri
     select: { targetId: true }
   })
 
-  return logs.map(log => log.targetId)
+  return logs.map(log => log.targetId).filter((id): id is string => id !== null)
 }
 
 // 发送提醒的函数（模拟实现）

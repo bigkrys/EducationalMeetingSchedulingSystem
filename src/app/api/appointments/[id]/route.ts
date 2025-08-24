@@ -3,7 +3,7 @@ import { prisma } from '@/lib/api/db'
 import { updateAppointmentSchema } from '@/lib/api/validation'
 import { withRoles } from '@/lib/api/middleware'
 import { deleteCachePattern } from '@/lib/api/cache'
-import { sendAppointmentApprovedNotification, sendAppointmentCancelledNotification } from '@/lib/api/email'
+import { sendAppointmentApprovedNotification, sendAppointmentCancelledNotification, sendAppointmentRejectedNotification } from '@/lib/api/email'
 import { z } from 'zod'
 
 // 更新预约状态

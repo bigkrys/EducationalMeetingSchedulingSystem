@@ -6,6 +6,8 @@ import { Card, Alert, Button, message } from 'antd'
 import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
 import StudentBookingCalendar from '@/components/student/StudentBookingCalendar'
 import { getCurrentUserId } from '@/lib/api/auth'
+import { StudentGuard } from '@/components/shared/AuthGuard'
+import PageLoader from '@/components/shared/PageLoader'
 
 export default function BookAppointment() {
   const [studentId, setStudentId] = useState<string>('')
@@ -62,9 +64,10 @@ export default function BookAppointment() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">加载中...</div>
-      </div>
+      <PageLoader 
+        message="正在准备预约系统" 
+        description="正在获取您的学生信息和可预约教师列表"
+      />
     )
   }
 
@@ -89,7 +92,8 @@ export default function BookAppointment() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <StudentGuard>
+      <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 页面头部 */}
         <div className="mb-6">
@@ -129,6 +133,7 @@ export default function BookAppointment() {
           onBookingSuccess={handleBookingSuccess}
         />
       </div>
-    </div>
+      </div>
+    </StudentGuard>
   )
 }

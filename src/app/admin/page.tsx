@@ -1,6 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+// 强制动态渲染，避免预渲染问题
+export const dynamic = 'force-dynamic'
+
+import React, { useState, useEffect } from 'react'
+import { AdminGuard } from '@/components/shared/AuthGuard'
 import { 
   Card, 
   Button, 
@@ -106,200 +110,192 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '50vh' 
-      }}>
+      <div className="flex items-center justify-center min-h-screen">
         <Spin size="large" />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <Title level={2}>管理员控制台</Title>
-        <Text type="secondary">系统概览和快速操作</Text>
+    <AdminGuard>
+      <div className="container mx-auto px-4 py-8">
+      {/* 顶部标题 */}
+      <div className="mb-8">
+        <Title level={2}>
+          <BarChartOutlined className="mr-3" />
+          管理员仪表板
+        </Title>
+        <Text type="secondary">
+          系统概览和管理工具
+        </Text>
       </div>
 
       {/* 统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={24} md={12} lg={8}>
+      <Row gutter={[16, 16]} className="mb-8">
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="总用户数"
               value={dashboardData?.stats.totalUsers || 0}
               prefix={<UserOutlined />}
+              valueStyle={{ color: '#1890ff' }}
             />
           </Card>
         </Col>
-        <Col xs={24} md={12} lg={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="学生总数"
+              title="学生数量"
               value={dashboardData?.stats.totalStudents || 0}
               prefix={<UserOutlined />}
+              valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
-        <Col xs={24} md={12} lg={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="教师总数"
+              title="教师数量"
               value={dashboardData?.stats.totalTeachers || 0}
               prefix={<UserOutlined />}
+              valueStyle={{ color: '#722ed1' }}
             />
           </Card>
         </Col>
-        <Col xs={24} md={12} lg={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="总预约数"
               value={dashboardData?.stats.totalAppointments || 0}
               prefix={<CalendarOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} md={12} lg={8}>
-          <Card>
-            <Statistic
-              title="待审批"
-              value={dashboardData?.stats.pendingApprovals || 0}
-              prefix={<ClockCircleOutlined />}
               valueStyle={{ color: '#fa8c16' }}
             />
           </Card>
         </Col>
-        <Col xs={24} md={12} lg={8}>
-          <Card>
-            <Statistic
-              title="已过期"
-              value={dashboardData?.stats.expiredAppointments || 0}
-              prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
       </Row>
 
-      {/* 系统健康状态和快速操作 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <Space>
-                <BarChartOutlined />
-                系统健康状态
-              </Space>
-            }
+      {/* 重要指标 */}
+      <Row gutter={[16, 16]} className="mb-8">
+        <Col xs={24} md={12}>
+          <Card 
+            title="待处理事项" 
+            extra={<ClockCircleOutlined />}
           >
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>数据库</Text>
-                <Space>
-                  {getHealthIcon(dashboardData?.systemHealth.database || 'warning')}
-                  <Tag color={getHealthColor(dashboardData?.systemHealth.database || 'warning')}>
-                    {getHealthText(dashboardData?.systemHealth.database || 'warning')}
+            <Row gutter={16}>
+              <Col span={12}>
+                <Statistic
+                  title="待审批预约"
+                  value={dashboardData?.stats.pendingApprovals || 0}
+                  valueStyle={{ color: '#faad14' }}
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic
+                  title="过期预约"
+                  value={dashboardData?.stats.expiredAppointments || 0}
+                  valueStyle={{ color: '#ff4d4f' }}
+                />
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+        
+        <Col xs={24} md={12}>
+          <Card 
+            title="系统健康状态" 
+            extra={<SettingOutlined />}
+          >
+            <Space direction="vertical" className="w-full">
+              <div className="flex justify-between items-center">
+                <span>数据库</span>
+                <div>
+                  {getHealthIcon(dashboardData?.systemHealth.database || 'healthy')}
+                  <Tag 
+                    color={getHealthColor(dashboardData?.systemHealth.database || 'healthy')}
+                    className="ml-2"
+                  >
+                    {getHealthText(dashboardData?.systemHealth.database || 'healthy')}
                   </Tag>
-                </Space>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>缓存</Text>
-                <Space>
-                  {getHealthIcon(dashboardData?.systemHealth.cache || 'warning')}
-                  <Tag color={getHealthColor(dashboardData?.systemHealth.cache || 'warning')}>
-                    {getHealthText(dashboardData?.systemHealth.cache || 'warning')}
+              <div className="flex justify-between items-center">
+                <span>缓存</span>
+                <div>
+                  {getHealthIcon(dashboardData?.systemHealth.cache || 'healthy')}
+                  <Tag 
+                    color={getHealthColor(dashboardData?.systemHealth.cache || 'healthy')}
+                    className="ml-2"
+                  >
+                    {getHealthText(dashboardData?.systemHealth.cache || 'healthy')}
                   </Tag>
-                </Space>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>队列</Text>
-                <Space>
-                  {getHealthIcon(dashboardData?.systemHealth.queue || 'warning')}
-                  <Tag color={getHealthColor(dashboardData?.systemHealth.queue || 'warning')}>
-                    {getHealthText(dashboardData?.systemHealth.queue || 'warning')}
+              <div className="flex justify-between items-center">
+                <span>队列</span>
+                <div>
+                  {getHealthIcon(dashboardData?.systemHealth.queue || 'healthy')}
+                  <Tag 
+                    color={getHealthColor(dashboardData?.systemHealth.queue || 'healthy')}
+                    className="ml-2"
+                  >
+                    {getHealthText(dashboardData?.systemHealth.queue || 'healthy')}
                   </Tag>
-                </Space>
+                </div>
               </div>
             </Space>
           </Card>
         </Col>
+      </Row>
 
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <Space>
-                <SettingOutlined />
-                快速操作
-              </Space>
-            }
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
-              <Button block style={{ textAlign: 'left' }}>
-                <UserOutlined style={{ marginRight: '8px' }} />
+      {/* 快速操作 */}
+      <Card title="快速操作" extra={<SettingOutlined />}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} md={8}>
+            <Card 
+              type="inner"
+              title="用户管理"
+              extra={<UserOutlined />}
+            >
+              <p>查看和管理系统用户</p>
+              <Button type="primary" href="/admin/users" className="mt-3">
                 管理用户
               </Button>
-              <Button block style={{ textAlign: 'left' }}>
-                <FileTextOutlined style={{ marginRight: '8px' }} />
-                管理科目
-              </Button>
-              <Button block style={{ textAlign: 'left' }}>
-                <SettingOutlined style={{ marginRight: '8px' }} />
-                管理策略
-              </Button>
-              <Button block style={{ textAlign: 'left' }}>
-                <BarChartOutlined style={{ marginRight: '8px' }} />
-                查看审计日志
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 系统任务 */}
-      <Card
-        title={
-          <Space>
-            <ClockCircleOutlined />
-            系统任务
-          </Space>
-        }
-      >
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                过期待审批
-              </Text>
-              <Button size="small" type="primary">
-                立即执行
+            </Card>
+          </Col>
+          
+          <Col xs={24} sm={12} md={8}>
+            <Card 
+              type="inner"
+              title="审计日志"
+              extra={<FileTextOutlined />}
+            >
+              <p>查看系统操作记录</p>
+              <Button type="primary" href="/admin/audit-logs" className="mt-3">
+                查看日志
               </Button>
             </Card>
           </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                重置配额
-              </Text>
-              <Button size="small" type="primary">
-                立即执行
-              </Button>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                发送提醒
-              </Text>
-              <Button size="small" type="primary">
+          
+          <Col xs={24} sm={12} md={8}>
+            <Card 
+              type="inner"
+              title="系统作业"
+              extra={<ClockCircleOutlined />}
+            >
+              <p>执行系统维护任务</p>
+              <Button type="primary" onClick={() => {
+                // 执行过期预约清理
+                fetch('/api/jobs/expire-pending', { method: 'POST' })
+                  .then(() => alert('过期预约清理任务已启动'))
+                  .catch(() => alert('任务执行失败'))
+              }} className="mt-3">
                 立即执行
               </Button>
             </Card>
           </Col>
         </Row>
-      </Card>
-    </div>
+        </Card>
+      </div>
+    </AdminGuard>
   )
 }

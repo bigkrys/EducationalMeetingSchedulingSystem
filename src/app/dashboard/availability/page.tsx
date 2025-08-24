@@ -8,6 +8,8 @@ import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId } from '@/lib/api/auth'
 import TeacherAvailabilityCalendar from '@/components/teacher/TeacherAvailabilityCalendar'
+import { TeacherGuard } from '@/components/shared/AuthGuard'
+import PageLoader from '@/components/shared/PageLoader'
 
 const { Option } = Select
 const { Title, Text } = Typography
@@ -173,26 +175,48 @@ export default function TeacherAvailability() {
   }
 
   if (!teacher) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white shadow rounded-lg p-6">
-            <div className="text-center py-4">
-              {loading ? '加载教师信息中...' : error || '加载教师信息中...'}
-            </div>
-            {error && (
-              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                {error}
-              </div>
-            )}
+    if (loading) {
+      return (
+        <PageLoader 
+          message="正在加载教师信息" 
+          description="正在获取您的教学安排和可用时间设置"
+        />
+      )
+    }
+    
+    if (error) {
+      return (
+        <div className="min-h-screen bg-gray-50 py-8">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <Card className="shadow-lg">
+              <Alert
+                message="加载失败"
+                description={error}
+                type="error"
+                showIcon
+                action={
+                  <Button size="small" danger onClick={() => router.push('/dashboard')}>
+                    返回主页
+                  </Button>
+                }
+              />
+            </Card>
           </div>
         </div>
-      </div>
+      )
+    }
+    
+    return (
+      <PageLoader 
+        message="教师信息验证中" 
+        description="正在验证您的教师身份和权限"
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <TeacherGuard>
+      <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 顶部导航栏 */}
         <div className="flex items-center justify-between mb-6">
@@ -249,6 +273,7 @@ export default function TeacherAvailability() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </TeacherGuard>
   )
 }

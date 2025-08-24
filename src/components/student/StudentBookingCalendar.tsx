@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Space, message, DatePicker, Modal, Form, Select } from 'antd'
 import { CalendarOutlined, ClockCircleOutlined, UserOutlined, BookOutlined } from '@ant-design/icons'
+import { useRouter } from 'next/navigation'
 
 const { Option } = Select
 
@@ -26,14 +27,17 @@ export default function StudentBookingCalendar({
   studentName,
   onBookingSuccess
 }: StudentBookingCalendarProps) {
+  const router = useRouter()
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTeacher, setSelectedTeacher] = useState<string>('')
   const [selectedSubject, setSelectedSubject] = useState<string>('')
   const [timeSlots, setTimeSlots] = useState<CalendarSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [bookingModalVisible, setBookingModalVisible] = useState(false)
-  const [teachers, setTeachers] = useState<any[]>([])
-  const [subjects, setSubjects] = useState<string[]>([])
+  const [allTeachers, setAllTeachers] = useState<any[]>([])
+  const [studentSubjects, setStudentSubjects] = useState<string[]>([])
+  const [filteredTeachers, setFilteredTeachers] = useState<any[]>([])
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([])
   const [form] = Form.useForm()
 
   // 获取教师列表
@@ -56,23 +60,29 @@ export default function StudentBookingCalendar({
         console.log('获取到的教师数据:', data)
         
         // 确保数据是数组
+        let teachersData = []
         if (Array.isArray(data)) {
-          setTeachers(data)
+          teachersData = data
         } else if (data && Array.isArray(data.teachers)) {
-          setTeachers(data.teachers)
+          teachersData = data.teachers
         } else {
           console.warn('教师数据格式不支持:', data)
-          setTeachers([])
+          teachersData = []
         }
+        
+        setAllTeachers(teachersData)
+        return teachersData
       } else {
         const errorData = await response.json()
         message.error(errorData.message || '获取教师列表失败')
-        setTeachers([])
+        setAllTeachers([])
+        return []
       }
     } catch (error) {
       console.error('获取教师列表失败:', error)
       message.error('获取教师列表失败')
-      setTeachers([])
+      setAllTeachers([])
+      return []
     }
   }
 
@@ -95,31 +105,100 @@ export default function StudentBookingCalendar({
         const userData = await response.json()
         console.log('获取到的学生数据:', userData)
         
+        let subjects = []
         if (userData.student && userData.student.enrolledSubjects) {
-          // 确保科目是数组
+          // 处理不同的科目数据格式
           if (Array.isArray(userData.student.enrolledSubjects)) {
-            setSubjects(userData.student.enrolledSubjects)
+            // 如果已经是数组，直接使用
+            subjects = userData.student.enrolledSubjects
+          } else if (typeof userData.student.enrolledSubjects === 'string') {
+            // 如果是字符串，转换为数组（支持逗号分隔或单个科目）
+            subjects = userData.student.enrolledSubjects
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0)
+            console.log('将科目字符串转换为数组:', userData.student.enrolledSubjects, '→', subjects)
           } else {
-            console.warn('学生科目数据格式不支持:', userData.student.enrolledSubjects)
-            setSubjects([])
+            console.warn('学生科目数据格式不支持:', userData.student.enrolledSubjects, '类型:', typeof userData.student.enrolledSubjects)
+            subjects = []
           }
         } else {
           console.log('学生没有注册科目或科目数据不完整')
-          setSubjects([])
+          subjects = []
         }
+        
+        setStudentSubjects(subjects)
+        return subjects
       } else {
         console.error('获取学生信息失败')
-        setSubjects([])
+        setStudentSubjects([])
+        return []
       }
     } catch (error) {
       console.error('获取学生科目失败:', error)
-      setSubjects([])
+      setStudentSubjects([])
+      return []
     }
   }
 
+  // 过滤教师和科目
+  const filterTeachersAndSubjects = (teachers: any[], subjects: string[]) => {
+    console.log('=== 教师科目匹配开始 ===')
+    console.log('学生已注册科目:', subjects)
+    console.log('系统中的所有教师数量:', teachers.length)
+    
+    if (!subjects.length) {
+      console.log('学生未注册任何科目，无法预约')
+      setFilteredTeachers([])
+      setAvailableSubjects([])
+      return
+    }
+
+    // 只显示能教授学生已注册科目的教师
+    const availableTeachers = teachers.filter(teacher => {
+      if (!teacher.subjects || !Array.isArray(teacher.subjects)) {
+        console.log(`教师 ${teacher.name} 无科目信息，跳过`)
+        return false
+      }
+      
+      // 检查教师是否至少能教授学生的一个科目
+      const canTeach = teacher.subjects.some((teacherSubject: string) => 
+        subjects.includes(teacherSubject)
+      )
+      
+      if (canTeach) {
+        console.log(`✓ 教师 ${teacher.name} 可以教授: ${teacher.subjects.filter(s => subjects.includes(s)).join(', ')}`)
+      } else {
+        console.log(`✗ 教师 ${teacher.name} 的科目 [${teacher.subjects.join(', ')}] 与学生科目不匹配`)
+      }
+      
+      return canTeach
+    })
+
+    // 学生可选的科目是：学生已注册的科目
+    const availableSubjects = [...subjects]
+
+    console.log('=== 过滤结果 ===')
+    console.log(`匹配的教师数量: ${availableTeachers.length}`)
+    console.log('可预约的教师:', availableTeachers.map(t => t.name))
+    console.log('学生可选科目:', availableSubjects)
+    console.log('==================')
+
+    setFilteredTeachers(availableTeachers)
+    setAvailableSubjects(availableSubjects)
+  }
+
   useEffect(() => {
-    fetchTeachers()
-    fetchStudentSubjects()
+    const loadData = async () => {
+      const [teachers, subjects] = await Promise.all([
+        fetchTeachers(),
+        fetchStudentSubjects()
+      ])
+      
+      filterTeachersAndSubjects(teachers, subjects)
+    }
+    
+    loadData()
   }, [])
 
   useEffect(() => {
@@ -190,21 +269,29 @@ export default function StudentBookingCalendar({
     setTimeSlots([])
     
     if (teacherId) {
-      const teacher = teachers.find(t => t.id === teacherId)
-      if (teacher && teacher.subjects && Array.isArray(teacher.subjects) && teacher.subjects.length > 0) {
-        // 更新科目列表为教师教授的科目
-        setSubjects(teacher.subjects)
-        // 自动选择第一个科目
-        setSelectedSubject(teacher.subjects[0])
-      } else {
-        // 如果教师没有科目信息，清空科目列表
-        setSubjects([])
-        setSelectedSubject('')
+      const teacher = filteredTeachers.find(t => t.id === teacherId)
+      if (teacher && teacher.subjects && Array.isArray(teacher.subjects)) {
+        // 获取该教师可以教授的且学生已注册的科目
+        const teacherStudentCommonSubjects = teacher.subjects.filter(
+          (subject: string) => studentSubjects.includes(subject)
+        )
+        
+        console.log('教师和学生共同的科目:', teacherStudentCommonSubjects)
+        
+        if (teacherStudentCommonSubjects.length === 0) {
+          console.warn('警告：选择的教师与学生没有共同科目，这不应该发生！')
+          message.warning('该教师暂时无法教授您的科目，请选择其他教师')
+          setSelectedTeacher('')
+          return
+        }
+        
+        // 如果只有一个共同科目，自动选择
+        if (teacherStudentCommonSubjects.length === 1) {
+          setSelectedSubject(teacherStudentCommonSubjects[0])
+          console.log('自动选择唯一科目:', teacherStudentCommonSubjects[0])
+        }
+        // 如果有多个科目，保持为空让用户选择
       }
-    } else {
-      // 如果没有选择教师，恢复为学生已注册的科目
-      fetchStudentSubjects()
-      setSelectedSubject('')
     }
   }
 
@@ -275,11 +362,15 @@ export default function StudentBookingCalendar({
 
       if (response.ok) {
         const result = await response.json()
-        message.success('预约成功！')
+        message.success('预约成功！正在跳转到我的预约页面...')
         setBookingModalVisible(false)
         form.resetFields()
-        fetchTimeSlots()
         onBookingSuccess?.()
+        
+        // 延迟跳转，让用户看到成功消息
+        setTimeout(() => {
+          router.push('/dashboard/my-appointments')
+        }, 1000)
       } else {
         const errorData = await response.json()
         console.error('预约失败详情:', errorData)
@@ -307,68 +398,129 @@ export default function StudentBookingCalendar({
     }
   }
 
+  // 显示用户提示信息
+  const renderUserInfo = () => {
+    if (!studentSubjects.length) {
+      return (
+        <Card title="无法预约">
+          <div className="text-center py-8">
+            <div className="text-yellow-600 mb-4">
+              <BookOutlined style={{ fontSize: '48px' }} />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">您还没有注册任何科目</h3>
+            <p className="text-gray-500 mb-4">请联系管理员为您注册科目后再进行预约</p>
+          </div>
+        </Card>
+      )
+    }
+    
+    if (!filteredTeachers.length) {
+      return (
+        <Card title="暂无可选老师">
+          <div className="text-center py-8">
+            <div className="text-blue-400 mb-4">
+              <UserOutlined style={{ fontSize: '48px' }} />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">暂无可选老师，请稍后</h3>
+            <p className="text-gray-500 mb-4">
+              您已注册的科目：{studentSubjects.join(', ')}
+            </p>
+            <p className="text-gray-500">教师们可能正在更新课程安排，请稍后再试</p>
+            <div className="mt-6">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                刷新重试
+              </button>
+            </div>
+          </div>
+        </Card>
+      )
+    }
+    
+    return null
+  }
+
   return (
     <div className="space-y-6">
+      {/* 用户提示信息 */}
+      {renderUserInfo()}
+      
       {/* 选择器 */}
-      <Card title="选择教师和科目">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <UserOutlined className="mr-2" />
-              选择教师
-            </label>
-            <Select
-              value={selectedTeacher}
-              onChange={handleTeacherChange}
-              placeholder="请选择教师"
-              className="w-full"
-            >
-              {Array.isArray(teachers) && teachers.map(teacher => (
-                <Option key={teacher.id} value={teacher.id}>
-                  {teacher.name} - {teacher.subjects?.join(', ') || '无科目'}
-                </Option>
-              ))}
-            </Select>
-          </div>
+      {studentSubjects.length > 0 && filteredTeachers.length > 0 && (
+        <Card title="选择教师和科目">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <UserOutlined className="mr-2" />
+                选择教师
+              </label>
+              <Select
+                value={selectedTeacher}
+                onChange={handleTeacherChange}
+                placeholder="请选择教师"
+                className="w-full"
+              >
+                {Array.isArray(filteredTeachers) && filteredTeachers.map(teacher => (
+                  <Option key={teacher.id} value={teacher.id}>
+                    {teacher.name} - {teacher.subjects?.join(', ') || '无科目'}
+                  </Option>
+                ))}
+              </Select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <BookOutlined className="mr-2" />
-              选择科目
-            </label>
-            <Select
-              value={selectedSubject}
-              onChange={handleSubjectChange}
-              placeholder="请选择科目"
-              className="w-full"
-              disabled={!selectedTeacher}
-            >
-              {Array.isArray(subjects) && subjects.map(subject => (
-                <Option key={subject} value={subject}>
-                  {subject}
-                </Option>
-              ))}
-            </Select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <BookOutlined className="mr-2" />
+                选择科目
+              </label>
+              <Select
+                value={selectedSubject}
+                onChange={handleSubjectChange}
+                placeholder={selectedTeacher ? "请选择科目" : "请先选择教师"}
+                className="w-full"
+                disabled={!selectedTeacher}
+              >
+                {selectedTeacher && Array.isArray(availableSubjects) && 
+                  (() => {
+                    const teacher = filteredTeachers.find(t => t.id === selectedTeacher)
+                    if (!teacher || !teacher.subjects) return []
+                    
+                    // 只显示教师能教授且学生已注册的科目
+                    const commonSubjects = teacher.subjects.filter(
+                      (subject: string) => studentSubjects.includes(subject)
+                    )
+                    
+                    return commonSubjects.map(subject => (
+                      <Option key={subject} value={subject}>
+                        {subject}
+                      </Option>
+                    ))
+                  })()
+                }
+              </Select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <CalendarOutlined className="mr-2" />
-              选择日期
-            </label>
-            <DatePicker
-              onChange={handleDateSelect}
-              className="w-full"
-              placeholder="请选择日期"
-              disabledDate={(current) => {
-                const today = new Date()
-                today.setHours(0, 0, 0, 0)
-                return current && current.toDate() < today
-              }}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <CalendarOutlined className="mr-2" />
+                选择日期
+              </label>
+              <DatePicker
+                onChange={handleDateSelect}
+                className="w-full"
+                placeholder="请选择日期"
+                disabledDate={(current) => {
+                  const today = new Date()
+                  today.setHours(0, 0, 0, 0)
+                  return current && current.toDate() < today
+                }}
+              />
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* 可用时间列表 */}
       {selectedDate && selectedTeacher && selectedSubject && (
@@ -458,7 +610,7 @@ export default function StudentBookingCalendar({
             rules={[{ required: true, message: '请选择教师' }]}
           >
             <Select placeholder="请选择教师">
-              {Array.isArray(teachers) && teachers.map(teacher => (
+              {Array.isArray(filteredTeachers) && filteredTeachers.map(teacher => (
                 <Option key={teacher.id} value={teacher.id}>
                   {teacher.name}
                 </Option>
@@ -472,7 +624,7 @@ export default function StudentBookingCalendar({
             rules={[{ required: true, message: '请选择科目' }]}
           >
             <Select placeholder="请选择科目">
-              {Array.isArray(subjects) && subjects.map(subject => (
+              {Array.isArray(availableSubjects) && availableSubjects.map(subject => (
                 <Option key={subject} value={subject}>
                   {subject}
                 </Option>

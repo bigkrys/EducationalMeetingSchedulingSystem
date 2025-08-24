@@ -22,10 +22,7 @@ export async function POST(request: NextRequest) {
     // 获取所有需要重置配额的学生
     const studentsToReset = await prisma.student.findMany({
       where: {
-        OR: [
-          { lastQuotaReset: { lt: new Date(today.getFullYear(), today.getMonth(), 1) } },
-          { lastQuotaReset: null }
-        ]
+        lastQuotaReset: { lt: new Date(today.getFullYear(), today.getMonth(), 1) }
       },
       select: { id: true, monthlyMeetingsUsed: true, lastQuotaReset: true }
     })

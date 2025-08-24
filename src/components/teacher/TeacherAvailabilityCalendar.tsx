@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, Button, Space, message, Modal, Form, Select, DatePicker, Tag, Empty } from 'antd'
 import { PlusOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
+import { api } from '@/lib/api/http-client'
 
 import AddAvailabilityModal from './AddAvailabilityModal'
 
@@ -194,26 +195,14 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           console.log('dayOfWeek 字段值:', values.dayOfWeek, '类型:', typeof values.dayOfWeek)
           console.log('星期名称:', ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][values.dayOfWeek])
 
-          const response = await fetch(`/api/teachers/${teacherId}/availability`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(availabilityData)
-          })
-
+          // 使用新的HTTP客户端，它会自动处理错误
+          const response = await api.post(`/api/teachers/${teacherId}/availability`, availabilityData)
+          
           if (!response.ok) {
+            // 全局错误处理器会自动显示错误消息
+            // 这里只需要抛出错误以停止后续处理
             const errorData = await response.json()
-            console.log('API 错误响应:', errorData)
-            
-            // 优化错误提示
-            let errorMessage = errorData.message || '添加可用性失败'
-            if (errorMessage.includes('时间冲突') || errorMessage.includes('冲突')) {
-              errorMessage = `时间冲突：${errorMessage}\n\n提示：同一星期几内不能设置重叠的时间段。请检查您是否在同一天设置了重复或重叠的时间。`
-            }
-            
-            throw new Error(errorMessage)
+            throw new Error(errorData.message || '添加可用性失败')
           }
 
           return response.json()

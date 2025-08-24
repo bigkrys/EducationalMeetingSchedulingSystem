@@ -1,5 +1,8 @@
 'use client'
 
+// 强制动态渲染，避免预渲染问题
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import { 
   Button, 
@@ -24,6 +27,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined
 } from '@ant-design/icons'
+
+const { Option } = Select
 
 const { Title, Text } = Typography
 const { Search } = Input
@@ -207,10 +212,10 @@ export default function UserManagement() {
               style={{ width: 120 }}
               allowClear
             >
-              <Select.Option value="">全部角色</Select.Option>
-              <Select.Option value="student">学生</Select.Option>
-              <Select.Option value="teacher">教师</Select.Option>
-              {/* <Select.Option value="admin">管理员</Select.Option> */}
+              <Option value="">全部角色</Option>
+              <Option value="student">学生</Option>
+              <Option value="teacher">教师</Option>
+              {/* <Option value="admin">管理员</Option> */}
             </Select>
           </Col>
           <Col>

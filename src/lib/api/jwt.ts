@@ -12,10 +12,8 @@ export interface JWTPayload {
 
 export function generateAccessToken(payload: JWTPayload): string {
   // 开发环境使用更长的token有效期，生产环境使用15分钟
-  const ttl = process.env.NODE_ENV === 'development' 
-    ? (process.env.ACCESS_TOKEN_TTL_MIN || '60')  // 开发环境默认60分钟
-    : (process.env.ACCESS_TOKEN_TTL_MIN || '15')  // 生产环境默认15分钟
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: `${ttl}m` })
+  const ttl = parseInt(process.env.ACCESS_TOKEN_TTL_MIN || '60')
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: `${ttl}m` as any })
 }
 
 export function generateRefreshToken(payload: JWTPayload): string {

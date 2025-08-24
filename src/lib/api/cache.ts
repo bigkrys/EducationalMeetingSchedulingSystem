@@ -41,6 +41,16 @@ class MemoryCache {
       }
     }
   }
+
+  // 清理过期缓存
+  cleanup() {
+    const now = Date.now()
+    for (const [key, item] of this.cache.entries()) {
+      if (now - item.timestamp > item.ttl) {
+        this.cache.delete(key)
+      }
+    }
+  }
 }
 
 export const memoryCache = new MemoryCache()
@@ -132,12 +142,7 @@ export async function deleteCachePattern(pattern: string) {
 
 // 清理过期缓存
 export function cleanupMemoryCache() {
-  const now = Date.now()
-  for (const [key, item] of memoryCache.cache.entries()) {
-    if (now - item.timestamp > item.ttl) {
-      memoryCache.delete(key)
-    }
-  }
+  memoryCache.cleanup()
 }
 
 // 定期清理内存缓存

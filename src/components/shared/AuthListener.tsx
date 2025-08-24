@@ -1,5 +1,8 @@
 'use client'
 
+// 导入Ant Design React兼容性补丁
+import '@ant-design/v5-patch-for-react-19'
+
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
@@ -9,6 +12,7 @@ import {
   clearStoredTokens,
   isTokenExpiringSoon 
 } from '@/lib/api/auth'
+import { initializeGlobalErrorHandler } from '@/lib/api/global-error-handler'
 
 interface AuthListenerProps {
   children: React.ReactNode
@@ -19,6 +23,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
   const refreshTimeoutRef = useRef<NodeJS.Timeout>()
   const activityTimeoutRef = useRef<NodeJS.Timeout>()
   const lastActivityRef = useRef<number>(Date.now())
+  const originalWarnRef = useRef<typeof console.warn | null>(null)
 
   // 处理用户活动
   const handleUserActivity = () => {
@@ -104,6 +109,29 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     // 只在客户端运行
     if (typeof window === 'undefined') return
 
+    // 抑制Ant Design React兼容性警告
+    if (!originalWarnRef.current) {
+      originalWarnRef.current = console.warn
+      console.warn = function (...args) {
+        const message = args[0]
+        if (typeof message === 'string' && message.includes('[antd: compatible]')) {
+          // 抑制Ant Design兼容性警告
+          return
+        }
+        if (originalWarnRef.current) {
+          originalWarnRef.current.apply(console, args)
+        }
+      }
+    }
+
+    // 初始化全局错误处理器
+    try {
+      initializeGlobalErrorHandler()
+      console.log('✅ 全局错误处理器已在AuthListener中初始化')
+    } catch (error) {
+      console.error('❌ 全局错误处理器初始化失败:', error)
+    }
+
     // 使用节流的事件监听，减少性能开销
     let timeoutId: NodeJS.Timeout | null = null
     const throttledHandleUserActivity = (event: Event) => {
@@ -140,6 +168,12 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
       
       if (activityTimeoutRef.current) {
         clearTimeout(activityTimeoutRef.current)
+      }
+      
+      // 恢复原始的console.warn
+      if (originalWarnRef.current) {
+        console.warn = originalWarnRef.current
+        originalWarnRef.current = null
       }
     }
   }, [router])

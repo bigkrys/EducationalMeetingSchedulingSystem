@@ -20,7 +20,7 @@ interface BlockedTime {
   teacherId: string
   startTime: Date
   endTime: Date
-  reason?: string
+  reason: string | null
 }
 
 interface Appointment {
@@ -95,13 +95,8 @@ async function detectAvailabilityConflicts(
             existingSlots = await prisma.teacherAvailability.findMany({
           where: {
             teacherId,
-            OR: [
-              { specificDate: { gte: startOfDay, lte: endOfDay } },
-              { 
-                dayOfWeek: targetDate.getDay(),
-                isActive: true
-              }
-            ]
+            dayOfWeek: targetDate.getDay(),
+            isActive: true
           },
           orderBy: { startTime: 'asc' }
         })
@@ -537,6 +532,10 @@ async function mergeOverlappingSlots(
   })
   
   // 创建新的合并时间段
+  if (newSlot.dayOfWeek === undefined) {
+    throw new Error('dayOfWeek is required for merging slots')
+  }
+  
   const mergedSlot = await prisma.teacherAvailability.create({
     data: {
       teacherId,
@@ -849,6 +848,14 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       })
     }
 
+    // 确保是周循环模式（系统目前只支持这种模式）
+    if (validatedData.dayOfWeek === undefined) {
+      return NextResponse.json({
+        error: 'BAD_REQUEST',
+        message: 'dayOfWeek is required for weekly recurring availability'
+      }, { status: 400 })
+    }
+
     // 创建新的可用性记录
     const newAvailability = await prisma.teacherAvailability.create({
       data: {
@@ -943,6 +950,15 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
           continue
         }
         
+        // 确保是周循环模式
+        if (validatedData.dayOfWeek === undefined) {
+          errors.push({
+            slot,
+            error: 'dayOfWeek is required for weekly recurring availability'
+          })
+          continue
+        }
+
         // 创建时间段
         const newSlot = await prisma.teacherAvailability.create({
           data: {

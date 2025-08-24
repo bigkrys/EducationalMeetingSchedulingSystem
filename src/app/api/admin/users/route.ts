@@ -36,7 +36,7 @@ async function getUsersHandler(request: NextRequest, context?: any) {
         email: true,
         name: true,
         role: true,
-        isActive: true,
+        status: true,
         createdAt: true
       },
       orderBy: { createdAt: 'desc' },
@@ -91,8 +91,8 @@ async function createUserHandler(request: NextRequest, context?: any) {
         email,
         name,
         role,
-        password: password, // 注意：实际应该哈希密码
-        isActive: true
+        passwordHash: password, // 注意：实际应该哈希密码
+        status: 'active'
       }
     })
 
@@ -135,5 +135,64 @@ async function createUserHandler(request: NextRequest, context?: any) {
   }
 }
 
+async function updateUserHandler(request: NextRequest, context?: any) {
+  try {
+    const body = await request.json()
+    const { userId, updates } = body
+
+    if (!userId || !updates) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'Missing userId or updates' },
+        { status: 400 }
+      )
+    }
+
+    // 更新用户基本信息
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(updates.name && { name: updates.name }),
+        ...(updates.email && { email: updates.email }),
+        ...(updates.status && { status: updates.status })
+      }
+    })
+
+    // 如果是学生，更新学生特定信息
+    if (user.role === 'student' && updates.student) {
+      await prisma.student.update({
+        where: { userId: userId },
+        data: {
+          ...(updates.student.serviceLevel && { serviceLevel: updates.student.serviceLevel }),
+          ...(updates.student.monthlyMeetingsUsed !== undefined && { monthlyMeetingsUsed: updates.student.monthlyMeetingsUsed })
+        }
+      })
+    }
+
+    // 如果是教师，更新教师特定信息
+    if (user.role === 'teacher' && updates.teacher) {
+      await prisma.teacher.update({
+        where: { userId: userId },
+        data: {
+          ...(updates.teacher.maxDailyMeetings && { maxDailyMeetings: updates.teacher.maxDailyMeetings }),
+          ...(updates.teacher.bufferMinutes && { bufferMinutes: updates.teacher.bufferMinutes })
+        }
+      })
+    }
+
+    return NextResponse.json({
+      message: 'User updated successfully',
+      userId: user.id
+    })
+
+  } catch (error) {
+    console.error('Update user error:', error)
+    return NextResponse.json(
+      { error: 'INTERNAL_ERROR', message: 'Failed to update user' },
+      { status: 500 }
+    )
+  }
+}
+
 export const GET = withRole('admin')(getUsersHandler)
 export const POST = withRole('admin')(createUserHandler)
+export const PUT = withRole('admin')(updateUserHandler)

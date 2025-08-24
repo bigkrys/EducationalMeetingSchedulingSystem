@@ -1,9 +1,11 @@
 'use client'
 
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { userService, User } from '@/lib/api/user-service'
+import PageLoader, { PageSkeleton } from '@/components/shared/PageLoader'
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null)
@@ -37,20 +39,19 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
+      <PageLoader 
+        message="正在加载用户信息" 
+        description="正在获取您的个人资料和权限设置"
+      />
     )
   }
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">用户未找到</h1>
-          <p className="text-gray-600">请先登录</p>
-        </div>
-      </div>
+      <PageLoader 
+        message="用户验证失败" 
+        description="正在重新验证您的身份，请稍候..."
+      />
     )
   }
 
