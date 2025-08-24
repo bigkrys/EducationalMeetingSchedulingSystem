@@ -75,7 +75,7 @@ async function main() {
       userId: teacherUser.id,
       maxDailyMeetings: 6,
       bufferMinutes: 15,
-      timezone: 'Asia/Shanghai'
+
     }
   })
 
@@ -112,15 +112,7 @@ async function main() {
     }
   })
 
-  // 创建管理员记录
-  const admin = await prisma.admin.upsert({
-    where: { userId: adminUser.id },
-    update: {},
-    create: {
-      userId: adminUser.id,
-      scope: JSON.stringify({ all: true })
-    }
-  })
+  // Admin用户已创建，无需额外的admin表
   console.log('✅ Admin user created')
 
   // 关联教师和科目
@@ -204,7 +196,7 @@ async function main() {
       data: {
         teacherId: teacher.id,
         ...avail,
-        isActive: true
+
       }
     })
   }

@@ -17,8 +17,7 @@ export async function authenticateUser(email: string, password: string) {
     where: { email },
     include: {
       student: true,
-      teacher: true,
-      admin: true
+      teacher: true
     }
   })
 
@@ -32,10 +31,11 @@ export async function authenticateUser(email: string, password: string) {
   }
 
   // Update last login
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() }
-  })
+  // 更新最后登录时间（如果需要可以在schema中添加lastLoginAt字段）
+  // await prisma.user.update({
+  //   where: { id: user.id },
+  //   data: { lastLoginAt: new Date() }
+  // })
 
   const payload: JWTPayload = {
     userId: user.id,
@@ -63,7 +63,7 @@ export async function authenticateUser(email: string, password: string) {
       name: user.name,
       student: user.student,
       teacher: user.teacher,
-      admin: user.admin
+      // admin字段在PostgreSQL schema中不存在
     },
     accessToken,
     refreshToken

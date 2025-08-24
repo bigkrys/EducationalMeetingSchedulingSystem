@@ -24,14 +24,14 @@ export async function POST(request: NextRequest) {
         teacherId,
         date: dateStr,
         slot: slotDate,
-        status: 'waiting'
+
       },
       include: {
         student: { include: { user: true } },
         teacher: { include: { user: true } }
       },
       orderBy: [
-        { priority: 'desc' },
+        // 优先级排序需要根据学生的服务等级来实现
         { createdAt: 'asc' }
       ]
     })
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
 
     if (student.monthlyMeetingsUsed >= monthlyLimit) {
       // 学生没有配额，跳过并查找下一个
-      await prisma.waitlist.update({
-        where: { id: waitlistEntry.id },
-        data: { status: 'expired' }
+      // 学生没有配额，删除候补记录
+      await prisma.waitlist.delete({
+        where: { id: waitlistEntry.id }
       })
 
       // 递归调用，查找下一个学生
@@ -150,9 +150,9 @@ export async function POST(request: NextRequest) {
     })
 
     // 更新候补队列状态
-    await prisma.waitlist.update({
-      where: { id: waitlistEntry.id },
-      data: { status: 'promoted' }
+    // 删除已提升的候补记录
+    await prisma.waitlist.delete({
+      where: { id: waitlistEntry.id }
     })
 
     // 更新学生月度使用次数
@@ -215,13 +215,13 @@ async function promoteNextStudent(teacherId: string, slot: string, subject: stri
         teacherId,
         date: dateStr,
         slot: slotDate,
-        status: 'waiting'
+
       },
       include: {
         student: { include: { user: true } }
       },
       orderBy: [
-        { priority: 'desc' },
+        // 优先级排序需要根据学生的服务等级来实现
         { createdAt: 'asc' }
       ]
     })

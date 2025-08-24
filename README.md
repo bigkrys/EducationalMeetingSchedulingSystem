@@ -165,57 +165,7 @@ AUTH-->>ADM: 设置密码并登录后台
 
 ```
 
-### 3.1.4 修改密码
-
-- 场景：登录用户在“个人设置”中修改自己的密码。
-- 流程：输入旧密码 → 校验 → 以 Argon2id/bcrypt(≥10) 重新哈希新密码 → 失效该用户所有 `refreshToken`（强制其它设备退出）→ 审计(action=password_change)。`users.password_hash` 字段已存在。
-
-```mermaid
-sequenceDiagram
-participant U as User(登录态)
-participant W as WebApp
-participant API as API Gateway
-participant AUTH as AuthService
-participant DB as DB
-
-U->>W: 输入旧密码/新密码
-W->>API: PATCH /api/users/me/password
-API->>AUTH: 校验旧密码强度/历史(可选)
-AUTH->>DB: 更新password_hash
-AUTH->>DB: 标记该用户所有refresh_token为revoked
-AUTH-->>W: 200 OK (建议前端清理会话并提示重登)
-
-```
-
-### 3.1.5 忘记密码
-
-- “忘记密码”入口输入邮箱 → 如果用户存在且可恢复，生成一次性 `reset_token`（15–30 分钟有效），发送邮件。
-- 用户通过邮件链接进入“重置密码”页 → 设置新密码 → 失效所有会话/刷新令牌 → 审计(action=password_reset)。
-
-```mermaid
-sequenceDiagram
-participant U as User
-participant W as WebApp
-participant API as API Gateway
-participant AUTH as AuthService
-participant DB as DB
-participant MAIL as MailService
-
-U->>W: 提交邮箱(忘记密码)
-W->>API: POST /api/auth/forgot-password
-API->>AUTH: 生成reset_token(hash入库,短效)
-AUTH->>DB: 保存reset_token
-AUTH->>MAIL: 发送重置链接
-
-U->>MAIL: 点击重置链接
-MAIL->>AUTH: 验证reset_token有效性
-AUTH->>DB: 更新password_hash
-AUTH->>DB: 吊销该用户所有refresh_token
-AUTH-->>U: 重置成功(去登录)
-
-```
-
-### 3.1.6 登录/刷新/登出
+### 3.1.4 登录/刷新/登出
 
 ```mermaid
 sequenceDiagram
@@ -243,14 +193,6 @@ API->>AUTH: 当前refresh_token.revoked=true
 AUTH-->>W: 204 No Content
 
 ```
-
-### 3.1.7 安全与风控
-
-- 密码策略：长度≥8，至少 1 位字母+数字（机构可配置）。
-- 登录限流：按 IP 与邮箱做滑动窗口限速（Redis key），登录失败 N 次后临时锁定账户。
-- 邮件链接：单次使用、最少权限、短期有效；所有令牌只保存哈希。
-- 审计：`audit_logs(actor_id, action, target_id, created_at)` 已有表对接登录/修改密码/重置密码等事件。
-- 账号状态：`users.status in ('pending','active','frozen')`，被冻结用户阻断发起预约/审批等写操作。
 
 ## 3.2 学生｜搜索教师可用槽位
 
@@ -1111,17 +1053,8 @@ Premium 学生全部自动批准
 
 48h 超时（通知双方）
 
-✅ 审计日志（预约创建 / 审批 / 超时 / 配额重置等事件记录）
 
-✅ 已生成通知截图（email_notification_screenshot.png）
 
-5. 工程化 & 文档
-
-✅ 数据建模（Prisma schema 与迁移）
-
-✅ README（项目概述 + 安装运行 + 测试账号 + TODO）
-
-✅ API 文档（已补充 /docs/api-documentation.md）
-
-✅ 部署准备（.env.example, Supabase/Railway 兼容）
-
+# 十二、 关键算法实现
+## 生成可用时间段算法
+## 检查重叠的预约和阻塞时间

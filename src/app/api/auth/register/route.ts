@@ -67,8 +67,7 @@ export async function POST(request: NextRequest) {
       // 输入的是科目名称，需要转换为ID
       const subjects = await prisma.subject.findMany({
         where: {
-          name: { in: validatedData.subjectIds },
-          isActive: true
+          name: { in: validatedData.subjectIds }
         }
       })
       
@@ -152,7 +151,7 @@ export async function POST(request: NextRequest) {
             create: {
               maxDailyMeetings: validatedData.maxDailyMeetings,
               bufferMinutes: validatedData.bufferMinutes,
-              timezone: 'Asia/Shanghai'
+
             }
           }
         },

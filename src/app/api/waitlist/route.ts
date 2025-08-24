@@ -8,7 +8,7 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
     const { searchParams } = new URL(request.url)
     const studentId = searchParams.get('studentId')
     const teacherId = searchParams.get('teacherId')
-    const status = searchParams.get('status') || 'waiting'
+    // 移除status过滤，因为Waitlist模型中没有status字段
 
     if (!studentId && !teacherId) {
       return NextResponse.json(
@@ -28,7 +28,6 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
         teacher: { include: { user: true } }
       },
       orderBy: [
-        { priority: 'desc' },
         { createdAt: 'asc' }
       ]
     })
@@ -42,8 +41,9 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
         studentName: item.student.user.name,
         date: item.date,
         slot: item.slot.toISOString(),
-        priority: item.priority,
-        status: item.status,
+        priority: item.student?.serviceLevel === 'premium' ? 100 : 
+                 item.student?.serviceLevel === 'level1' ? 50 : 10, // 动态计算优先级
+        // status字段在Waitlist模型中不存在
         createdAt: item.createdAt.toISOString()
       }))
     })
@@ -77,7 +77,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
         studentId,
         date,
         slot: new Date(slot),
-        status: 'waiting'
+
       }
     })
 
@@ -97,24 +97,13 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
       }
     })
 
-    let priority = 0
-    if (student?.serviceLevel === 'premium') {
-      priority = 100
-    } else if (student?.serviceLevel === 'level1') {
-      priority = 50
-    } else {
-      priority = 10
-    }
-
-    // 创建候补队列条目
+    // 创建候补队列条目（优先级将通过查询时的排序来实现）
     const waitlistEntry = await prisma.waitlist.create({
       data: {
         teacherId,
         studentId,
         date,
-        slot: new Date(slot),
-        priority,
-        status: 'waiting'
+        slot: new Date(slot)
       }
     })
 
@@ -130,7 +119,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
             date,
             slot,
             subject,
-            priority,
+            // priority字段已移除
             reason: 'Student added to waitlist for unavailable slot'
           })
         }
@@ -139,8 +128,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
 
     return NextResponse.json({
       message: 'Added to waitlist successfully',
-      id: waitlistEntry.id,
-      priority
+      id: waitlistEntry.id
     }, { status: 201 })
 
   } catch (error) {

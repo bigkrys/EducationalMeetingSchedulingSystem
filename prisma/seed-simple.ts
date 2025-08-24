@@ -165,7 +165,7 @@ async function main() {
           userId: user.id,
           maxDailyMeetings: teacherData.maxDailyMeetings,
           bufferMinutes: teacherData.bufferMinutes,
-          timezone: 'Asia/Shanghai'
+
         }
       })
 
@@ -214,7 +214,7 @@ async function main() {
             id: `${teacher.id}-${avail.dayOfWeek}`,
             teacherId: teacher.id,
             ...avail,
-            isActive: true
+
           }
         })
       }
@@ -238,14 +238,7 @@ async function main() {
       }
     })
 
-    await prisma.admin.upsert({
-      where: { userId: adminUser.id },
-      update: {},
-      create: {
-        userId: adminUser.id,
-        scope: JSON.stringify({ all: true })
-      }
-    })
+    // Admin用户已创建，无需额外的admin表
     console.log('✅ Admin user created')
 
     // 6. 输出测试账户信息
