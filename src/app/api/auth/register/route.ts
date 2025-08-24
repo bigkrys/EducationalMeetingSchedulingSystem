@@ -182,15 +182,62 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     if (error instanceof z.ZodError) {
+      // 将 Zod 错误转换为更友好的中文错误信息
+      const friendlyErrors = error.errors.map(err => {
+        const field = err.path[0]
+        let message = err.message
+        
+        // 为常见字段提供中文错误信息
+        if (field === 'password' && err.code === 'too_small') {
+          message = '密码长度至少需要8个字符'
+        } else if (field === 'email' && err.code === 'invalid_string') {
+          message = '请输入有效的邮箱地址'
+        } else if (field === 'name' && err.code === 'too_small') {
+          message = '姓名不能为空'
+        } else if (field === 'subjectIds' && err.code === 'too_small') {
+          message = '请至少选择一个科目'
+        }
+        
+        return {
+          ...err,
+          message
+        }
+      })
+      
       return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors },
+        { error: 'BAD_REQUEST', message: '输入数据验证失败', details: friendlyErrors },
         { status: 400 }
       )
     }
 
     console.error('Registration error:', error)
+    
+    // 处理 Prisma 错误
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as any
+      if (prismaError.code === 'P2002') {
+        return NextResponse.json(
+          { error: 'EMAIL_EXISTS', message: '该邮箱已被注册' },
+          { status: 409 }
+        )
+      } else if (prismaError.code === 'P2003') {
+        return NextResponse.json(
+          { error: 'BAD_REQUEST', message: '关联数据无效，请检查科目选择' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // 处理其他类型的错误
+    let errorMessage = '注册失败'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    }
+    
     return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Registration failed' },
+      { error: 'BAD_REQUEST', message: errorMessage },
       { status: 500 }
     )
   }

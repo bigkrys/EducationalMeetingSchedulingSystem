@@ -6,6 +6,7 @@ import SubjectSelector from '@/components/shared/SubjectSelector'
 import RoleSelector from '@/components/shared/RoleSelector'
 import StudentFields from '@/components/shared/StudentFields'
 import TeacherFields from '@/components/shared/TeacherFields'
+import { message } from 'antd'
 
 interface FormData {
   email: string
@@ -37,6 +38,7 @@ export default function LoginForm() {
   })
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
+  const [passwordError, setPasswordError] = useState('');
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,6 +49,12 @@ export default function LoginForm() {
     try {
       if (!isLogin && formData.password !== formData.confirmPassword) {
         setError('两次输入的密码不一致')
+        setLoading(false)
+        return
+      }
+      if (!isLogin && passwordError.length > 0) {
+        setError(passwordError)
+        setLoading(false)
         return
       }
 
@@ -107,7 +115,38 @@ export default function LoginForm() {
         }
       } else {
         const errorData = await response.json()
-        setError(errorData.message || '操作失败')
+        
+        // 处理注册验证错误，显示更详细的错误信息
+        if (!isLogin && errorData.error === 'BAD_REQUEST' && errorData.details) {
+          // 处理 Zod 验证错误
+          const fieldErrors = errorData.details.map((err: any) => {
+            const field = err.path[0]
+            const fieldNames: { [key: string]: string } = {
+              email: '邮箱',
+              password: '密码',
+              name: '姓名',
+              serviceLevel: '服务级别',
+              subjectIds: '科目',
+              maxDailyMeetings: '每日最大会议数',
+              bufferMinutes: '缓冲时间'
+            }
+            const fieldName = fieldNames[field] || field
+            return `${fieldName}: ${err.message}`
+          })
+          const errorMessage = fieldErrors.join('; ')
+          message.error(errorMessage)
+          setError(errorMessage)
+        } else if (!isLogin && errorData.error === 'EMAIL_EXISTS') {
+          // 处理邮箱已存在错误
+          const errorMessage = '该邮箱已被注册，请使用其他邮箱或直接登录'
+          message.error(errorMessage)
+          setError(errorMessage)
+        } else {
+          // 处理其他错误
+          const errorMessage = errorData.message || '操作失败'
+          message.error(errorMessage)
+          setError(errorMessage)
+        }
       }
     } catch (error) {
       console.error('请求失败:', error)
@@ -178,11 +217,28 @@ export default function LoginForm() {
           <input
             type="password"
             value={formData.password}
-            onChange={(e) => handleInputChange('password', e.target.value)}
+            onChange={(e) => {
+              handleInputChange('password', e.target.value);
+              const value = e.target.value;
+              let errorMsg = '';
+              
+              if (value.length < 8) {
+                errorMsg = '密码长度至少需要8个字符';
+              } else if (!/^[a-zA-Z0-9\u4e00-\u9fa5]+$/.test(value)) {
+                errorMsg = '密码只能包含字母、数字和中文字符';
+              } else if (!/[a-zA-Z]/.test(value)) {
+                errorMsg = '密码必须包含至少一个字母';
+              }
+              
+              setPasswordError(errorMsg);
+            }}
             required
-            placeholder="请输入密码"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="请输入密码（8位以上，必须包含字母）"
+            className="w-full px-3 py-2 border borsder-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          {passwordError && (
+            <span className="text-red-500 text-sm mt-1">{passwordError}</span>
+          )}
         </div>
 
         {/* 确认密码（仅注册时显示） */}
@@ -247,8 +303,16 @@ export default function LoginForm() {
 
         {/* 错误提示 */}
         {error && (
-          <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
-            {error}
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+            <div className="flex items-start">
+              <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+              </svg>
+              <div>
+                <div className="font-medium">注册失败</div>
+                <div className="text-red-600 mt-1">{error}</div>
+              </div>
+            </div>
           </div>
         )}
 
