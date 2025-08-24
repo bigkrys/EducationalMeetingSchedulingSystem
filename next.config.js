@@ -15,6 +15,17 @@ const nextConfig = {
       exclude: ['error']
     } : false,
   },
+
+  // webpack 配置
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // 确保路径解析正确
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, 'src'),
+    }
+    
+    return config
+  },
 }
 
 module.exports = nextConfig
