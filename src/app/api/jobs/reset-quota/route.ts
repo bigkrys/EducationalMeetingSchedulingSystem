@@ -3,6 +3,15 @@ import { prisma } from '@/lib/api/db'
 
 export async function POST(request: NextRequest) {
   try {
+    // 验证触发密钥
+    const headerSecret = request.headers.get('x-job-secret') || ''
+    const auth = request.headers.get('authorization') || ''
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
+    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
+      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
+    }
+
     // 检查是否是每月1日（或者手动触发）
     const today = new Date()
     const isFirstDayOfMonth = today.getDate() === 1

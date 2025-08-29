@@ -4,6 +4,15 @@ import { addHours, subHours } from 'date-fns'
 
 export async function POST(request: NextRequest) {
   try {
+    // 验证触发密钥
+    const headerSecret = request.headers.get('x-job-secret') || ''
+    const auth = request.headers.get('authorization') || ''
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
+    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
+      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { offsetHours } = body
 

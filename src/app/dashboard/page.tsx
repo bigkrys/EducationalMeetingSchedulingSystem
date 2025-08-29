@@ -1,11 +1,11 @@
-'use client'
+"use client"
 
-
-import { useState, useEffect } from 'react'
+import React from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { userService, User } from '@/lib/api/user-service'
+import { userService, User, clearUserCache } from '@/lib/api/user-service'
 import PageLoader from '@/components/shared/PageLoader'
-import NavigationButton from '@/components/shared/NavigationButton'
+import DashboardContent from '@/components/dashboard/DashboardContent'
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null)
@@ -13,264 +13,47 @@ export default function Dashboard() {
   const router = useRouter()
 
   useEffect(() => {
-    fetchUserData()
+    let mounted = true
+
+    const load = async () => {
+      setLoading(true)
+      try {
+        const u = await userService.getCurrentUser()
+        if (mounted) setUser(u)
+      } catch (err) {
+        console.error('Failed to load user in dashboard:', err)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { mounted = false }
   }, [])
 
-  const fetchUserData = async () => {
-    try {
-      const userData = await userService.getCurrentUser()
-      setUser(userData)
-    } catch (error) {
-      console.error('Failed to fetch user data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogout = () => {
-    // 清除本地存储的认证信息
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('userRole')
-    
-    // 跳转到首页
+  const handleLogout = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch (e) { console.error(e) }
+    try { clearUserCache() } catch (_) {}
+    try { localStorage.removeItem('accessToken'); localStorage.removeItem('refreshToken'); localStorage.removeItem('userRole') } catch (_) {}
     router.push('/')
   }
 
-  if (loading) {
-    return (
-      <PageLoader 
-        message="正在加载用户信息" 
-        description="正在获取您的个人资料和权限设置"
-      />
-    )
-  }
-
-  if (!user) {
-    return (
-      <PageLoader 
-        message="用户验证失败" 
-        description="正在重新验证您的身份，请稍候..."
-      />
-    )
-  }
+  if (loading) return <PageLoader message="正在加载用户信息" description="正在获取您的个人资料和权限设置" />
+  if (!user) return <PageLoader message="用户验证失败" description="请重新登录或稍后重试" />
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* 顶部导航栏 */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            欢迎回来，{user.name}！
-          </h1>
-          <p className="text-gray-600">
-            教育会议调度系统 - 智能预约平台
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">欢迎回来，{user.name}！</h1>
+          <p className="text-gray-600">教育会议调度系统 - 智能预约平台</p>
         </div>
-        
-        {/* 退出按钮 */}
-        <button
-          onClick={handleLogout}
-          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-        >
-          退出登录
-        </button>
+
+        <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">登出</button>
       </div>
 
-      {/* 用户信息卡片 */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">用户信息</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-500">姓名</label>
-            <p className="text-lg font-semibold">{user.name}</p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-500">邮箱</label>
-            <p className="text-lg font-semibold">{user.email}</p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-500">角色</label>
-            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {user.role === 'student' && '学生'}
-              {user.role === 'teacher' && '教师'}
-              {user.role === 'admin' && '管理员'}
-            </span>
-          </div>
-          
-          {user.role === 'student' && user.student && (
-            <>
-              <div>
-                <label className="text-sm font-medium text-gray-500">服务级别</label>
-                <p className="text-lg font-semibold">
-                  {user.student.serviceLevel === 'level1' && '一级'}
-                  {user.student.serviceLevel === 'level2' && '二级'}
-                  {user.student.serviceLevel === 'premium' && '高级'}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">本月已使用次数</label>
-                <p className="text-lg font-semibold">{user.student.monthlyMeetingsUsed || 0}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">已注册科目</label>
-                <p className="text-lg font-semibold">
-                  {user.student.enrolledSubjects || '无'}
-                </p>
-              </div>
-            </>
-          )}
-          
-          {user.role === 'teacher' && user.teacher && (
-            <>
-              <div>
-                <label className="text-sm font-medium text-gray-500">每日最大预约数</label>
-                <p className="text-lg font-semibold">{user.teacher.maxDailyMeetings}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">缓冲时间</label>
-                <p className="text-lg font-semibold">{user.teacher.bufferMinutes} 分钟</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 功能菜单 */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">功能菜单</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {user.role === 'student' && (
-            <>
-              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                    预约会议
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    查看教师可用时间并预约会议
-                  </p>
-                  <NavigationButton 
-                    href="/dashboard/book-appointment" 
-                    type="primary" 
-                    size="large"
-                    className="w-full"
-                    loadingText="正在进入预约..."
-                  >
-                    开始预约
-                  </NavigationButton>
-                </div>
-              </div>
-
-              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                    我的预约
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    查看和管理您的所有预约
-                  </p>
-                  <NavigationButton 
-                    href="/dashboard/my-appointments" 
-                    type="default" 
-                    size="large"
-                    className="w-full"
-                    loadingText="正在加载..."
-                  >
-                    查看预约
-                  </NavigationButton>
-                </div>
-              </div>
-
-              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                    候补队列
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    加入热门时段的候补队列
-                  </p>
-                  <NavigationButton 
-                    href="/dashboard/waitlist" 
-                    type="default" 
-                    size="large"
-                    className="w-full"
-                    loadingText="正在加载..."
-                  >
-                    查看候补
-                  </NavigationButton>
-                </div>
-              </div>
-            </>
-          )}
-
-          {user.role === 'teacher' && (
-            <>
-              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                    设置可用性
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    设置您的每周可用时间
-                  </p>
-                  <NavigationButton 
-                    href="/dashboard/availability" 
-                    type="primary" 
-                    size="large"
-                    className="w-full"
-                    loadingText="正在加载..."
-                  >
-                    管理可用性
-                  </NavigationButton>
-                </div>
-              </div>
-
-              <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                    预约管理
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    查看和审批学生预约
-                  </p>
-                  <NavigationButton 
-                    href="/dashboard/appointments" 
-                    type="default" 
-                    size="large"
-                    className="w-full"
-                    loadingText="正在加载..."
-                  >
-                    查看预约
-                  </NavigationButton>
-                </div>
-              </div>
-            </>
-          )}
-
-          {user.role === 'admin' && (
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6 text-center">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
-                  管理员功能
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  管理员功能正在开发中，敬请期待...
-                </p>
-                <NavigationButton 
-                  href="/dashboard" 
-                  type="default" 
-                  size="large"
-                  className="w-full"
-                  disabled
-                >
-                  暂未开放
-                </NavigationButton>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+  {/* 直接在上层决定并渲染 DashboardContent，内部根据 role 展示不同功能区域 */}
+  <DashboardContent initialUser={user} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-'use client'
+ 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -6,6 +6,7 @@ import { Card, Alert, Button, message } from 'antd'
 import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
 import StudentBookingCalendar from '@/components/student/StudentBookingCalendar'
 import { getCurrentUserId } from '@/lib/api/auth'
+import { userService } from '@/lib/api/user-service'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
 
@@ -27,25 +28,13 @@ export default function BookAppointment() {
           router.push('/')
           return
         }
-
-        // 获取用户详细信息
-        const response = await fetch('/api/users/me', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          }
-        })
-
-        if (response.ok) {
-          const userData = await response.json()
-          // 使用学生ID而不是用户ID
-          if (userData.student && userData.student.id) {
-            setStudentId(userData.student.id)
-            setStudentName(userData.name || '学生')
-          } else {
-            setError('用户不是学生或学生信息不完整')
-          }
+        // 使用 userService（内存缓存 + in-flight 去重）获取当前用户
+        const userData = await userService.getCurrentUser()
+        if (userData && (userData as any).student && (userData as any).student.id) {
+          setStudentId((userData as any).student.id)
+          setStudentName((userData as any).name || '学生')
         } else {
-          setError('获取用户信息失败')
+          setError('用户不是学生或学生信息不完整')
         }
       } catch (err) {
         setError('网络错误')

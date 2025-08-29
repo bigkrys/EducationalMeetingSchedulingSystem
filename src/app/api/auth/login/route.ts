@@ -41,6 +41,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    // Prisma DB connectivity errors should return 503 so callers can retry
+    try {
+      const errAny = error as any
+      if (errAny && (errAny.code === 'P1001' || (errAny.message && typeof errAny.message === 'string' && errAny.message.includes("Can't reach database server")))) {
+        console.error('Login DB unreachable:', errAny)
+        return NextResponse.json(
+          { error: 'DB_UNAVAILABLE', message: 'Database is unreachable. Please try again later.' },
+          { status: 503 }
+        )
+      }
+    } catch (_) {}
 
     console.error('Login error:', error)
     return NextResponse.json(

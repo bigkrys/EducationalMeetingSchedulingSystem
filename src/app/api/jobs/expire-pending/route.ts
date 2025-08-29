@@ -1,118 +1,120 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { sendAppointmentExpiredNotification } from '@/lib/api/email'
+import { deleteCachePattern } from '@/lib/api/cache'
 
 export async function POST(request: NextRequest) {
   try {
+    // 验证触发密钥，防止外部滥用
+    const headerSecret = request.headers.get('x-job-secret') || ''
+    const auth = request.headers.get('authorization') || ''
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
+    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
+      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
+    }
+
     // 计算48小时前的时间
     const expireTime = new Date()
     expireTime.setHours(expireTime.getHours() - 48)
 
-    // 查找需要过期的待审批预约
-    const expiredAppointments = await prisma.appointment.findMany({
-      where: {
-        status: 'pending',
-        createdAt: { lt: expireTime }
-      },
-      include: {
-        student: { include: { user: true } },
-        teacher: { include: { user: true } }
-      }
-    })
+    // 分页批处理，避免一次性加载过多记录
+    const batchSize = 200
+    let totalExpired = 0
 
-    if (expiredAppointments.length === 0) {
-      return NextResponse.json({
-        message: 'No pending appointments need to expire',
-        updated: 0
+    while (true) {
+      const batch = await prisma.appointment.findMany({
+        where: { status: 'pending', createdAt: { lt: expireTime } },
+        orderBy: { createdAt: 'asc' },
+        take: batchSize,
+        include: {
+          student: { include: { user: true } },
+          teacher: { include: { user: true } }
+        }
       })
-    }
 
-    // 批量更新过期预约
-    const updatePromises = expiredAppointments.map((appointment: any) => 
-      prisma.appointment.update({
-        where: { id: appointment.id },
+      if (!batch || batch.length === 0) break
+
+      // 更新状态
+      const ids = batch.map(b => b.id)
+      await prisma.appointment.updateMany({
+        where: { id: { in: ids } },
         data: { status: 'expired' }
       })
-    )
 
-    await Promise.all(updatePromises)
+      totalExpired += batch.length
 
-    // 发送过期通知邮件
-    const emailPromises = expiredAppointments.map(async (appointment: any) => {
-      try {
-        // 获取科目名称
-        const subject = await prisma.subject.findUnique({
-          where: { id: appointment.subjectId }
-        })
+      // 发送通知 & 写审计（并发限制）
+      const concurrency = 10
+      let index = 0
+      const sendNext = async () => {
+        if (index >= batch.length) return
+        const item = batch[index++]
+        try {
+          const subject = await prisma.subject.findUnique({ where: { id: item.subjectId } })
+          if (subject) {
+            await sendAppointmentExpiredNotification(
+              item.student.user.email,
+              item.teacher.user.email,
+              {
+                studentName: item.student.user.name,
+                teacherName: item.teacher.user.name,
+                subject: subject.name,
+                scheduledTime: item.scheduledTime.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+              }
+            )
+          }
 
-        if (subject) {
-          await sendAppointmentExpiredNotification(
-            appointment.student.user.email,
-            appointment.teacher.user.email,
-            {
-              studentName: appointment.student.user.name,
-              teacherName: appointment.teacher.user.name,
-              subject: subject.name,
-              scheduledTime: appointment.scheduledTime.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'Asia/Shanghai'
+          await prisma.auditLog.create({
+            data: {
+              action: 'APPOINTMENT_EXPIRED',
+              targetId: item.id,
+              details: JSON.stringify({
+                appointmentId: item.id,
+                studentId: item.studentId,
+                studentName: item.student.user.name,
+                teacherId: item.teacherId,
+                teacherName: item.teacher.user.name,
+                scheduledTime: item.scheduledTime.toISOString(),
+                expiredAt: new Date().toISOString(),
+                reason: '48 hours timeout without teacher approval'
               })
             }
-          )
-        }
-      } catch (error) {
-        console.error(`Failed to send expired notification for appointment ${appointment.id}:`, error)
-      }
-    })
-
-    await Promise.all(emailPromises)
-
-    // 记录审计日志
-    const auditLogPromises = expiredAppointments.map((appointment: any) =>
-      prisma.auditLog.create({
-        data: {
-          action: 'APPOINTMENT_EXPIRED',
-          targetId: appointment.id,
-          details: JSON.stringify({
-            appointmentId: appointment.id,
-            studentId: appointment.studentId,
-            studentName: appointment.student.user.name,
-            teacherId: appointment.teacherId,
-            teacherName: appointment.teacher.user.name,
-            scheduledTime: appointment.scheduledTime.toISOString(),
-            expiredAt: new Date().toISOString(),
-            reason: '48 hours timeout without teacher approval'
           })
+        } catch (error) {
+          console.error(`Failed to process expired appointment ${item.id}:`, error)
         }
-      })
-    )
 
-    await Promise.all(auditLogPromises)
+        // 继续下一个
+        return sendNext()
+      }
 
-    // 清除相关缓存
-    const cacheClearPromises = expiredAppointments.map((appointment: any) => {
-      const dateStr = appointment.scheduledTime.toISOString().split('T')[0]
-      return prisma.$executeRaw`SELECT 1` // 这里可以调用缓存清理函数
-    })
+      // 启动并发任务
+      const workers = Array.from({ length: Math.min(concurrency, batch.length) }).map(() => sendNext())
+      await Promise.all(workers)
 
-    await Promise.all(cacheClearPromises)
+      // 清除相关缓存（按教师/日期模式）
+      for (const item of batch) {
+        const dateStr = item.scheduledTime.toISOString().split('T')[0]
+        // slots:{teacherId}:{date}:{duration}
+        await deleteCachePattern(`slots:${item.teacherId}:${dateStr}`)
+      }
+
+      // 如果少于 batchSize 则结束循环
+      if (batch.length < batchSize) break
+    }
+
+    if (totalExpired === 0) {
+      return NextResponse.json({ message: 'No pending appointments need to expire', updated: 0 })
+    }
+
 
     return NextResponse.json({
       message: 'Pending appointments expired successfully',
-      updated: expiredAppointments.length,
+      updated: totalExpired,
       expiredAt: new Date().toISOString(),
       details: {
-        totalExpired: expiredAppointments.length,
-        appointments: expiredAppointments.map((apt: any) => ({
-          id: apt.id,
-          studentName: apt.student.user.name,
-          teacherName: apt.teacher.user.name,
-          scheduledTime: apt.scheduledTime.toISOString()
-        }))
+        totalExpired
       }
     })
 

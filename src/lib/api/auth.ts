@@ -3,7 +3,7 @@ import { prisma } from './db'
 import { generateAccessToken, generateRefreshToken, JWTPayload } from './jwt'
 
 export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 12
+  const saltRounds = 10
   return bcrypt.hash(password, saltRounds)
 }
 
@@ -13,60 +13,100 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export async function authenticateUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      student: true,
-      teacher: true
-    }
-  })
-
-  if (!user || user.status !== 'active') {
-    return null
+  // generate per-request unique labels to avoid console.time label collisions
+  const uniq = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+  const labels = {
+    total: `auth:total:${email}:${uniq}`,
+    dbFind: `auth:db-find:${email}:${uniq}`,
+    verify: `auth:verify-password:${email}:${uniq}`,
+    gen: `auth:generate-tokens:${email}:${uniq}`,
+    store: `auth:store-refresh:${email}:${uniq}`
   }
 
+  console.time(labels.total)
+  try {
+    console.time(labels.dbFind)
+    // only select minimal fields required for authentication to reduce DB latency
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        name: true
+      }
+    })
+    console.timeEnd(labels.dbFind)
+
+    if (!user) {
+      console.timeEnd(labels.total)
+      return null
+    }
+
+  console.time(labels.verify)
   const isValidPassword = await verifyPassword(password, user.passwordHash)
-  if (!isValidPassword) {
-    return null
-  }
-
-  // Update last login
-  // 更新最后登录时间（如果需要可以在schema中添加lastLoginAt字段）
-  // await prisma.user.update({
-  //   where: { id: user.id },
-  //   data: { lastLoginAt: new Date() }
-  // })
-
-  const payload: JWTPayload = {
-    userId: user.id,
-    email: user.email,
-    role: user.role
-  }
-
-  const accessToken = generateAccessToken(payload)
-  const refreshToken = generateRefreshToken(payload)
-
-  // Store refresh token
-  await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: refreshToken,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  console.timeEnd(labels.verify)
+    if (!isValidPassword) {
+      console.timeEnd(labels.total)
+      return null
     }
-  })
 
-  return {
-    user: {
-      id: user.id,
+    // Update last login (optional)
+    // await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+
+    const payload: JWTPayload = {
+      userId: user.id,
       email: user.email,
-      role: user.role,
-      name: user.name,
-      student: user.student,
-      teacher: user.teacher,
-      // admin字段在PostgreSQL schema中不存在
-    },
-    accessToken,
-    refreshToken
+      role: user.role
+    }
+
+    console.time(labels.gen)
+    const accessToken = generateAccessToken(payload)
+    const refreshToken = generateRefreshToken(payload)
+    console.timeEnd(labels.gen)
+
+    // store refresh token in background to avoid adding I/O latency to login response
+    console.time(labels.store)
+    ;(async () => {
+      try {
+        await prisma.refreshToken.upsert({
+          where: { tokenHash: refreshToken },
+          update: {
+            userId: user.id,
+            revoked: false,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          },
+          create: {
+            userId: user.id,
+            tokenHash: refreshToken,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+          }
+        })
+      } catch (e: any) {
+        // background failure should be logged but not block login
+        console.error('Failed to store refresh token (background):', e)
+      } finally {
+        try { console.timeEnd(labels.store) } catch (_) {}
+      }
+    })()
+
+  console.timeEnd(labels.total)
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name
+      },
+      accessToken,
+      refreshToken
+    }
+  } catch (error) {
+    // ensure total timer is ended on unexpected error
+    try { console.timeEnd(labels.total) } catch (_) {}
+    throw error
   }
 }
 

@@ -28,14 +28,20 @@ interface User {
   bufferMinutes?: number
 }
 
-export default function DashboardContent() {
-  const [user, setUser] = useState<User | null>(null)
+export default function DashboardContent({ initialUser }: { initialUser?: User }) {
+  const [user, setUser] = useState<User | null>(initialUser || null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initialUser) {
+      // if parent provided the user, skip fetching
+      setLoading(false)
+      return
+    }
+
     fetchUserData()
-  }, [])
+  }, [initialUser])
 
   const fetchUserData = async () => {
     try {
