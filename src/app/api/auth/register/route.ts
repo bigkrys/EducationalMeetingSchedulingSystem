@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { hashPassword } from '@/lib/api/auth'
+import { hashPassword } from '@/lib/api/auth.server'
 import { z } from 'zod'
 
 // 学生注册验证 schema

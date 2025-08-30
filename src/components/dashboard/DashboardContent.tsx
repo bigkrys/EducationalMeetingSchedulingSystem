@@ -25,7 +25,19 @@ interface User {
   enrolledSubjects?: string[]
   subjects?: string[]
   maxDailyMeetings?: number
-  bufferMinutes?: number
+  bufferMinutes?: number,
+  student?: {
+    id: string
+    serviceLevel?: 'level1' | 'level2' | 'premium'
+    monthlyMeetingsUsed?: number
+    enrolledSubjects?: string[]
+  },
+  teacher?: {
+    id: string
+    maxDailyMeetings?: number
+    bufferMinutes?: number
+    subjects?: string[]
+  }
 }
 
 export default function DashboardContent({ initialUser }: { initialUser?: User }) {
@@ -169,21 +181,21 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                 <Statistic 
                   title="服务级别" 
                   value={
-                    user.serviceLevel === 'level1' ? '一级' :
-                    user.serviceLevel === 'level2' ? '二级' : '高级'
+                    user.student?.serviceLevel === 'level1' ? '一级' :
+                    user.student?.serviceLevel === 'level2' ? '二级' : '高级'
                   }
                 />
               </Col>
               <Col xs={24} md={12} lg={8}>
                 <Statistic 
                   title="本月已使用次数" 
-                  value={user.monthlyMeetingsUsed || 0} 
+                  value={user.student?.monthlyMeetingsUsed || 0} 
                 />
               </Col>
               <Col xs={24} md={12} lg={8}>
                 <Statistic 
                   title="已注册科目" 
-                  value={user.enrolledSubjects?.join(', ') || '无'} 
+                  value={user.student?.enrolledSubjects?.join(', ') || '无'} 
                 />
               </Col>
             </>
@@ -194,19 +206,19 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
               <Col xs={24} md={12} lg={8}>
                 <Statistic 
                   title="教授科目" 
-                  value={user.subjects?.join(', ') || '无'} 
+                  value={user.teacher?.subjects?.join(', ') || '无'} 
                 />
               </Col>
               <Col xs={24} md={12} lg={8}>
                 <Statistic 
                   title="每日最大预约数" 
-                  value={user.maxDailyMeetings || 0} 
+                  value={user.teacher?.maxDailyMeetings || 0} 
                 />
               </Col>
               <Col xs={24} md={12} lg={8}>
                 <Statistic 
                   title="缓冲时间（分钟）" 
-                  value={user.bufferMinutes || 0} 
+                  value={user.teacher?.bufferMinutes || 0} 
                 />
               </Col>
             </>
@@ -220,7 +232,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
         <Row gutter={[16, 16]}>
           {user.role === 'student' && (
             <>
-              <Col xs={24} md={12} lg={8}>
+              <Col xs={12} md={12} lg={12}>
                 <Link href="/dashboard/book-appointment">
                   <Card 
                     hoverable
@@ -239,7 +251,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                 </Link>
               </Col>
 
-              <Col xs={24} md={12} lg={8}>
+              <Col xs={12} md={12} lg={12}>
                 <Link href="/dashboard/my-appointments">
                   <Card 
                     hoverable
@@ -258,7 +270,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                 </Link>
               </Col>
 
-              <Col xs={24} md={12} lg={8}>
+              {/* <Col xs={24} md={12} lg={8}>
                 <Link href="/dashboard/waitlist">
                   <Card 
                     hoverable
@@ -275,7 +287,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                     </div>
                   </Card>
                 </Link>
-              </Col>
+              </Col> */}
             </>
           )}
 

@@ -9,11 +9,11 @@ export interface User {
     id: string
     serviceLevel: 'level1' | 'level2' | 'premium'
     monthlyMeetingsUsed: number
-    enrolledSubjects: string
+  enrolledSubjects: string[]
   }
   teacher?: {
     id: string
-    subjects: string
+  subjects: string[]
     maxDailyMeetings: number
     bufferMinutes: number
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyRefreshToken, generateAccessToken, generateRefreshToken, revokeRefreshToken } from '@/lib/api/jwt'
 import { prisma } from '@/lib/api/db'
 import { JWTPayload } from '@/lib/api/jwt'
+import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,9 +26,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 检查 token 是否在数据库中且未撤销
+    // 检查 token 是否在数据库中且未撤销（数据库中存储的是 refresh token 的 sha256 哈希）
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex')
     const tokenRecord = await prisma.refreshToken.findUnique({
-      where: { tokenHash: refreshToken },
+      where: { tokenHash },
       include: { user: true }
     })
 
@@ -49,12 +51,13 @@ export async function POST(request: NextRequest) {
     const newRefreshToken = generateRefreshToken(newPayload)
 
     // 撤销旧 token 并创建新 token
+    const newTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex')
     await Promise.all([
-      revokeRefreshToken(refreshToken),
+      revokeRefreshToken(tokenHash),
       prisma.refreshToken.create({
         data: {
           userId: payload.userId,
-          tokenHash: newRefreshToken,
+          tokenHash: newTokenHash,
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
         }
       })

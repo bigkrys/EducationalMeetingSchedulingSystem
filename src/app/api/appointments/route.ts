@@ -181,6 +181,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
 // 创建预约
 async function createAppointmentHandler(request: NextRequest, context?: any) {
   try {
+  let emailDebug: any = undefined
     const body = await request.json()
     const validatedData = createAppointmentSchema.parse(body)
 
@@ -256,8 +257,10 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       )
     }
 
-    // 检查槽位是否可用
-    const scheduledTime = new Date(validatedData.scheduledTime)
+  // 检查槽位是否可用
+  // 标准化 scheduledTime 到分钟精度，避免微秒/秒差异导致并发时写入不同的 timestamp
+  const scheduledTime = new Date(validatedData.scheduledTime)
+  scheduledTime.setSeconds(0, 0)
     const slotEnd = addMinutes(scheduledTime, validatedData.durationMinutes)
     
     // 检查是否与已有预约冲突（包含缓冲时间）
@@ -279,7 +282,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
 
     if (hasConflict) {
       return NextResponse.json(
-        { error: 'SLOT_TAKEN', message: 'Time slot is not available' },
+  { error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' },
         { status: 409 }
       )
     }
@@ -423,20 +426,33 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       })
     }
 
-    // 创建预约
-    const appointment = await prisma.appointment.create({
-      data: {
-        studentId: validatedData.studentId,
-        teacherId: validatedData.teacherId,
-        subjectId: subject.id,
-        scheduledTime,
-        durationMinutes: validatedData.durationMinutes,
-        status,
-        approvalRequired,
-        approvedAt: status === 'approved' ? new Date() : null,
-        idempotencyKey: validatedData.idempotencyKey
+    // 创建预约（注意并发可能导致竞态）。如果数据库存在唯一约束冲突，则返回 SLOT_TAKEN。
+    let appointment: any
+    try {
+      appointment = await prisma.appointment.create({
+        data: {
+          studentId: validatedData.studentId,
+          teacherId: validatedData.teacherId,
+          subjectId: subject.id,
+          scheduledTime,
+          durationMinutes: validatedData.durationMinutes,
+          status,
+          approvalRequired,
+          approvedAt: status === 'approved' ? new Date() : null,
+          idempotencyKey: validatedData.idempotencyKey
+        }
+      })
+    } catch (err: any) {
+      // Prisma 唯一约束错误代码 P2002
+      if (err?.code === 'P2002') {
+        return NextResponse.json(
+          { error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' },
+          { status: 409 }
+        )
       }
-    })
+
+      throw err
+    }
 
 
     // 更新学生月度使用次数
@@ -457,12 +473,12 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       })
 
       if (subjectRecord) {
-        // 异步发送邮件通知（不阻塞响应）
-        setTimeout(async () => {
+        // 受控发送邮件：在 serverless 环境中 setTimeout 可能不会被执行，
+        // 我们根据环境变量决定是同步等待发送还是 fire-and-forget。
+        const _sendAppointmentNotifications = async () => {
           try {
             if (status === 'pending') {
-              // 如果预约需要审批，通知教师
-              await sendNewAppointmentRequestNotification(
+              const res = await sendNewAppointmentRequestNotification(
                 teacher.user.email,
                 {
                   studentName: student.user.name,
@@ -479,9 +495,9 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                   studentEmail: student.user.email
                 }
               )
+              return { teacherSent: res?.teacherSent }
             } else if (status === 'approved') {
-              // 如果预约自动批准，发送确认通知
-              await sendAppointmentApprovedNotification(
+              const res = await sendAppointmentApprovedNotification(
                 student.user.email,
                 teacher.user.email,
                 {
@@ -499,21 +515,43 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                   durationMinutes: validatedData.durationMinutes
                 }
               )
+              return { studentSent: res?.studentSent, teacherSent: res?.teacherSent }
             }
           } catch (error) {
             console.error('Failed to send appointment notification emails:', error)
+            return { error: String(error) }
           }
-        }, 1000) // 延迟1秒执行，确保预约创建完成
+          return { }
+        }
+
+        let emailDebug: any = undefined
+        if (process.env.SEND_EMAIL_SYNC === 'true') {
+          // 在某些部署（或测试）中希望确保邮件已发送再返回
+          // 修改 _sendAppointmentNotifications 以返回 studentSent/teacherSent
+          try {
+            const result = await _sendAppointmentNotifications()
+            emailDebug = result
+          } catch (e) {
+            console.error('Sync email send error:', e)
+            emailDebug = { error: String(e) }
+          }
+        } else {
+          // fire-and-forget：启动发送但不阻塞响应（比 setTimeout 更可靠）
+          _sendAppointmentNotifications().catch(err => console.error('Async email send error:', err))
+        }
       }
     } catch (error) {
       console.error('Failed to prepare appointment notification emails:', error)
     }
 
-    return NextResponse.json({
+    const responseBody: any = {
       id: appointment.id,
       status: appointment.status,
       approvalRequired: appointment.approvalRequired
-    }, { status: 201 })
+    }
+    if (emailDebug) responseBody.emailDebug = emailDebug
+
+    return NextResponse.json(responseBody, { status: 201 })
 
   } catch (error) {
     if (error instanceof z.ZodError) {

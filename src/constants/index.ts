@@ -1,4 +1,8 @@
 // 系统常量
+// 将常用时间常量导出为顶层常量，便于从其他模块直接导入使用
+export const DEFAULT_EXPIRE_HOURS = 48 // 小时
+export const DEFAULT_BUFFER_MINUTES = 15 // 分钟
+
 export const SYSTEM_CONSTANTS = {
   // 预约相关
   DEFAULT_APPOINTMENT_DURATION: 30, // 分钟
@@ -6,8 +10,8 @@ export const SYSTEM_CONSTANTS = {
   MIN_APPOINTMENT_DURATION: 15, // 分钟
   
   // 时间相关
-  DEFAULT_EXPIRE_HOURS: 48, // 小时
-  DEFAULT_BUFFER_MINUTES: 15, // 分钟
+  DEFAULT_EXPIRE_HOURS: DEFAULT_EXPIRE_HOURS, // 小时
+  DEFAULT_BUFFER_MINUTES: DEFAULT_BUFFER_MINUTES, // 分钟
   
   // 配额相关
   DEFAULT_MONTHLY_QUOTA: 10,

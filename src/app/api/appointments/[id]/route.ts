@@ -157,8 +157,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
         })
 
         if (subject) {
-          // 异步发送邮件通知（不阻塞响应）
-          setTimeout(async () => {
+          const _sendApprovalNotifications = async () => {
             try {
               await sendAppointmentApprovedNotification(
                 appointment.student.user.email,
@@ -181,7 +180,13 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
             } catch (error) {
               console.error('Failed to send approval notification emails:', error)
             }
-          }, 1000) // 延迟1秒执行，确保预约更新完成
+          }
+
+          if (process.env.SEND_EMAIL_SYNC === 'true') {
+            await _sendApprovalNotifications()
+          } else {
+            _sendApprovalNotifications().catch(err => console.error('Async email send error:', err))
+          }
         }
       } catch (error) {
         console.error('Failed to prepare approval notification emails:', error)
@@ -197,8 +202,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
         })
 
         if (subject) {
-          // 异步发送邮件通知（不阻塞响应）
-          setTimeout(async () => {
+          const _sendRejectionNotifications = async () => {
             try {
               await sendAppointmentRejectedNotification(
                 appointment.student.user.email,
@@ -221,7 +225,13 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
             } catch (error) {
               console.error('Failed to send rejection notification emails:', error)
             }
-          }, 1000) // 延迟1秒执行，确保预约更新完成
+          }
+
+          if (process.env.SEND_EMAIL_SYNC === 'true') {
+            await _sendRejectionNotifications()
+          } else {
+            _sendRejectionNotifications().catch(err => console.error('Async email send error:', err))
+          }
         }
       } catch (error) {
         console.error('Failed to prepare rejection notification emails:', error)
@@ -237,8 +247,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
         })
 
         if (subject) {
-          // 异步发送邮件通知（不阻塞响应）
-          setTimeout(async () => {
+          const _sendCancelNotifications = async () => {
             try {
               await sendAppointmentCancelledNotification(
                 appointment.student.user.email,
@@ -261,7 +270,13 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
             } catch (error) {
               console.error('Failed to send cancellation notification emails:', error)
             }
-          }, 1000) // 延迟1秒执行，确保预约更新完成
+          }
+
+          if (process.env.SEND_EMAIL_SYNC === 'true') {
+            await _sendCancelNotifications()
+          } else {
+            _sendCancelNotifications().catch(err => console.error('Async email send error:', err))
+          }
         }
       } catch (error) {
         console.error('Failed to prepare cancellation notification emails:', error)

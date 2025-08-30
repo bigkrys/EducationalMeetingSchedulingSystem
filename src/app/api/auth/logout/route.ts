@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revokeRefreshToken } from '@/lib/api/jwt'
+import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,8 +8,9 @@ export async function POST(request: NextRequest) {
                         request.headers.get('refresh-token')
 
     if (refreshToken) {
-      // 撤销 refresh token
-      await revokeRefreshToken(refreshToken)
+      // 撤销 refresh token（数据库中存储的是 sha256）
+      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex')
+      await revokeRefreshToken(tokenHash)
     }
 
     const response = new NextResponse(null, { status: 204 })

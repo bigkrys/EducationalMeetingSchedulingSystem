@@ -114,12 +114,13 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       html
     }
 
-    const info = await transporter.sendMail(mailOptions)
-    console.log('Email sent successfully:', info.messageId)
-    return true
+  const info = await transporter.sendMail(mailOptions)
+  // 更详细的日志：包含收件人与主题，便于排查某个收件人未收到邮件的原因
+  console.log('Email sent successfully:', { to, subject, messageId: info.messageId })
+  return true
   } catch (error) {
-    console.error('Failed to send email:', error)
-    return false
+  console.error('Failed to send email', { to, subject, error })
+  return false
   }
 }
 
@@ -134,25 +135,33 @@ export async function sendAppointmentApprovedNotification(
     scheduledTime: string
     durationMinutes: number
   }
-): Promise<void> {
+): Promise<{ studentSent: boolean; teacherSent: boolean }> {
   try {
     // 发送给学生
-    await sendEmail(
+    const studentSent = await sendEmail(
       studentEmail,
       emailTemplates.appointmentApproved.subject,
       emailTemplates.appointmentApproved.studentTemplate(data)
     )
+    if (!studentSent) {
+      console.error('Appointment approval email failed for student', { studentEmail, appointment: data })
+    }
 
     // 发送给教师
-    await sendEmail(
+    const teacherSent = await sendEmail(
       teacherEmail,
       emailTemplates.appointmentApproved.subject,
       emailTemplates.appointmentApproved.teacherTemplate(data)
     )
+    if (!teacherSent) {
+      console.error('Appointment approval email failed for teacher', { teacherEmail, appointment: data })
+    }
 
-    console.log('Appointment approved notifications sent successfully')
+    console.log('Appointment approved notifications attempted', { studentSent, teacherSent })
+    return { studentSent, teacherSent }
   } catch (error) {
     console.error('Failed to send appointment approved notifications:', error)
+    return { studentSent: false, teacherSent: false }
   }
 }
 
@@ -167,25 +176,27 @@ export async function sendAppointmentCancelledNotification(
     scheduledTime: string
     reason?: string
   }
-): Promise<void> {
+): Promise<{ studentSent: boolean; teacherSent: boolean }> {
   try {
     // 发送给学生
-    await sendEmail(
+    const studentSent = await sendEmail(
       studentEmail,
       emailTemplates.appointmentCancelled.subject,
       emailTemplates.appointmentCancelled.studentTemplate(data)
     )
 
     // 发送给教师
-    await sendEmail(
+    const teacherSent = await sendEmail(
       teacherEmail,
       emailTemplates.appointmentCancelled.subject,
       emailTemplates.appointmentCancelled.teacherTemplate(data)
     )
 
-    console.log('Appointment cancelled notifications sent successfully')
+    console.log('Appointment cancelled notifications attempted', { studentSent, teacherSent })
+    return { studentSent, teacherSent }
   } catch (error) {
     console.error('Failed to send appointment cancelled notifications:', error)
+    return { studentSent: false, teacherSent: false }
   }
 }
 
@@ -200,10 +211,9 @@ export async function sendAppointmentRejectedNotification(
     scheduledTime: string
     reason: string
   }
-): Promise<void> {
+): Promise<{ studentSent: boolean; teacherSent: boolean }> {
   try {
-    // 发送给学生
-    await sendEmail(
+    const studentSent = await sendEmail(
       studentEmail,
       '预约被拒绝通知',
       `
@@ -231,8 +241,7 @@ export async function sendAppointmentRejectedNotification(
       `
     )
 
-    // 发送给教师
-    await sendEmail(
+    const teacherSent = await sendEmail(
       teacherEmail,
       '预约拒绝确认通知',
       `
@@ -254,9 +263,11 @@ export async function sendAppointmentRejectedNotification(
       `
     )
 
-    console.log('Appointment rejected notifications sent successfully')
+    console.log('Appointment rejected notifications attempted', { studentSent, teacherSent })
+    return { studentSent, teacherSent }
   } catch (error) {
     console.error('Failed to send appointment rejected notifications:', error)
+    return { studentSent: false, teacherSent: false }
   }
 }
 
@@ -270,10 +281,9 @@ export async function sendAppointmentExpiredNotification(
     subject: string
     scheduledTime: string
   }
-): Promise<void> {
+): Promise<{ studentSent: boolean; teacherSent: boolean }> {
   try {
-    // 发送给学生
-    await sendEmail(
+    const studentSent = await sendEmail(
       studentEmail,
       '预约过期通知',
       `
@@ -300,8 +310,7 @@ export async function sendAppointmentExpiredNotification(
       `
     )
 
-    // 发送给教师
-    await sendEmail(
+    const teacherSent = await sendEmail(
       teacherEmail,
       '预约过期通知',
       `
@@ -323,9 +332,11 @@ export async function sendAppointmentExpiredNotification(
       `
     )
 
-    console.log('Appointment expired notifications sent successfully')
+    console.log('Appointment expired notifications attempted', { studentSent, teacherSent })
+    return { studentSent, teacherSent }
   } catch (error) {
     console.error('Failed to send appointment expired notifications:', error)
+    return { studentSent: false, teacherSent: false }
   }
 }
 
@@ -339,9 +350,9 @@ export async function sendNewAppointmentRequestNotification(
     durationMinutes: number
     studentEmail: string
   }
-): Promise<void> {
+): Promise<{ teacherSent: boolean }> {
   try {
-    await sendEmail(
+    const teacherSent = await sendEmail(
       teacherEmail,
       '新的预约请求通知',
       `
@@ -364,10 +375,15 @@ export async function sendNewAppointmentRequestNotification(
         </div>
       `
     )
-
-    console.log('New appointment request notification sent successfully')
+    if (!teacherSent) {
+      console.error('New appointment request email failed for teacher', { teacherEmail, appointment: data })
+    } else {
+      console.log('New appointment request notification sent successfully', { teacherEmail })
+    }
+    return { teacherSent }
   } catch (error) {
     console.error('Failed to send new appointment request notification:', error)
+    return { teacherSent: false }
   }
 }
 

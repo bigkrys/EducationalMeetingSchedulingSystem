@@ -17,7 +17,7 @@ async function handler(request: AuthenticatedRequest) {
       return NextResponse.json(cached.data)
     }
 
-  // 从数据库获取用户信息
+    // 从数据库获取用户信息
     // select narrowly to reduce join cost and payload
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -60,29 +60,33 @@ async function handler(request: AuthenticatedRequest) {
     }
 
     // 构建响应数据
-    const userData = {
+    const userData: any = {
       id: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
-      student: user.student ? {
+    }
+    if (user.student) {
+      userData.student = {
         id: user.student.id,
         serviceLevel: user.student.serviceLevel,
         monthlyMeetingsUsed: user.student.monthlyMeetingsUsed,
         enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name)
-      } : undefined,
-      teacher: user.teacher ? {
+      }
+    }
+    if (user.teacher) {
+      userData.teacher = {
         id: user.teacher.id,
-        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name),
         maxDailyMeetings: user.teacher.maxDailyMeetings,
-        bufferMinutes: user.teacher.bufferMinutes
-      } : undefined
+        bufferMinutes: user.teacher.bufferMinutes,
+        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name)
+      }
     }
 
     // put into short-lived cache
     try {
       userMeCache.set(userId, { expiresAt: Date.now() + USER_ME_TTL_MS, data: userData })
-    } catch (_) {}
+    } catch (_) { }
 
     return NextResponse.json(userData)
   } catch (error: any) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { sendAppointmentExpiredNotification } from '@/lib/api/email'
 import { deleteCachePattern } from '@/lib/api/cache'
+import { DEFAULT_EXPIRE_HOURS } from '@/constants'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,9 +15,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
     }
 
-    // 计算48小时前的时间
+    // 计算过期阈值：优先级 -> ENV JOB_EXPIRE_HOURS > servicePolicy.level='default' or min(policy.expireHours) > DEFAULT_EXPIRE_HOURS
+    let expireHours = DEFAULT_EXPIRE_HOURS
+
+    // 1) 环境变量覆盖（如果提供且为数字）
+    const envVal = process.env.JOB_EXPIRE_HOURS
+    if (envVal) {
+      const parsed = parseInt(envVal, 10)
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        expireHours = parsed
+      }
+    }
+
+    // 2) 尝试从 servicePolicy 中读取策略值（优先查找 level='default'，如无则取所有策略的最小 expireHours）
+    try {
+      const defaultPolicy = await prisma.servicePolicy.findUnique({ where: { level: 'default' } })
+      if (defaultPolicy && typeof defaultPolicy.expireHours === 'number' && defaultPolicy.expireHours > 0) {
+        expireHours = defaultPolicy.expireHours
+      } else {
+        const allPolicies = await prisma.servicePolicy.findMany({ select: { expireHours: true } })
+        if (allPolicies && allPolicies.length > 0) {
+          // 取最小值以保证更严格的过期行为（可以按需调整为最大值/平均值）
+          const minExpire = Math.min(...allPolicies.map(p => p.expireHours || DEFAULT_EXPIRE_HOURS))
+          if (minExpire > 0) expireHours = minExpire
+        }
+      }
+    } catch (err) {
+      // 读取策略失败则回退到默认值
+      console.warn('Failed to read servicePolicy for expireHours, using defaults', err)
+    }
+
+    // 计算阈值时间
     const expireTime = new Date()
-    expireTime.setHours(expireTime.getHours() - 48)
+    expireTime.setHours(expireTime.getHours() - expireHours)
 
     // 分页批处理，避免一次性加载过多记录
     const batchSize = 200

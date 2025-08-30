@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/api/auth'
+import { authenticateUser } from '@/lib/api/auth.server'
 import { loginSchema } from '@/lib/api/validation'
 import { z } from 'zod'
 

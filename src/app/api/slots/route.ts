@@ -8,7 +8,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const teacherId = searchParams.get('teacherId')
     const date = searchParams.get('date')
-    const duration = parseInt(searchParams.get('duration') || '30')
+    const durationParam = searchParams.get('duration')
+    const duration = parseInt(durationParam || '30')
+
+    // 验证 duration 为正整数
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'duration must be a positive integer' },
+        { status: 400 }
+      )
+    }
 
     if (!teacherId || !date) {
       return NextResponse.json(
@@ -18,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 检查缓存
-    const cacheKey = `slots:${teacherId}:${date}:${duration}`
+  const cacheKey = `slots:${teacherId}:${date}:${duration}`
     const cachedSlots = memoryCache.get(cacheKey)
     if (cachedSlots) {
       return NextResponse.json(cachedSlots)

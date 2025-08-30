@@ -195,7 +195,7 @@ export default function StudentBookingCalendar({
     }
   }, [selectedDate, selectedTeacher, selectedSubject])
 
-  const fetchTimeSlots = async () => {
+  const fetchTimeSlots = React.useCallback(async () => {
     if (!selectedDate || !selectedTeacher || !selectedSubject) return
     
     try {
@@ -243,7 +243,7 @@ export default function StudentBookingCalendar({
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedDate, selectedTeacher, selectedSubject])
 
   const handleDateSelect = (date: any) => {
     setSelectedDate(date.format('YYYY-MM-DD'))
@@ -360,20 +360,33 @@ export default function StudentBookingCalendar({
       } else {
         const errorData = await response.json()
         console.error('预约失败详情:', errorData)
-        
-        // 显示更详细的错误信息
-        let errorMessage = '预约失败，请重试'
-        if (errorData.error && errorData.message) {
-          errorMessage = `${errorData.error}: ${errorData.message}`
-        } else if (errorData.message) {
-          errorMessage = errorData.message
-        }
-        
-        message.error(errorMessage)
-        
-        // 如果是验证错误，显示详细信息
-        if (errorData.details) {
-          console.error('验证错误详情:', errorData.details)
+
+        // 如果是 SLOT_TAKEN，使用更友好的提示并刷新可约时间
+        if (errorData && errorData.error === 'SLOT_TAKEN') {
+          const friendly = errorData.message || '该时间已被其他学生预订，请重新选择时间进行预约'
+          message.error(friendly)
+          // 关闭弹窗并刷新可约时间列表
+          setBookingModalVisible(false)
+          form.resetFields()
+          // 确保在下一 tick 再刷新，以避免冲突
+          setTimeout(() => {
+            fetchTimeSlots()
+          }, 200)
+        } else {
+          // 显示更详细的错误信息
+          let errorMessage = '预约失败，请重试'
+          if (errorData.error && errorData.message) {
+            errorMessage = `${errorData.error}: ${errorData.message}`
+          } else if (errorData.message) {
+            errorMessage = errorData.message
+          }
+          
+          message.error(errorMessage)
+          
+          // 如果是验证错误，显示详细信息
+          if (errorData.details) {
+            console.error('验证错误详情:', errorData.details)
+          }
         }
       }
     } catch (error) {
@@ -526,11 +539,18 @@ export default function StudentBookingCalendar({
       {!initialLoading && selectedDate && selectedTeacher && selectedSubject && (
         <Card 
           title={
-            <div className="flex items-center space-x-2">
-              <CalendarOutlined className="text-blue-600" />
-              <span className="text-lg font-semibold text-gray-900">
-                {selectedDate} 可用时间
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <CalendarOutlined className="text-blue-600" />
+                <span className="text-lg font-semibold text-gray-900">
+                  {selectedDate} 可用时间
+                </span>
+              </div>
+              <div>
+                <Button onClick={() => fetchTimeSlots()} size="small">
+                  刷新
+                </Button>
+              </div>
             </div>
           }
           className="shadow-sm border-gray-200"

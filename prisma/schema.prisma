@@ -125,6 +125,7 @@ model Appointment {
   teacher          Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   subject          Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
+  @@unique([teacherId, scheduledTime])
   @@map("appointments")
 }
 
