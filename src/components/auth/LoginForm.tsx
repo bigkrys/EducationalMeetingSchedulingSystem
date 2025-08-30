@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import useSubmitting from '@/lib/hooks/useSubmitting'
 import { useRouter } from 'next/navigation'
 import SubjectSelector from '@/components/shared/SubjectSelector'
 import RoleSelector from '@/components/shared/RoleSelector'
@@ -38,13 +39,17 @@ export default function LoginForm() {
   })
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
+  const { submitting: submittingForm, wrap: wrapSubmit } = useSubmitting(false)
   const [passwordError, setPasswordError] = useState('');
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
+    if (loading || redirecting || submittingForm) return
+
+    await wrapSubmit(async () => {
+      setLoading(true)
+      setError(null)
 
     try {
       if (!isLogin && formData.password !== formData.confirmPassword) {
@@ -151,11 +156,12 @@ export default function LoginForm() {
     } catch (error) {
       console.error('请求失败:', error)
       setError('网络错误，请重试')
-    } finally {
-      if (!redirecting) {
-        setLoading(false)
+      } finally {
+        if (!redirecting) {
+          setLoading(false)
+        }
       }
-    }
+    })
   }
 
   const handleInputChange = (field: keyof FormData, value: any) => {

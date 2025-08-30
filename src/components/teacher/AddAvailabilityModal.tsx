@@ -12,6 +12,7 @@ interface AddAvailabilityModalProps {
   onCancel: () => void
   onSubmit: (values: any) => void
   form: any
+  submitting?: boolean
 }
 
 interface TimeSlot {
@@ -25,6 +26,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
   onCancel,
   onSubmit,
   form
+  ,submitting = false
 }) => {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([
     { id: '1', startTime: '', endTime: '' }
@@ -194,6 +196,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
                       size="small"
                       icon={<DeleteOutlined />}
                       onClick={() => handleRemoveTimeSlot(slot.id)}
+                      disabled={submitting}
                     />
                   )}
                 </div>
@@ -204,6 +207,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
               type="dashed"
               icon={<PlusOutlined />}
               onClick={handleAddTimeSlot}
+              disabled={submitting}
               className="w-full"
             >
               添加时间段
@@ -216,7 +220,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
             <Button onClick={handleCancel}>
               取消
             </Button>
-            <Button type="primary" onClick={handleSubmit}>
+            <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
               确认添加
             </Button>
           </div>

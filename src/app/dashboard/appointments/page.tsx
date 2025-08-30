@@ -85,8 +85,9 @@ export default function AppointmentsManagement() {
   }
 
   const handleApprove = async (appointment: Appointment) => {
-    setSelectedAppointment(appointment)
-    setApproveModalVisible(true)
+  if (processing) return
+  setSelectedAppointment(appointment)
+  setApproveModalVisible(true)
   }
 
   const confirmApprove = async () => {
@@ -110,9 +111,10 @@ export default function AppointmentsManagement() {
   }
 
   const handleReject = async (appointment: Appointment) => {
-    setSelectedAppointment(appointment)
-    setRejectModalVisible(true)
-    setRejectReason('')
+  if (processing) return
+  setSelectedAppointment(appointment)
+  setRejectModalVisible(true)
+  setRejectReason('')
   }
 
   const confirmReject = async () => {

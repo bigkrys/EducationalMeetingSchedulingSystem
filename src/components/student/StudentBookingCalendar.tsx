@@ -34,6 +34,7 @@ export default function StudentBookingCalendar({
   const [timeSlots, setTimeSlots] = useState<CalendarSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true) // 添加初始加载状态
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [bookingModalVisible, setBookingModalVisible] = useState(false)
   const [allTeachers, setAllTeachers] = useState<any[]>([])
   const [studentSubjects, setStudentSubjects] = useState<string[]>([])
@@ -189,12 +190,6 @@ export default function StudentBookingCalendar({
     loadData()
   }, [])
 
-  useEffect(() => {
-    if (selectedDate && selectedTeacher && selectedSubject) {
-      fetchTimeSlots()
-    }
-  }, [selectedDate, selectedTeacher, selectedSubject])
-
   const fetchTimeSlots = React.useCallback(async () => {
     if (!selectedDate || !selectedTeacher || !selectedSubject) return
     
@@ -244,6 +239,12 @@ export default function StudentBookingCalendar({
       setLoading(false)
     }
   }, [selectedDate, selectedTeacher, selectedSubject])
+
+  useEffect(() => {
+    if (selectedDate && selectedTeacher && selectedSubject) {
+      fetchTimeSlots()
+    }
+  }, [selectedDate, selectedTeacher, selectedSubject, fetchTimeSlots])
 
   const handleDateSelect = (date: any) => {
     setSelectedDate(date.format('YYYY-MM-DD'))
@@ -307,7 +308,10 @@ export default function StudentBookingCalendar({
   }
 
   const handleBooking = async (values: any) => {
+    if (bookingSubmitting) return
+
     try {
+      setBookingSubmitting(true)
       setLoading(true)
       
       const token = localStorage.getItem('accessToken')
@@ -337,7 +341,7 @@ export default function StudentBookingCalendar({
       }
 
 
-      const response = await fetch('/api/appointments', {
+  const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -393,7 +397,8 @@ export default function StudentBookingCalendar({
       console.error('预约失败:', error)
       message.error('预约失败，请重试')
     } finally {
-      setLoading(false)
+  setBookingSubmitting(false)
+  setLoading(false)
     }
   }
 
@@ -680,10 +685,10 @@ export default function StudentBookingCalendar({
 
           <Form.Item className="mb-0">
             <div className="flex justify-end space-x-3">
-              <Button onClick={() => setBookingModalVisible(false)}>
+              <Button onClick={() => setBookingModalVisible(false)} disabled={bookingSubmitting}>
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" loading={loading}>
+              <Button type="primary" htmlType="submit" loading={bookingSubmitting} disabled={bookingSubmitting}>
                 确认预约
               </Button>
             </div>

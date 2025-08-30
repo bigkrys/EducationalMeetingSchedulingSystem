@@ -44,6 +44,9 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
   const [loading, setLoading] = useState(false)
   const [isAddModalVisible, setIsAddModalVisible] = useState(false)
   const [isBlockModalVisible, setIsBlockModalVisible] = useState(false)
+  const [submittingAdd, setSubmittingAdd] = useState(false)
+  const [submittingBlock, setSubmittingBlock] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form] = Form.useForm()
   const [blockForm] = Form.useForm()
 
@@ -155,13 +158,15 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
   // 添加可用性
   const handleAddAvailability = async (values: any) => {
+    if (submittingAdd) return
+    setSubmittingAdd(true)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
         message.error('请先登录')
+        setSubmittingAdd(false)
         return
       }
-
 
       // 处理多个时间段
       if (values.timeSlots && Array.isArray(values.timeSlots)) {
@@ -208,15 +213,20 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     } catch (error) {
       console.error('添加可用性错误:', error)
       message.error(error instanceof Error ? error.message : '添加可用性失败')
+    } finally {
+      setSubmittingAdd(false)
     }
   }
 
   // 删除可用性
   const handleDeleteAvailability = async (id: string) => {
+    if (deletingId) return
+    setDeletingId(id)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
         message.error('请先登录')
+        setDeletingId(null)
         return
       }
 
@@ -237,15 +247,20 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       }
     } catch (error) {
       message.error('删除失败')
+    } finally {
+      setDeletingId(null)
     }
   }
 
   // 添加阻塞时间
   const handleAddBlockedTime = async (values: any) => {
+    if (submittingBlock) return
+    setSubmittingBlock(true)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
         message.error('请先登录')
+        setSubmittingBlock(false)
         return
       }
 
@@ -298,6 +313,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       }
     } catch (error) {
       message.error('添加阻塞时间失败')
+    } finally {
+      setSubmittingBlock(false)
     }
   }
 
@@ -361,13 +378,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => setIsAddModalVisible(true)}
+              onClick={() => setIsAddModalVisible(true)}
+              loading={submittingAdd}
+              disabled={submittingAdd}
           >
             添加可用时间
           </Button>
           <Button
             icon={<ClockCircleOutlined />}
-            onClick={() => setIsBlockModalVisible(true)}
+              onClick={() => setIsBlockModalVisible(true)}
+              loading={submittingBlock}
+              disabled={submittingBlock}
           >
             添加阻塞时间
           </Button>
@@ -409,6 +430,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                         size="small"
                         icon={<DeleteOutlined />}
                         onClick={() => handleDeleteAvailability(item.id)}
+                        loading={deletingId === item.id}
+                        disabled={!!deletingId}
                       />
                     </div>
                   ))}
@@ -447,6 +470,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                   size="small"
                   icon={<DeleteOutlined />}
                   onClick={() => handleDeleteBlockedTime(blockedTime.id)}
+                  loading={deletingId === blockedTime.id}
+                  disabled={!!deletingId}
                 />
               </div>
             ))}
@@ -460,6 +485,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         onCancel={() => setIsAddModalVisible(false)}
         onSubmit={handleAddAvailability}
         form={form}
+  submitting={submittingAdd}
       />
 
       {/* 添加阻塞时间弹窗 */}

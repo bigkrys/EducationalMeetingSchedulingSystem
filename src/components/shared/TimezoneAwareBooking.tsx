@@ -28,6 +28,7 @@ export default function TimezoneAwareBooking({
 }: TimezoneAwareBookingProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
+  const [selectingSlot, setSelectingSlot] = useState(false)
   
   const timezoneInfo = getTimezoneInfo()
 
@@ -76,7 +77,13 @@ export default function TimezoneAwareBooking({
 
   const handleSlotClick = (slot: TimeSlot) => {
     if (slot.status === 'available') {
-      onSlotSelect?.(slot.startTime)
+      if (selectingSlot) return
+      try {
+        setSelectingSlot(true)
+        onSlotSelect?.(slot.startTime)
+      } finally {
+        setSelectingSlot(false)
+      }
     }
   }
 
@@ -107,7 +114,7 @@ export default function TimezoneAwareBooking({
           <List.Item>
             <Button
               type={slot.status === 'available' ? 'default' : 'text'}
-              disabled={slot.status !== 'available'}
+              disabled={slot.status !== 'available' || selectingSlot}
               onClick={() => handleSlotClick(slot)}
               style={{ 
                 width: '100%', 

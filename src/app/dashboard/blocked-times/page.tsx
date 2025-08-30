@@ -28,6 +28,9 @@ export default function BlockedTimes() {
     endTime: '',
     reason: ''
   })
+  // 防止重复提交/删除
+  const [submittingBlocked, setSubmittingBlocked] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [teacherId, setTeacherId] = useState<string>('')
   const router = useRouter()
 
@@ -89,8 +92,11 @@ export default function BlockedTimes() {
   }
 
   const handleSubmit = async () => {
+    if (submittingBlocked) return
+    setSubmittingBlocked(true)
     if (!formData.startTime || !formData.endTime) {
       message.error('请选择开始和结束时间')
+      setSubmittingBlocked(false)
       return
     }
 
@@ -124,10 +130,14 @@ export default function BlockedTimes() {
     } catch (error) {
       console.error('操作失败:', error)
       message.error('操作失败')
+    } finally {
+      setSubmittingBlocked(false)
     }
   }
 
   const handleDelete = async (id: string) => {
+    if (deletingId) return
+    setDeletingId(id)
     try {
       const response = await fetch(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
@@ -145,6 +155,8 @@ export default function BlockedTimes() {
     } catch (error) {
       console.error('删除失败:', error)
       message.error('删除失败')
+    } finally {
+      setDeletingId(null)
     }
   }
 
