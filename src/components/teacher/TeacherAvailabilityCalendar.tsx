@@ -401,12 +401,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                         <span className="font-medium">
                           {item.startTime} - {item.endTime}
                         </span>
-                        <Tag
-                          color={item.isActive ? 'green' : 'red'}
-                          className="ml-2"
-                        >
-                          {item.isActive ? '启用' : '禁用'}
-                        </Tag>
+                        
                       </div>
                       <Button
                         type="text"
