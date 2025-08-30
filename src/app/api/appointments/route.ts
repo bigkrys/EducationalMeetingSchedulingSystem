@@ -191,10 +191,27 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     })
 
     if (existingAppointment) {
-      return NextResponse.json(
-        { error: 'IDEMPOTENT_CONFLICT', message: 'Appointment with this idempotency key already exists' },
-        { status: 409 }
-      )
+      // 已存在相同 idempotencyKey 的预约：返回现有预约信息以支持幂等重试
+      const apt = await prisma.appointment.findUnique({
+        where: { id: existingAppointment.id },
+        include: { student: { include: { user: true } }, teacher: { include: { user: true } }, subject: true }
+      })
+      if (apt) {
+        return NextResponse.json({
+          id: apt.id,
+          scheduledTime: apt.scheduledTime.toISOString(),
+          status: apt.status,
+          subject: apt.subject?.name,
+          durationMinutes: apt.durationMinutes,
+          approvalRequired: apt.approvalRequired,
+          approvedAt: apt.approvedAt?.toISOString(),
+          createdAt: apt.createdAt.toISOString(),
+          studentId: apt.student?.id,
+          studentName: apt.student?.user?.name,
+          teacherId: apt.teacher?.id,
+          teacherName: apt.teacher?.user?.name
+        }, { status: 200 })
+      }
     }
 
     // 检查学生是否存在且为激活状态
@@ -257,215 +274,174 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       )
     }
 
-  // 检查槽位是否可用
-  // 标准化 scheduledTime 到分钟精度，避免微秒/秒差异导致并发时写入不同的 timestamp
-  const scheduledTime = new Date(validatedData.scheduledTime)
-  scheduledTime.setSeconds(0, 0)
-    const slotEnd = addMinutes(scheduledTime, validatedData.durationMinutes)
-    
-    // 检查是否与已有预约冲突（包含缓冲时间）
-    const bufferStart = addMinutes(scheduledTime, -teacher.bufferMinutes)
-    const bufferEnd = addMinutes(slotEnd, teacher.bufferMinutes)
-    
-    const conflictingAppointments = await prisma.appointment.findMany({
-      where: {
-        teacherId: validatedData.teacherId,
-        scheduledTime: { lt: bufferEnd },
-        status: { in: ['pending', 'approved'] }
-      }
-    })
-
-    const hasConflict = conflictingAppointments.some((appointment: any) => {
-      const appointmentEnd = addMinutes(appointment.scheduledTime, appointment.durationMinutes)
-      return (bufferStart < appointmentEnd && bufferEnd > appointment.scheduledTime)
-    })
-
-    if (hasConflict) {
-      return NextResponse.json(
-  { error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' },
-        { status: 409 }
-      )
-    }
-
-    // 检查教师当日预约数量限制
-    const dayStart = new Date(scheduledTime)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(scheduledTime)
-    dayEnd.setHours(23, 59, 59, 999)
-
-    const dailyAppointments = await prisma.appointment.count({
-      where: {
-        teacherId: validatedData.teacherId,
-        scheduledTime: { gte: dayStart, lte: dayEnd },
-        status: { in: ['pending', 'approved'] }
-      }
-    })
-
-    if (dailyAppointments >= teacher.maxDailyMeetings) {
-      return NextResponse.json(
-        { error: 'MAX_DAILY_REACHED', message: 'Teacher has reached maximum daily appointments' },
-        { status: 409 }
-      )
-    }
-
-    // 检查学生月度配额
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    monthStart.setHours(0, 0, 0, 0)
-
-    if (student.lastQuotaReset < monthStart) {
-      // 重置月度配额
-      await prisma.student.update({
-        where: { id: student.id },
-        data: {
-          monthlyMeetingsUsed: 0,
-          lastQuotaReset: new Date()
-        }
-      })
-      // 重新获取学生信息
-      const updatedStudent = await prisma.student.findUnique({
-        where: { id: student.id }
-      })
-      if (updatedStudent) {
-        student.monthlyMeetingsUsed = updatedStudent.monthlyMeetingsUsed
-      }
-    }
-
-    // 检查是否超过月度配额限制
-    const policy = await prisma.servicePolicy.findUnique({
-      where: { level: student.serviceLevel }
-    })
-    
-    // 对于level2学生，允许创建预约但状态为pending
-    // 对于其他级别，检查自动批准配额
-    if (student.serviceLevel !== 'level2') {
-      let monthlyLimit = 10 // 默认限制
-      if (policy) {
-        monthlyLimit = policy.monthlyAutoApprove // 使用数据库策略配置
-      }
-
-      if (student.monthlyMeetingsUsed >= monthlyLimit) {
-        return NextResponse.json(
-          { error: 'QUOTA_EXCEEDED', message: 'Monthly appointment quota exceeded' },
-          { status: 409 }
-        )
-      }
-    }
-
-    // 根据服务级别决定是否需要审批
-    let approvalRequired = true
-    let status: 'pending' | 'approved' = 'pending'
-
-    if (student.serviceLevel === 'premium') {
-      approvalRequired = false
-      status = 'approved'
-    } else if (student.serviceLevel === 'level1') {
-      // 检查是否还有自动批准次数
-      const policy = await prisma.servicePolicy.findUnique({
-        where: { level: 'level1' }
-      })
-      
-      const autoApproveLimit = policy?.monthlyAutoApprove || 2
-      if (student.monthlyMeetingsUsed < autoApproveLimit) {
-        approvalRequired = false
-        status = 'approved'
-      }
-    }
-
-    // 首先查找或创建科目
-    let subject = await prisma.subject.findFirst({
-      where: { name: validatedData.subject }
-    })
-    
+    // 首先查找或创建科目（需要在事务前准备好 subject.id）
+    let subject = await prisma.subject.findFirst({ where: { name: validatedData.subject } })
     if (!subject) {
-      // 如果科目不存在，创建一个新的
-      subject = await prisma.subject.create({
-        data: {
-          name: validatedData.subject,
-          code: validatedData.subject.toUpperCase().replace(/\s+/g, '_'),
-          description: `科目：${validatedData.subject}`
-        }
-      })
+      subject = await prisma.subject.create({ data: { name: validatedData.subject, code: validatedData.subject.toUpperCase().replace(/\s+/g, '_'), description: `科目：${validatedData.subject}` } })
     }
 
-    // 确保学生有该科目
-    const existingStudentSubject = await prisma.studentSubject.findUnique({
-      where: {
-        studentId_subjectId: {
-          studentId: validatedData.studentId,
-          subjectId: subject.id
-        }
-      }
-    })
+    // 检查槽位并创建预约（使用事务与行锁序列化同一教师的并发请求）
+    // 标准化 scheduledTime 到分钟精度，避免微秒/秒差异导致并发时写入不同的 timestamp
+    const scheduledTime = new Date(validatedData.scheduledTime)
+    scheduledTime.setSeconds(0, 0)
+    const slotEnd = addMinutes(scheduledTime, validatedData.durationMinutes)
 
-    if (!existingStudentSubject) {
-      await prisma.studentSubject.create({
-        data: {
-          studentId: validatedData.studentId,
-          subjectId: subject.id
-        }
-      })
-    }
-
-    // 确保教师有该科目
-    const existingTeacherSubject = await prisma.teacherSubject.findUnique({
-      where: {
-        teacherId_subjectId: {
-          teacherId: validatedData.teacherId,
-          subjectId: subject.id
-        }
-      }
-    })
-
-    if (!existingTeacherSubject) {
-      await prisma.teacherSubject.create({
-        data: {
-          teacherId: validatedData.teacherId,
-          subjectId: subject.id
-        }
-      })
-    }
-
-    // 创建预约（注意并发可能导致竞态）。如果数据库存在唯一约束冲突，则返回 SLOT_TAKEN。
-    let appointment: any
+    // 冲突/创建逻辑在事务内执行，以避免检查-创建之间的竞态。
+    let appointment: any = undefined
     try {
-      appointment = await prisma.appointment.create({
-        data: {
-          studentId: validatedData.studentId,
-          teacherId: validatedData.teacherId,
-          subjectId: subject.id,
-          scheduledTime,
-          durationMinutes: validatedData.durationMinutes,
-          status,
-          approvalRequired,
-          approvedAt: status === 'approved' ? new Date() : null,
-          idempotencyKey: validatedData.idempotencyKey
+      appointment = await prisma.$transaction(async (tx) => {
+  // 重新读取可能被并发修改的数据（学生记录、教师行等）
+        const txTeacher = await tx.teacher.findUnique({ where: { id: validatedData.teacherId } })
+        if (!txTeacher) {
+          throw new Error('TEACHER_NOT_FOUND_TX')
         }
+
+        const txStudent = await tx.student.findUnique({ where: { id: validatedData.studentId } })
+        if (!txStudent) {
+          throw new Error('STUDENT_NOT_FOUND_TX')
+        }
+
+        // 计算缓冲区并检查冲突（使用事务视图上的数据）
+        const bufferStart = addMinutes(scheduledTime, -txTeacher.bufferMinutes)
+        const bufferEnd = addMinutes(slotEnd, txTeacher.bufferMinutes)
+
+        const conflictingAppointments = await tx.appointment.findMany({
+          where: {
+            teacherId: validatedData.teacherId,
+            scheduledTime: { lt: bufferEnd },
+            status: { in: ['pending', 'approved'] }
+          }
+        })
+
+        const hasConflict = conflictingAppointments.some((appt: any) => {
+          const appointmentEnd = addMinutes(appt.scheduledTime, appt.durationMinutes)
+          return (bufferStart < appointmentEnd && bufferEnd > appt.scheduledTime)
+        })
+
+        if (hasConflict) {
+          // 使用特定错误标识，让外层捕获并返回友好消息
+          const e: any = new Error('SLOT_TAKEN_TX')
+          e.code = 'SLOT_TAKEN_TX'
+          throw e
+        }
+
+        // 检查教师当日预约数量限制（基于事务视图）
+        const dayStart = new Date(scheduledTime)
+        dayStart.setHours(0, 0, 0, 0)
+        const dayEnd = new Date(scheduledTime)
+        dayEnd.setHours(23, 59, 59, 999)
+
+        const dailyAppointments = await tx.appointment.count({
+          where: {
+            teacherId: validatedData.teacherId,
+            scheduledTime: { gte: dayStart, lte: dayEnd },
+            status: { in: ['pending', 'approved'] }
+          }
+        })
+
+        if (dailyAppointments >= txTeacher.maxDailyMeetings) {
+          const e: any = new Error('MAX_DAILY_REACHED_TX')
+          e.code = 'MAX_DAILY_REACHED_TX'
+          throw e
+        }
+
+        // 在事务中重新计算/重置学生月度配额（以防并发修改）
+        const now = new Date()
+        const monthStart = new Date(now)
+        monthStart.setDate(1)
+        monthStart.setHours(0, 0, 0, 0)
+
+        if (txStudent.lastQuotaReset < monthStart) {
+          await tx.student.update({
+            where: { id: txStudent.id },
+            data: { monthlyMeetingsUsed: 0, lastQuotaReset: now }
+          })
+          txStudent.monthlyMeetingsUsed = 0
+          txStudent.lastQuotaReset = now
+        }
+
+        // 检查是否超过月度配额限制
+        const policy = await tx.servicePolicy.findUnique({ where: { level: txStudent.serviceLevel } })
+        if (txStudent.serviceLevel !== 'level2') {
+          let monthlyLimit = 10
+          if (policy) monthlyLimit = policy.monthlyAutoApprove
+          if (txStudent.monthlyMeetingsUsed >= monthlyLimit) {
+            const e: any = new Error('QUOTA_EXCEEDED_TX')
+            e.code = 'QUOTA_EXCEEDED_TX'
+            throw e
+          }
+        }
+
+        // 根据服务级别决定是否需要审批
+        let approvalRequired = true
+        let status: 'pending' | 'approved' = 'pending'
+        if (txStudent.serviceLevel === 'premium') {
+          approvalRequired = false
+          status = 'approved'
+        } else if (txStudent.serviceLevel === 'level1') {
+          const policyLevel1 = await tx.servicePolicy.findUnique({ where: { level: 'level1' } })
+          const autoApproveLimit = policyLevel1?.monthlyAutoApprove || 2
+          if (txStudent.monthlyMeetingsUsed < autoApproveLimit) {
+            approvalRequired = false
+            status = 'approved'
+          }
+        }
+
+        // 在事务内创建预约
+        const created = await tx.appointment.create({
+          data: {
+            studentId: validatedData.studentId,
+            teacherId: validatedData.teacherId,
+            subjectId: subject.id,
+            scheduledTime,
+            durationMinutes: validatedData.durationMinutes,
+            status,
+            approvalRequired,
+            approvedAt: status === 'approved' ? new Date() : null,
+            idempotencyKey: validatedData.idempotencyKey
+          }
+        })
+
+        // 更新学生月度使用次数（事务内）
+        await tx.student.update({ where: { id: txStudent.id }, data: { monthlyMeetingsUsed: { increment: 1 } } })
+
+        return created
       })
     } catch (err: any) {
+      // 事务内部产生的特定错误映射为友好 HTTP 响应
+      if (err?.code === 'SLOT_TAKEN_TX') {
+        return NextResponse.json({ error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' }, { status: 409 })
+      }
+      if (err?.code === 'MAX_DAILY_REACHED_TX') {
+        return NextResponse.json({ error: 'MAX_DAILY_REACHED', message: 'Teacher has reached maximum daily appointments' }, { status: 409 })
+      }
+      if (err?.code === 'QUOTA_EXCEEDED_TX') {
+        return NextResponse.json({ error: 'QUOTA_EXCEEDED', message: 'Monthly appointment quota exceeded' }, { status: 409 })
+      }
       // Prisma 唯一约束错误代码 P2002
       if (err?.code === 'P2002') {
-        return NextResponse.json(
-          { error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' },
-          { status: 409 }
-        )
+        return NextResponse.json({ error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' }, { status: 409 })
       }
 
       throw err
     }
 
+    const existingStudentSubject = await prisma.studentSubject.findUnique({ where: { studentId_subjectId: { studentId: validatedData.studentId, subjectId: subject.id } } })
+    if (!existingStudentSubject) {
+      await prisma.studentSubject.create({ data: { studentId: validatedData.studentId, subjectId: subject.id } })
+    }
 
-    // 更新学生月度使用次数
-    await prisma.student.update({
-      where: { id: student.id },
-      data: { monthlyMeetingsUsed: { increment: 1 } }
-    })
+    // 确保教师有该科目
+    const existingTeacherSubject = await prisma.teacherSubject.findUnique({ where: { teacherId_subjectId: { teacherId: validatedData.teacherId, subjectId: subject.id } } })
+    if (!existingTeacherSubject) {
+      await prisma.teacherSubject.create({ data: { teacherId: validatedData.teacherId, subjectId: subject.id } })
+    }
 
     // 清除相关缓存
     const dateStr = scheduledTime.toISOString().split('T')[0]
     await deleteCachePattern(`slots:${validatedData.teacherId}:${dateStr}:*`)
 
-    // 发送邮件通知
+  // 发送邮件通知
     try {
       // 获取科目名称
       const subjectRecord = await prisma.subject.findUnique({
@@ -475,9 +451,10 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       if (subjectRecord) {
         // 受控发送邮件：在 serverless 环境中 setTimeout 可能不会被执行，
         // 我们根据环境变量决定是同步等待发送还是 fire-and-forget。
-        const _sendAppointmentNotifications = async () => {
+    const _sendAppointmentNotifications = async () => {
           try {
-            if (status === 'pending') {
+      const aptStatus = appointment?.status
+      if (aptStatus === 'pending') {
               const res = await sendNewAppointmentRequestNotification(
                 teacher.user.email,
                 {
@@ -496,7 +473,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                 }
               )
               return { teacherSent: res?.teacherSent }
-            } else if (status === 'approved') {
+            } else if (aptStatus === 'approved') {
               const res = await sendAppointmentApprovedNotification(
                 student.user.email,
                 teacher.user.email,
@@ -516,7 +493,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                 }
               )
               return { studentSent: res?.studentSent, teacherSent: res?.teacherSent }
-            }
+              }
           } catch (error) {
             console.error('Failed to send appointment notification emails:', error)
             return { error: String(error) }

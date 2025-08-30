@@ -495,6 +495,31 @@ participant D as DB
 Q->>A: POST /api/jobs/reset-quota (每月1日 00:05)
 A->>D: UPDATE students SET monthlyMeetingsUsed=0, lastQuotaReset=NOW()
 D-->>A: 返回影响行数
+
+### 在 Vercel 上部署与定时触发
+
+如果你的应用部署在 Vercel，可以使用 Vercel 的 Scheduled Functions（Cron Jobs）来触发该接口：
+
+1. 在 Vercel 仪表盘 -> Projects -> 你的项目 -> Settings -> Environment Variables 中添加一个环境变量：
+  - `JOB_TRIGGER_SECRET`：随机的强字符串，用作触发密钥（Production 环境）。
+
+2. 在 Vercel Dashboard -> Functions / Cron（Scheduled Jobs）中新建一个 Cron Job：
+  - URL: `https://<你的域名>/api/jobs/reset-quota`
+  - Method: `POST`
+  - Headers: `Authorization: Bearer <JOB_TRIGGER_SECRET>` （后端同时支持 `x-job-secret`，两者任一即可）
+  - Schedule（cron）: `5 0 1 * *` （UTC，每月 1 日 00:05）
+
+3. 本地/手动触发示例（用于测试）：
+
+```bash
+BASE_URL="https://your-site.vercel.app"
+JOB_TRIGGER_SECRET="<your-secret>"
+curl -i -X POST "$BASE_URL/api/jobs/reset-quota?force=true" \
+  -H "Authorization: Bearer $JOB_TRIGGER_SECRET"
+```
+
+返回示例：JSON 表示更新数量或无需要更新的消息；同时数据库会写入一条 `QUOTA_RESET` 审计日志。
+
 ```
 
 ## 3.13 系统｜提醒通知

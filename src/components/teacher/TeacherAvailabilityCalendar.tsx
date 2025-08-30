@@ -48,7 +48,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
   const [blockForm] = Form.useForm()
 
   // 获取可用性数据
-  const fetchAvailability = async () => {
+  const fetchAvailability = React.useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
@@ -103,10 +103,10 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     } finally {
       setLoading(false)
     }
-  }
+  }, [teacherId])
 
   // 获取阻塞时间数据
-  const fetchBlockedTimes = async () => {
+  const fetchBlockedTimes = React.useCallback(async () => {
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
@@ -146,12 +146,12 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     } catch (error) {
       console.error('获取阻塞时间失败:', error)
     }
-  }
+  }, [teacherId])
 
   useEffect(() => {
     fetchAvailability()
     fetchBlockedTimes()
-  }, [teacherId])
+  }, [fetchAvailability, fetchBlockedTimes])
 
   // 添加可用性
   const handleAddAvailability = async (values: any) => {
@@ -183,13 +183,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           const response = await api.post(`/api/teachers/${teacherId}/availability`, availabilityData)
           
           if (!response.ok) {
-            // 全局错误处理器会自动显示错误消息
-            // 这里只需要抛出错误以停止后续处理
             const errorData = await response.json()
             throw new Error(errorData.message || '添加可用性失败')
           }
 
-          return response.json()
+          const result = await response.json()
+          // 如果后端返回与 blockedTime 的 warnings，提示用户（但仍视为成功）
+          if (result && result.blockedTimeWarnings && Array.isArray(result.blockedTimeWarnings) && result.blockedTimeWarnings.length > 0) {
+            message.warning('已创建可用时间，但检测到与阻塞时间的冲突，相关时段将不会对学生显示为可预约。')
+          }
+
+          return result
         })
 
         await Promise.all(promises)
@@ -263,7 +267,28 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       })
 
       if (response.ok) {
-        message.success('阻塞时间已添加')
+        const result = await response.json()
+        // 如果后端返回 availabilityConflicts，提示用户但仍认为创建成功
+        if (result && result.availabilityConflicts && Array.isArray(result.availabilityConflicts) && result.availabilityConflicts.length > 0) {
+          Modal.info({
+            title: '已添加阻塞时间（存在与可用时间的冲突）',
+            content: (
+              <div>
+                <p>阻塞时间已创建，但与下列每周可用时间存在冲突：</p>
+                <ul>
+                  {result.availabilityConflicts.map((c: any) => (
+                    <li key={c.id}>{`周${c.dayOfWeek} ${c.startTime}-${c.endTime}`}</li>
+                  ))}
+                </ul>
+                <p>这些可用时间段在学生查询/创建预约时会被过滤。</p>
+              </div>
+            ),
+            onOk() {}
+          })
+        } else {
+          message.success('阻塞时间已添加')
+        }
+
         setIsBlockModalVisible(false)
         blockForm.resetFields()
         fetchBlockedTimes()

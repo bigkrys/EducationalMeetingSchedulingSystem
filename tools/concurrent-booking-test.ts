@@ -59,9 +59,28 @@ async function main() {
   const logins = await Promise.all(accounts.map(a => login(a.email, a.password)))
   console.log('登录结果：', JSON.stringify(logins, null, 2))
 
-  // 解析 token 与 user id（尽量容错）
+  // 解析 token
   const tokens = logins.map(l => (l && l.body && (l.body.accessToken || l.body.access_token)) ? (l.body.accessToken || l.body.access_token) : '')
-  const studentIds = logins.map(l => (l && l.body && l.body.user && l.body.user.id) ? l.body.user.id : '')
+
+  // 使用 token 获取当前用户信息以获得 studentId（更可靠）
+  const studentIds: string[] = []
+  for (const token of tokens) {
+    if (!token) {
+      studentIds.push('')
+      continue
+    }
+    try {
+      const meRes = await fetch(`${BASE}/api/users/me`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+  const meJson: any = await meRes.json().catch(() => ({}))
+  const extractedStudentId = meJson && (meJson.student?.id || meJson.id || (meJson.user && meJson.user.id)) ? (meJson.student?.id || meJson.id || meJson.user.id) : ''
+  studentIds.push(extractedStudentId)
+    } catch (e) {
+      studentIds.push('')
+    }
+  }
 
   console.log('准备并发创建预约...')
 

@@ -104,18 +104,11 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
       }
     })
 
+    // 如果与 weekly availability 有冲突，不再直接拒绝（允许共存），但记录冲突以返回前端提醒
+    let availabilityConflicts: any[] = []
     if (conflictingAvailability.length > 0) {
-      // 生成用户友好的冲突信息
-      const conflictDetails = conflictingAvailability.map(av => {
-        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-        return `${dayNames[av.dayOfWeek]} ${av.startTime}-${av.endTime}`
-      }).join('、')
-      
-      return NextResponse.json({
-        error: 'CONFLICT',
-        message: `阻塞时间与现有可用时间冲突：${conflictDetails}`,
-        conflicts: conflictingAvailability
-      }, { status: 409 })
+      availabilityConflicts = conflictingAvailability
+      console.log('Create blocked time - found conflicting weekly availability:', availabilityConflicts)
     }
 
     // 检查是否与现有预约冲突
@@ -175,6 +168,8 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
     return NextResponse.json({ 
       ok: true, 
       blockedTime,
+      // 把与 weekly availability 的冲突作为 warnings 返回给前端（非阻塞）
+      availabilityConflicts,
       message: 'Blocked time created successfully'
     })
 

@@ -811,26 +811,11 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       validatedData
     )
 
+    // 如果检测到与 blockedTime 冲突，默认允许创建（共存），但作为 warnings 返回给前端
+    let blockedTimeWarnings: any[] = []
     if (blockedTimeConflicts.length > 0) {
-      const friendlyMessage = generateFriendlyConflictMessage(blockedTimeConflicts)
-      return NextResponse.json({
-        error: 'BLOCKED_TIME_CONFLICT',
-        message: friendlyMessage,
-        conflicts: blockedTimeConflicts,
-        help: '您设置的时间段与阻塞时间冲突，请选择其他时间或调整阻塞时间设置',
-                  suggestions: [
-            {
-              action: 'adjust_time',
-              description: '调整可用时间：避开阻塞时间段',
-              recommendation: '建议您选择一个不与阻塞时间冲突的时间段'
-            },
-            {
-              action: 'modify_blocked_time',
-              description: '修改阻塞时间：调整或删除冲突的阻塞时间',
-              recommendation: '如果阻塞时间不再需要，您可以删除或调整它'
-            }
-          ]
-      }, { status: 409 })
+      blockedTimeWarnings = blockedTimeConflicts
+      console.log('Set availability - blocked time conflicts detected:', blockedTimeConflicts)
     }
 
     // 检查是否与已有预约冲突
@@ -908,7 +893,8 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       }
     })
 
-    return NextResponse.json({ ok: true })
+  // 如果存在与 blockedTime 的冲突，返回 warnings 供前端提示（非阻塞）
+  return NextResponse.json({ ok: true, availability: newAvailability, blockedTimeWarnings })
 
   } catch (error) {
     console.error('Set availability error:', error)
