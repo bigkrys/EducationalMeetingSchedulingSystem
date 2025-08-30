@@ -1,12 +1,20 @@
 import { prisma } from '@/lib/api/db'
-import { addMinutes, startOfDay, endOfDay, parseISO, getDay } from 'date-fns'
+import { addMinutes, parseISO, getDay } from 'date-fns'
+import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz'
 import { DEFAULT_BUFFER_MINUTES } from '@/constants'
 
 export async function calculateAvailableSlots(teacher: any, date: string, duration: number) {
-  const targetDate = parseISO(date)
-  const dayOfWeek = getDay(targetDate) // 0 = 周日, 1 = 周一, ...
-  
-  // 查找该日期的可用时间
+  // 教师时区（如果缺省则回退到 UTC）
+  const tz = teacher.timezone || 'UTC'
+
+  // 将教师本地的当天 00:00 转换为 UTC instant，用它作为当日范围的起点
+  // 注意：date 参数预期为 YYYY-MM-DD（日期字符串）
+  const dayStartUtc = zonedTimeToUtc(`${date}T00:00:00`, tz)
+  // 获取该瞬时在教师时区的本地表示以计算星期几
+  const dayStartInTz = utcToZonedTime(dayStartUtc, tz)
+  const dayOfWeek = getDay(dayStartInTz) // 0 = 周日, 1 = 周一, ...
+
+  // 查找该日期的可用时间（基于教师本地的星期几）
   const dayAvailability = teacher.availability.find((avail: any) => avail.dayOfWeek === dayOfWeek)
   
   if (!dayAvailability) {
@@ -17,13 +25,9 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
   const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number)
   const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number)
   
-  // 创建时间范围
-  const dayStart = startOfDay(targetDate)
-  const slotStart = new Date(dayStart)
-  slotStart.setHours(startHour, startMinute, 0, 0)
-  
-  const slotEnd = new Date(dayStart)
-  slotEnd.setHours(endHour, endMinute, 0, 0)
+  // 按教师时区构造具体的开始/结束瞬时（UTC）——以教师本地时间为准再转换为 UTC
+  const slotStart = zonedTimeToUtc(`${date}T${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00`, tz)
+  const slotEnd = zonedTimeToUtc(`${date}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`, tz)
 
   // 校验 duration，确保为正整数；否则回退到 30 分钟
   let slotDuration = Number(duration)
@@ -65,22 +69,25 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
   })
 
   // 获取阻塞时间
+  // 计算教师当天在 UTC 的范围（[dayStartUtc, dayStartUtc + 24h)）
+  const dayRangeStart = dayStartUtc
+  const dayRangeEnd = addMinutes(dayRangeStart, 24 * 60)
+
+  // 过滤出与该教师本地日期有交集的阻塞时间（blockedTimes 存储为 ISO/UTC）
   const blockedTimes = teacher.blockedTimes.filter((block: any) => {
     const blockStart = new Date(block.startTime)
     const blockEnd = new Date(block.endTime)
-    const dayStart = startOfDay(targetDate)
-    const dayEnd = endOfDay(targetDate)
-    
-    return blockStart < dayEnd && blockEnd > dayStart
+    return blockStart < dayRangeEnd && blockEnd > dayRangeStart
   })
 
   // 获取已有预约
+  // 查询数据库中落在该教师本地日期范围内的预约（数据库中的时间为 UTC instant）
   const existingAppointments = await prisma.appointment.findMany({
     where: {
       teacherId: teacher.id,
       scheduledTime: {
-        gte: startOfDay(targetDate),
-        lt: endOfDay(targetDate)
+        gte: dayRangeStart,
+        lt: dayRangeEnd
       },
       status: { in: ['pending', 'approved'] }
     }

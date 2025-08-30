@@ -28,9 +28,9 @@ const nextConfig = {
   },
   // 避免 Next 在 build 时以已弃用的选项调用 ESLint 导致噪音警告
   // 推荐在本地或 CI 上单独运行 `pnpm lint` 来检查/修复问题
-  // eslint: {
-  //   ignoreDuringBuilds: true
-  // }
+  eslint: {
+    ignoreDuringBuilds: true
+  }
 }
 
 module.exports = nextConfig

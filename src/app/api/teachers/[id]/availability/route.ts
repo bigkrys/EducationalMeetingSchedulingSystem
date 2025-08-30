@@ -95,7 +95,7 @@ async function detectAvailabilityConflicts(
     const endOfDay = new Date(targetDate)
     endOfDay.setHours(23, 59, 59, 999)
 
-    existingSlots = await prisma.teacherAvailability.findMany({
+    const found = await prisma.teacherAvailability.findMany({
       where: {
         teacherId,
         dayOfWeek: targetDate.getDay(),
@@ -103,9 +103,16 @@ async function detectAvailabilityConflicts(
       },
       orderBy: { startTime: 'asc' }
     })
+    existingSlots = found.map((s: any) => ({
+      id: s.id,
+      teacherId: s.teacherId,
+      dayOfWeek: s.dayOfWeek,
+      startTime: String(s.startTime),
+      endTime: String(s.endTime)
+    }))
   } else if (request.dayOfWeek !== undefined) {
     // 检查周循环的冲突
-    existingSlots = await prisma.teacherAvailability.findMany({
+    const found = await prisma.teacherAvailability.findMany({
       where: {
         teacherId,
         dayOfWeek: request.dayOfWeek,
@@ -113,6 +120,13 @@ async function detectAvailabilityConflicts(
       },
       orderBy: { startTime: 'asc' }
     })
+    existingSlots = found.map((s: any) => ({
+      id: s.id,
+      teacherId: s.teacherId,
+      dayOfWeek: s.dayOfWeek,
+      startTime: String(s.startTime),
+      endTime: String(s.endTime)
+    }))
   }
 
   console.log(`找到 ${existingSlots.length} 个现有时间段`)
@@ -706,14 +720,21 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
       // 权限验证通过，继续执行
     }
 
-    const availability = await prisma.teacherAvailability.findMany({
+    const rawAvailability = await prisma.teacherAvailability.findMany({
       where: { teacherId },
       orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
     })
+    const availability: TeacherAvailability[] = rawAvailability.map((s: any) => ({
+      id: s.id,
+      teacherId: s.teacherId,
+      dayOfWeek: s.dayOfWeek,
+      startTime: String(s.startTime),
+      endTime: String(s.endTime)
+    }))
 
     // 生成优化建议（只对周循环的时间段）
     const weeklyAvailability = availability.filter(item => item.dayOfWeek !== undefined)
-    const optimizationSuggestions = weeklyAvailability.length > 0 ? 
+    const optimizationSuggestions = weeklyAvailability.length > 0 ?
       generateTimeOptimizationSuggestions(teacherId, weeklyAvailability) : []
 
     return NextResponse.json({
@@ -721,7 +742,7 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
       optimizationSuggestions,
       summary: {
         totalSlots: availability.length,
-        totalHours: availability.reduce((sum: number, slot: TeacherAvailability) => {
+  totalHours: availability.reduce((sum: number, slot: TeacherAvailability) => {
           return sum + (timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime)) / 60
         }, 0).toFixed(1),
         hasGaps: optimizationSuggestions.some(s => s.type === 'time_gap'),

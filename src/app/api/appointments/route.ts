@@ -466,7 +466,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: 'Asia/Shanghai'
+                    timeZone: (teacher as any)?.timezone || 'UTC'
                   }),
                   durationMinutes: validatedData.durationMinutes,
                   studentEmail: student.user.email
@@ -487,7 +487,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: 'Asia/Shanghai'
+                    timeZone: (teacher as any)?.timezone || 'UTC'
                   }),
                   durationMinutes: validatedData.durationMinutes
                 }

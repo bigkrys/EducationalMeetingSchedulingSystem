@@ -172,7 +172,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: 'Asia/Shanghai'
+                    timeZone: appointment.teacher?.timezone || 'UTC'
                   }),
                   durationMinutes: appointment.durationMinutes
                 }
@@ -217,7 +217,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: 'Asia/Shanghai'
+                    timeZone: appointment.teacher?.timezone || 'UTC'
                   }),
                   reason: validatedData.reason || '未提供原因'
                 }
@@ -262,7 +262,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: 'Asia/Shanghai'
+                    timeZone: appointment.teacher?.timezone || 'UTC'
                   }),
                   reason: validatedData.reason
                 }

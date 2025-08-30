@@ -50,6 +50,7 @@ model Teacher {
   maxDailyMeetings Int       @default(8)
   bufferMinutes    Int       @default(15)
   workingHours     Json?
+  timezone         String    @default("Asia/Shanghai")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   

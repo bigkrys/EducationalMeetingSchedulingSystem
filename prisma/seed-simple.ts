@@ -117,6 +117,7 @@ async function main() {
         email: 'teacher-a@test.com',
         password: 'password123',
         name: '教师A',
+  timezone: 'Asia/Shanghai',
         subjects: ['MATH', 'PHYSICS'],
         maxDailyMeetings: 8,
         bufferMinutes: 15
@@ -125,6 +126,7 @@ async function main() {
         email: 'teacher-b@test.com',
         password: 'password123',
         name: '教师B',
+  timezone: 'America/Los_Angeles',
         subjects: ['CHEMISTRY', 'BIOLOGY'],
         maxDailyMeetings: 6,
         bufferMinutes: 20
@@ -133,6 +135,7 @@ async function main() {
         email: 'teacher-c@test.com',
         password: 'password123',
         name: '教师C',
+  timezone: 'Europe/London',
         subjects: ['CHINESE', 'ENGLISH'],
         maxDailyMeetings: 10,
         bufferMinutes: 10
@@ -165,7 +168,7 @@ async function main() {
           userId: user.id,
           maxDailyMeetings: teacherData.maxDailyMeetings,
           bufferMinutes: teacherData.bufferMinutes,
-
+          // timezone set later via raw SQL for demo
         }
       })
 
@@ -221,6 +224,28 @@ async function main() {
     }
     console.log('✅ Teacher availability created')
 
+    // 4.1 使用原始 SQL 设置教师的时区，避免 Prisma 类型缓存问题
+    console.log('🌍 Updating teacher timezones...')
+    await prisma.$executeRawUnsafe(`
+      UPDATE "teachers" t
+      SET "timezone" = 'Asia/Shanghai'
+      FROM "users" u
+      WHERE t."userId" = u."id" AND u."email" = 'teacher-a@test.com';
+    `)
+    await prisma.$executeRawUnsafe(`
+      UPDATE "teachers" t
+      SET "timezone" = 'America/Los_Angeles'
+      FROM "users" u
+      WHERE t."userId" = u."id" AND u."email" = 'teacher-b@test.com';
+    `)
+    await prisma.$executeRawUnsafe(`
+      UPDATE "teachers" t
+      SET "timezone" = 'Europe/London'
+      FROM "users" u
+      WHERE t."userId" = u."id" AND u."email" = 'teacher-c@test.com';
+    `)
+    console.log('✅ Teacher timezones updated')
+
     // 5. 创建管理员用户
     console.log('👑 Creating admin user...')
     const adminUser = await prisma.user.upsert({
@@ -258,6 +283,7 @@ async function main() {
       console.log(`   Password: ${teacher.password}`)
       console.log(`   Subjects: ${teacher.subjects.join(', ')}`)
       console.log(`   Max Daily: ${teacher.maxDailyMeetings}`)
+  console.log(`   Timezone: ${teacher.timezone}`)
     })
 
     console.log('\n👑 Admin:')

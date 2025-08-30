@@ -31,6 +31,7 @@ export interface Teacher {
   maxDailyMeetings: number
   bufferMinutes: number
   workingHours?: any
+  timezone?: string
   user: User
 }
 

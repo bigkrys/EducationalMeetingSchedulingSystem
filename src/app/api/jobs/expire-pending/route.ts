@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
                 studentName: item.student.user.name,
                 teacherName: item.teacher.user.name,
                 subject: subject.name,
-                scheduledTime: item.scheduledTime.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+                scheduledTime: item.scheduledTime.toLocaleString('zh-CN', { timeZone: (item as any)?.teacher?.timezone || 'UTC' })
               }
             )
           }
