@@ -26,4 +26,11 @@
   ],
   "buildCommand": "pnpm vercel-build",
   "installCommand": "pnpm install"
+  ,
+  "crons": [
+    {
+      "path": "/api/jobs/reset-quota",
+      "schedule": "5 0 1 * *"
+    }
+  ]
 }

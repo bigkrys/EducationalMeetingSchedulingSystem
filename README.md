@@ -478,47 +478,72 @@ A->>E: 发送过期通知（学生+教师）
 ```
 
 ## 3.12 系统｜月初配额重置
+**实现说明（与代码一致）**：
 
-**目标**：每月 1 日重置 Level1/2 配额计数并更新时间戳。
-
-**步骤**：
-
-1. 约定触发时间（系统时区/教师时区，择一并在 UI 明示）；
-2. 支持幂等多次执行；
-3. 记录执行日志与指标。
+- 路由：`POST /api/jobs/reset-quota`（实现文件：`src/app/api/jobs/reset-quota/route.ts`）。
+- 鉴权：必须提供触发密钥，后端会检查 header `x-job-secret` 或 `Authorization: Bearer <secret>`，该密钥在部署环境中由 `JOB_TRIGGER_SECRET` 环境变量配置。未授权请求返回 401。
+- 触发时机限制：默认只允许在每月第 1 日执行；对于测试或手动触发，可以使用 `?force=true` 强制运行（路由会接受该参数并跳过日期限制）。
+- 行为：查找 `lastQuotaReset` 早于本月月初的学生，批量将 `monthlyMeetingsUsed` 置为 `0`，并把 `lastQuotaReset` 更新为本月月初（`new Date(year, month, 1)`）。
+- 审计：会写入一条 `AuditLog`（action=`QUOTA_RESET`），包含本次被重置的学生 id、此前配额等信息。
+- 幂等性：该任务按月设计为幂等——同一月重复运行不会再重置已更新的学生（查询条件为 `lastQuotaReset < 本月月初`）。
 
 ```mermaid
 sequenceDiagram
 participant Q as Cron
 participant A as Job API
 participant D as DB
-Q->>A: POST /api/jobs/reset-quota (每月1日 00:05)
-A->>D: UPDATE students SET monthlyMeetingsUsed=0, lastQuotaReset=NOW()
+Q->>A: POST /api/jobs/reset-quota (通常每月1日 00:05)
+A->>D: SELECT students WHERE lastQuotaReset < 本月月初
+A->>D: UPDATE 每个 student SET monthlyMeetingsUsed=0, lastQuotaReset=本月月初
 D-->>A: 返回影响行数
+
+```
 
 ### 在 Vercel 上部署与定时触发
 
 如果你的应用部署在 Vercel，可以使用 Vercel 的 Scheduled Functions（Cron Jobs）来触发该接口：
 
-1. 在 Vercel 仪表盘 -> Projects -> 你的项目 -> Settings -> Environment Variables 中添加一个环境变量：
-  - `JOB_TRIGGER_SECRET`：随机的强字符串，用作触发密钥（Production 环境）。
+说明：按你提供的信息，定时任务已通过 `vercel.json` 配置（参考 https://vercel.com/docs/cron-jobs），且 `JOB_TRIGGER_SECRET` 已在 Vercel 的 Environment Variables 中配置。
 
-2. 在 Vercel Dashboard -> Functions / Cron（Scheduled Jobs）中新建一个 Cron Job：
-  - URL: `https://<你的域名>/api/jobs/reset-quota`
-  - Method: `POST`
-  - Headers: `Authorization: Bearer <JOB_TRIGGER_SECRET>` （后端同时支持 `x-job-secret`，两者任一即可）
-  - Schedule（cron）: `5 0 1 * *` （UTC，每月 1 日 00:05）
+如果你希望把配置写入仓库（可被 Vercel 读取），示例 `vercel.json` 的 Cron 配置片段如下：
 
-3. 本地/手动触发示例（用于测试）：
+```json
+{
+  "crons": [
+    { "path": "/api/jobs/reset-quota", "schedule": "5 0 1 * *" }
+  ]
+}
+```
+
+注意：不要把 `JOB_TRIGGER_SECRET` 写入仓库；该密钥应通过 Vercel Dashboard -> Project -> Settings -> Environment Variables 添加到 Production（或对应环境）。后端同时接受 `Authorization: Bearer <secret>` 或 `x-job-secret: <secret>` 两种 header 形式。
+
+验证方法（可逐步执行）：
+
+1. 在 Vercel Dashboard → Project → Functions / Cron（或 Scheduled Jobs）确认存在一条路径为 `/api/jobs/reset-quota` 的 Cron 任务并处于启用状态。
+2. 在 Vercel 的 Function Logs 中查看最近的 Cron 执行记录（或手动触发一次并观察日志），确认请求的 HTTP 状态码与返回体。
+3. 手动触发（测试用，使用你在 Vercel 环境变量中配置的 secret）：
 
 ```bash
-BASE_URL="https://your-site.vercel.app"
-JOB_TRIGGER_SECRET="<your-secret>"
+BASE_URL="https://your-deployment.vercel.app"
+JOB_TRIGGER_SECRET="<your-secret-from-vercel>"
 curl -i -X POST "$BASE_URL/api/jobs/reset-quota?force=true" \
   -H "Authorization: Bearer $JOB_TRIGGER_SECRET"
 ```
 
-返回示例：JSON 表示更新数量或无需要更新的消息；同时数据库会写入一条 `QUOTA_RESET` 审计日志。
+4. 验证数据库审计：查询 `audit_logs` 表，确认最近有 `action='QUOTA_RESET'` 的记录，例如：
+
+```sql
+SELECT id, action, details, created_at
+FROM audit_logs
+WHERE action = 'QUOTA_RESET'
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+如果需要，我可以：
+
+- 帮你把 `vercel.json` 中的 Cron 片段加入仓库（示例，不会包含 secret），或
+- 把 README 中的该段落改为说明你已经在 `vercel.json` 中添加了 Cron（当前已完成）。
 
 ```
 
