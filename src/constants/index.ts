@@ -1,6 +1,6 @@
 // 系统常量
 // 将常用时间常量导出为顶层常量，便于从其他模块直接导入使用
-export const DEFAULT_EXPIRE_HOURS = 48 // 小时
+export const DEFAULT_EXPIRE_HOURS = 1 // 小时
 export const DEFAULT_BUFFER_MINUTES = 15 // 分钟
 
 export const SYSTEM_CONSTANTS = {

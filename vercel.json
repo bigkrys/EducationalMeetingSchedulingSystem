@@ -4,7 +4,9 @@
       "maxDuration": 30
     }
   },
-  "regions": ["hkg1"],
+  "regions": [
+    "hkg1"
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
@@ -25,12 +27,19 @@
     }
   ],
   "buildCommand": "pnpm vercel-build",
-  "installCommand": "pnpm install"
-  ,
+  "installCommand": "pnpm install",
   "crons": [
     {
       "path": "/api/jobs/reset-quota",
-      "schedule": "5 0 1 * *"
+      "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/jobs/expire-pending",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/jobs/remind",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -104,7 +104,7 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
       }
     })
 
-    // 如果与 weekly availability 有冲突，不再直接拒绝（允许共存），但记录冲突以返回前端提醒
+    // 如果与 weekly availability 有冲突，不直接拒绝（允许共存），但记录冲突以返回前端提醒
     let availabilityConflicts: any[] = []
     if (conflictingAvailability.length > 0) {
       availabilityConflicts = conflictingAvailability
