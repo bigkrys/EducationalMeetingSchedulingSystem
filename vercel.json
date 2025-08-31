@@ -35,7 +35,7 @@
     },
     {
       "path": "/api/jobs/expire-pending",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
