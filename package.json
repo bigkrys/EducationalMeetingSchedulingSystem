@@ -51,7 +51,7 @@
     "next": "15.5.0",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
-    "prisma": "^5.10.0",
+    "prisma": "^6.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "redis": "^4.6.13",
