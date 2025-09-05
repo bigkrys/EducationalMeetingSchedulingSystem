@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Table, Tag, Button, Space, Modal, message, Select, Empty, Alert } from 'antd'
+import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert } from 'antd'
 import { 
   CalendarOutlined, 
   ClockCircleOutlined, 
@@ -15,7 +15,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
-import { showApiError } from '@/lib/api/global-error-handler'
+import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 
 const { Option } = Select
@@ -59,7 +59,7 @@ export default function Waitlist() {
       
       const userId = getCurrentUserId()
       if (!userId) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         router.push('/')
         return
       }
@@ -88,7 +88,7 @@ export default function Waitlist() {
         subject: values.subject
       })
 
-      message.success('已加入候补队列')
+      showSuccessMessage('已加入候补队列')
       setAddModalVisible(false)
       fetchWaitlist()
     } catch (error: any) {
@@ -109,7 +109,7 @@ export default function Waitlist() {
 
     try {
       await httpClient.delete(`/api/waitlist/${selectedEntry.id}`)
-      message.success('已从候补队列中移除')
+      showSuccessMessage('已从候补队列中移除')
       setRemoveModalVisible(false)
       setSelectedEntry(null)
       fetchWaitlist()

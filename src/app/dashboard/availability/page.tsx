@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Button, message, Alert, Modal, Form, Select, TimePicker, Switch, Space, Row, Col, Typography } from 'antd'
+import { Card, Button, Alert, Modal, Form, Select, TimePicker, Switch, Space, Row, Col, Typography } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
@@ -11,6 +11,7 @@ import { userService } from '@/lib/api/user-service'
 import TeacherAvailabilityCalendar from '@/components/teacher/TeacherAvailabilityCalendar'
 import { TeacherGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
+import { showErrorMessage } from '@/lib/api/global-error-handler'
 
 const { Option } = Select
 const { Title, Text } = Typography
@@ -51,7 +52,7 @@ export default function TeacherAvailability() {
       try {
         const userId = getCurrentUserId()
         if (!userId) {
-          message.error('请先登录')
+          showErrorMessage('请先登录')
           router.push('/')
           return
         }

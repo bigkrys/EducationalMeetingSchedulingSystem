@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Table, Tag, Button, Space, Modal, message, Select, Empty, Alert, Input } from 'antd'
+import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert, Input } from 'antd'
 import { 
   CalendarOutlined, 
   ClockCircleOutlined, 
@@ -16,7 +16,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
-import { showApiError } from '@/lib/api/global-error-handler'
+import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
 import AuthGuard from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
@@ -100,7 +100,7 @@ export default function AppointmentsManagement() {
         action: 'approve'
       })
 
-      message.success('预约已确认')
+      showSuccessMessage('预约已确认')
       setApproveModalVisible(false)
       setSelectedAppointment(null)
       fetchAppointments()
@@ -120,7 +120,7 @@ export default function AppointmentsManagement() {
 
   const confirmReject = async () => {
     if (!selectedAppointment || !rejectReason.trim()) {
-      message.error('请输入拒绝原因')
+      showErrorMessage('请输入拒绝原因')
       return
     }
 
@@ -131,7 +131,7 @@ export default function AppointmentsManagement() {
         reason: rejectReason.trim()
       })
 
-      message.success('预约已拒绝')
+      showSuccessMessage('预约已拒绝')
       setRejectModalVisible(false)
       setSelectedAppointment(null)
       setRejectReason('')

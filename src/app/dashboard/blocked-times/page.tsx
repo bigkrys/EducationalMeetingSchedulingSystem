@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, Button, DatePicker, Input, message, Table, Popconfirm, Space } from 'antd'
+import { Card, Button, DatePicker, Input, Table, Popconfirm, Space } from 'antd'
+import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 import dayjs from 'dayjs'
 
@@ -44,7 +44,7 @@ export default function BlockedTimes() {
     try {
       const userId = getCurrentUserId()
       if (!userId) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         router.push('/')
         return
       }
@@ -60,7 +60,7 @@ export default function BlockedTimes() {
         if (userData.teacher && userData.teacher.id) {
           setTeacherId(userData.teacher.id)
         } else {
-          message.error('用户不是教师')
+          showErrorMessage('用户不是教师')
           router.push('/dashboard')
         }
       }
@@ -85,8 +85,7 @@ export default function BlockedTimes() {
         setBlockedTimes(data.blockedTimes || [])
       }
     } catch (error) {
-      console.error('获取阻塞时间失败:', error)
-      message.error('获取阻塞时间失败')
+      showErrorMessage('获取阻塞时间失败')
     } finally {
       setLoading(false)
     }
@@ -96,7 +95,7 @@ export default function BlockedTimes() {
     if (submittingBlocked) return
     setSubmittingBlocked(true)
     if (!formData.startTime || !formData.endTime) {
-      message.error('请选择开始和结束时间')
+      showErrorMessage('请选择开始和结束时间')
       setSubmittingBlocked(false)
       return
     }
@@ -119,7 +118,7 @@ export default function BlockedTimes() {
       })
 
       if (response.ok) {
-        message.success(editingId ? '更新成功' : '创建成功')
+        showSuccessMessage(editingId ? '更新成功' : '创建成功')
         setFormVisible(false)
         setEditingId(null)
         setFormData({ startTime: '', endTime: '', reason: '' })
@@ -129,8 +128,7 @@ export default function BlockedTimes() {
         showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      console.error('操作失败:', error)
-      message.error('操作失败')
+      showErrorMessage('操作失败')
     } finally {
       setSubmittingBlocked(false)
     }
@@ -148,15 +146,14 @@ export default function BlockedTimes() {
       })
 
       if (response.ok) {
-        message.success('删除成功')
+        showSuccessMessage('删除成功')
         fetchBlockedTimes()
       } else {
         const errorData = await response.json().catch(() => ({}))
         showApiError({ code: (errorData as any)?.code ?? (errorData as any)?.error, message: (errorData as any)?.message })
       }
     } catch (error) {
-      console.error('删除失败:', error)
-      message.error('删除失败')
+      showErrorMessage('删除失败')
     } finally {
       setDeletingId(null)
     }

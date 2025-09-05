@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Table, Tag, Button, Space, Modal, message, Select, Empty, Alert } from 'antd'
+import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert } from 'antd'
+import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { 
   CalendarOutlined, 
   ClockCircleOutlined, 
@@ -14,7 +15,6 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
-import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
@@ -56,7 +56,7 @@ export default function MyAppointments() {
       
       const userId = getCurrentUserId()
       if (!userId) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         router.push('/')
         return
       }
@@ -82,7 +82,7 @@ export default function MyAppointments() {
 
   const confirmCancel = async () => {
     if (!selectedAppointment || !cancelReason.trim()) {
-      message.error('请输入取消原因')
+      showErrorMessage('请输入取消原因')
       return
     }
 
@@ -93,7 +93,7 @@ export default function MyAppointments() {
         reason: cancelReason.trim()
       })
 
-      message.success('预约取消成功')
+      showSuccessMessage('预约取消成功')
       setCancelModalVisible(false)
       setSelectedAppointment(null)
       setCancelReason('')

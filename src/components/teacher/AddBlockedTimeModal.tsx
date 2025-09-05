@@ -1,7 +1,8 @@
 'use client'
 
 import React from 'react'
-import { Modal, Form, Select, DatePicker, Button, message } from 'antd'
+import { Modal, Form, Select, DatePicker, Button } from 'antd'
+import { showErrorMessage } from '@/lib/api/global-error-handler'
 
 const { Option } = Select
 const { RangePicker } = DatePicker
@@ -39,7 +40,7 @@ export default function AddBlockedTimeModal({
       })
       .catch((info: any) => {
         console.log('Validate Failed:', info)
-        message.error('请检查表单中的错误项并修正后再提交')
+        showErrorMessage('请检查表单中的错误项并修正后再提交')
       })
   }
 

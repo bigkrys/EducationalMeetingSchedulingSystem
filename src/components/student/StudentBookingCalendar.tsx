@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Card, Button, Space, message, DatePicker, Modal, Form, Select } from 'antd'
-import { showApiError } from '@/lib/api/global-error-handler'
+import { Card, Button, Space, DatePicker, Modal, Form, Select } from 'antd'
+import { showApiError, showErrorMessage, showSuccessMessage, showWarningMessage } from '@/lib/api/global-error-handler'
 import { CalendarOutlined, ClockCircleOutlined, UserOutlined, BookOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 
@@ -48,7 +48,7 @@ export default function StudentBookingCalendar({
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
@@ -81,8 +81,7 @@ export default function StudentBookingCalendar({
         return []
       }
     } catch (error) {
-      console.error('获取教师列表失败:', error)
-      message.error('获取教师列表失败')
+      showErrorMessage('获取教师列表失败')
       setAllTeachers([])
       return []
     }
@@ -93,7 +92,7 @@ export default function StudentBookingCalendar({
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
@@ -199,7 +198,7 @@ export default function StudentBookingCalendar({
       
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
@@ -233,8 +232,7 @@ export default function StudentBookingCalendar({
         setTimeSlots([])
       }
     } catch (error) {
-      console.error('获取时间槽失败:', error)
-      message.error('获取可用时间失败')
+      showErrorMessage('获取可用时间失败')
       setTimeSlots([])
     } finally {
       setLoading(false)
@@ -269,7 +267,7 @@ export default function StudentBookingCalendar({
         
         if (teacherStudentCommonSubjects.length === 0) {
           console.warn('警告：选择的教师与学生没有共同科目，这不应该发生！')
-          message.warning('该教师暂时无法教授您的科目，请选择其他教师')
+          showWarningMessage('该教师暂时无法教授您的科目，请选择其他教师')
           setSelectedTeacher('')
           return
         }
@@ -317,7 +315,7 @@ export default function StudentBookingCalendar({
       
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
@@ -328,7 +326,7 @@ export default function StudentBookingCalendar({
       } else if (typeof values.scheduledTime === 'string') {
         scheduledTime = values.scheduledTime
       } else {
-        message.error('预约时间格式错误')
+        showErrorMessage('预约时间格式错误')
         return
       }
 
@@ -353,7 +351,7 @@ export default function StudentBookingCalendar({
 
       if (response.ok) {
         const result = await response.json()
-        message.success('预约成功！正在跳转到我的预约页面...')
+        showSuccessMessage('预约成功！正在跳转到我的预约页面...')
         setBookingModalVisible(false)
         form.resetFields()
         onBookingSuccess?.()
@@ -364,7 +362,6 @@ export default function StudentBookingCalendar({
         }, 1000)
       } else {
         const errorData = await response.json()
-        console.error('预约失败详情:', errorData)
 
         // 如果是 SLOT_TAKEN，使用更友好的提示并刷新可约时间
         if (errorData && (errorData.error === 'SLOT_TAKEN' || errorData.code === 'SLOT_TAKEN')) {
@@ -378,18 +375,13 @@ export default function StudentBookingCalendar({
           }, 200)
         } else {
           showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
-          // 如果是验证错误，显示详细信息
-          if (errorData.details) {
-            console.error('验证错误详情:', errorData.details)
-          }
         }
       }
     } catch (error) {
-      console.error('预约失败:', error)
-      message.error('预约失败，请重试')
+      showErrorMessage('预约失败，请重试')
     } finally {
-  setBookingSubmitting(false)
-  setLoading(false)
+      setBookingSubmitting(false)
+      setLoading(false)
     }
   }
 
@@ -573,7 +565,7 @@ export default function StudentBookingCalendar({
                   }`}
                   onClick={() => handleSlotClick(slot)}
                 >
-                  <div className="flex flex-col items-center justify-center h-full space-y-2">
+                  <div className="flex flex-col items-center justify-center h-full space-y-1">
                     <div className="text-center">
                       <div className={`font-semibold text-base leading-tight `}>
                         {new Date(slot.startTime).toLocaleTimeString('zh-CN', {
@@ -585,6 +577,7 @@ export default function StudentBookingCalendar({
                       <span className={`text-xs font-medium mt-1 `}>
                         {slot.status === 'available' ? '可预约' : '不可预约'}
                       </span>
+                      <div className="text-[10px] text-gray-400 mt-1">UTC {new Date(slot.startTime).toISOString().slice(11,16)}</div>
                     </div>
                   </div>
                 </Button>

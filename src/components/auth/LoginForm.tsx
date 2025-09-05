@@ -7,8 +7,7 @@ import SubjectSelector from '@/components/shared/SubjectSelector'
 import RoleSelector from '@/components/shared/RoleSelector'
 import StudentFields from '@/components/shared/StudentFields'
 import TeacherFields from '@/components/shared/TeacherFields'
-import { message } from 'antd'
-import { showApiError } from '@/lib/api/global-error-handler'
+import { showApiError, showErrorMessage } from '@/lib/api/global-error-handler'
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
 
 interface FormData {
@@ -141,12 +140,12 @@ export default function LoginForm() {
             return `${fieldName}: ${err.message}`
           })
           const errorMessage = fieldErrors.join('; ')
-          message.error(errorMessage)
+          showErrorMessage(errorMessage)
           setError(errorMessage)
         } else if (!isLogin && errorData.error === 'EMAIL_EXISTS') {
           // 处理邮箱已存在错误
           const friendly = getFriendlyErrorMessage({ code: errorData?.error, message: errorData?.message })
-          message.error(friendly)
+          showErrorMessage(friendly)
           setError(friendly)
         } else {
           // 处理其他错误

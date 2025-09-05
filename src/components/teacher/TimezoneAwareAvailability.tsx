@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { Card, Button, TimePicker, Select, Space, message, Divider, Tag, Alert, Modal } from 'antd'
-import { showApiError } from '@/lib/api/global-error-handler'
+import { Card, Button, TimePicker, Select, Space, Divider, Tag, Alert, Modal } from 'antd'
+import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
@@ -123,7 +123,7 @@ export default function TimezoneAwareAvailability({
       )
 
       if (validTimeSlots.length === 0) {
-        message.error('请至少设置一个有效的时间段')
+        showErrorMessage('请至少设置一个有效的时间段')
         return
       }
 
@@ -132,17 +132,17 @@ export default function TimezoneAwareAvailability({
         if (!slot.startTime || !slot.endTime) continue
         
         if (slot.startTime >= slot.endTime) {
-          message.error('结束时间必须晚于开始时间')
+          showErrorMessage('结束时间必须晚于开始时间')
           return
         }
 
         const duration = slot.endTime.diff(slot.startTime, 'minute')
         if (duration < 15) {
-          message.error('时间段不能少于15分钟')
+          showErrorMessage('时间段不能少于15分钟')
           return
         }
         if (duration > 480) {
-          message.error('时间段不能超过8小时')
+          showErrorMessage('时间段不能超过8小时')
           return
         }
       }
@@ -174,7 +174,7 @@ export default function TimezoneAwareAvailability({
 
       if (response.ok) {
         const result = await response.json()
-        message.success('可用时间设置成功')
+        showSuccessMessage('可用时间设置成功')
         
         // 显示设置的时间信息
         const dayName = dayOptions.find(d => d.value === availabilityData.dayOfWeek)?.label
@@ -197,7 +197,7 @@ export default function TimezoneAwareAvailability({
 
     } catch (error) {
       console.error('设置可用时间失败:', error)
-      message.error('设置失败，请重试')
+      showErrorMessage('设置失败，请重试')
     } finally {
       setLoading(false)
     }

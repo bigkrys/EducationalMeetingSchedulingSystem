@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Alert, Button, message } from 'antd'
+import { Card, Alert, Button } from 'antd'
 import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
 import StudentBookingCalendar from '@/components/student/StudentBookingCalendar'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { userService } from '@/lib/api/user-service'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
+import { showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 
 export default function BookAppointment() {
   const [studentId, setStudentId] = useState<string>('')
@@ -24,7 +25,7 @@ export default function BookAppointment() {
       try {
         const userId = getCurrentUserId()
         if (!userId) {
-          message.error('请先登录')
+          showErrorMessage('请先登录')
           router.push('/')
           return
         }
@@ -47,7 +48,7 @@ export default function BookAppointment() {
   }, [router])
 
   const handleBookingSuccess = () => {
-    message.success('预约成功！')
+    showSuccessMessage('预约成功！')
     // 可以在这里添加其他成功后的逻辑
   }
 

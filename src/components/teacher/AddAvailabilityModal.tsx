@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { Modal, Form, Select, TimePicker, Button, Alert, Card, Tag, Switch } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
-import { message } from 'antd'
+import { showErrorMessage } from '@/lib/api/global-error-handler'
 
 const { Option } = Select
 
@@ -59,7 +59,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
       )
 
       if (validTimeSlots.length === 0) {
-        message.error('请至少设置一个有效的时间段')
+        showErrorMessage('请至少设置一个有效的时间段')
         return
       }
 
@@ -69,7 +69,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
         const end = new Date(`2000-01-01T${slot.endTime}:00`)
 
         if (start >= end) {
-          message.error('结束时间必须晚于开始时间')
+          showErrorMessage('结束时间必须晚于开始时间')
           return
         }
       }
