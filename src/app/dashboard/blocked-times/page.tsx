@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, Button, DatePicker, Input, message, Table, Popconfirm, Space } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 import dayjs from 'dayjs'
 
@@ -125,7 +126,7 @@ export default function BlockedTimes() {
         fetchBlockedTimes()
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '操作失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
       console.error('操作失败:', error)
@@ -150,7 +151,8 @@ export default function BlockedTimes() {
         message.success('删除成功')
         fetchBlockedTimes()
       } else {
-        message.error('删除失败')
+        const errorData = await response.json().catch(() => ({}))
+        showApiError({ code: (errorData as any)?.code ?? (errorData as any)?.error, message: (errorData as any)?.message })
       }
     } catch (error) {
       console.error('删除失败:', error)

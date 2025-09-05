@@ -1,16 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/api/db'
+import { authorizeJobRequest } from '@/lib/api/job-auth'
+import { ok, fail } from '@/lib/api/response'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
-    // 验证触发密钥
-    const headerSecret = request.headers.get('x-job-secret') || ''
-    const auth = request.headers.get('authorization') || ''
-    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
-    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
-      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
-    }
+    const rawBody = await request.text().catch(() => '')
+    // 统一授权检查（根据环境在内部调度器/私有调用中更严格），支持 HMAC 校验
+    const authCheck = await authorizeJobRequest(request, rawBody)
+    if (authCheck) return authCheck
 
     // 检查是否是每月1日（或者手动触发）
     const today = new Date()
@@ -21,10 +20,7 @@ export async function POST(request: NextRequest) {
       const { searchParams } = new URL(request.url)
       const force = searchParams.get('force')
       if (force !== 'true') {
-        return NextResponse.json({
-          error: 'BAD_REQUEST',
-          message: 'Quota reset can only be triggered on the first day of month or with force=true'
-        }, { status: 400 })
+        return fail('Quota reset can only be triggered on the first day of month or with force=true', 400, 'BAD_REQUEST')
       }
     }
 
@@ -37,10 +33,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (studentsToReset.length === 0) {
-      return NextResponse.json({
-        message: 'No students need quota reset',
-        updated: 0
-      })
+      return ok({ message: 'No students need quota reset', updated: 0 })
     }
 
     // 批量重置配额
@@ -72,7 +65,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
+    return ok({
       message: 'Monthly quota reset completed successfully',
       updated: studentsToReset.length,
       resetDate: today.toISOString(),
@@ -83,10 +76,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Quota reset error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to reset monthly quotas' },
-      { status: 500 }
-    )
+    logger.error('job.reset_quota.exception', { error: String(error) })
+    return fail('Failed to reset monthly quotas', 500, 'INTERNAL_ERROR')
   }
 }

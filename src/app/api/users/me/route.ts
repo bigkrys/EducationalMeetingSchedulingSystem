@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth, AuthenticatedRequest } from '@/lib/api/middleware'
 import { prisma } from '@/lib/api/db'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
 
 // very small in-process cache to speed up repeated /api/users/me calls during short periods
 // NOTE: in production (serverless) this may not be effective across instances; use Redis for multi-instance caching
@@ -14,7 +16,7 @@ async function handler(request: AuthenticatedRequest) {
     // serve from short-lived cache when available
     const cached = userMeCache.get(userId)
     if (cached && cached.expiresAt > Date.now()) {
-      return NextResponse.json(cached.data)
+      return ok(cached.data)
     }
 
     // 从数据库获取用户信息
@@ -53,10 +55,7 @@ async function handler(request: AuthenticatedRequest) {
     })
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'USER_NOT_FOUND', message: 'User not found' },
-        { status: 404 }
-      )
+      return fail('User not found', 404, 'USER_NOT_FOUND')
     }
 
     // 构建响应数据
@@ -88,24 +87,18 @@ async function handler(request: AuthenticatedRequest) {
       userMeCache.set(userId, { expiresAt: Date.now() + USER_ME_TTL_MS, data: userData })
     } catch (_) { }
 
-    return NextResponse.json(userData)
+    return ok(userData)
   } catch (error: any) {
     // If Prisma reports that DB is unreachable (P1001) or initialization error, return 503
-    console.error('Error fetching user info:', error)
+    logger.error('user.me.exception', { ...getRequestMeta(request), error: String(error) })
 
     const code = error?.code || error?.name
 
     if (code === 'P1001' || code === 'PrismaClientInitializationError') {
-      return NextResponse.json(
-        { error: 'DB_UNAVAILABLE', message: 'Database unavailable' },
-        { status: 503 }
-      )
+      return fail('Database unavailable', 503, 'DB_UNAVAILABLE')
     }
 
-    return NextResponse.json(
-      { error: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch user info' },
-      { status: 500 }
-    )
+    return fail('Failed to fetch user info', 500, 'INTERNAL_SERVER_ERROR')
   }
 }
 

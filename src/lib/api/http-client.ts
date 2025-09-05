@@ -1,5 +1,6 @@
 // 通用的HTTP客户端，自动添加token到请求头
 // 支持全局错误拦截和消息提示
+import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
 export class ApiClient {
   // 全局错误处理开关
   private static globalErrorHandling = true
@@ -37,11 +38,14 @@ export class ApiClient {
   private static async parseErrorResponse(response: Response): Promise<string> {
     try {
       const errorData = await response.json()
-      
-      // 根据不同的HTTP状态码返回友好的错误消息
+      // 优先按后端返回的 code 映射友好文案
+      const friendly = getFriendlyErrorMessage({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
+      if (friendly) return friendly
+
+      // 根据不同的HTTP状态码返回默认的友好错误消息
       switch (response.status) {
         case 400:
-          return errorData.message || '请求参数错误，请检查输入信息'
+          return '请求参数错误，请检查输入信息'
         case 401:
           return '认证失败，请重新登录'
         case 403:
@@ -49,9 +53,9 @@ export class ApiClient {
         case 404:
           return '请求的资源不存在'
         case 409:
-          return errorData.message || '操作冲突，请检查数据状态'
+          return '操作冲突，请检查数据状态'
         case 422:
-          return errorData.message || '数据验证失败，请检查输入'
+          return '数据验证失败，请检查输入'
         case 429:
           return '请求过于频繁，请稍后再试'
         case 500:
@@ -61,7 +65,7 @@ export class ApiClient {
         case 504:
           return '服务暂时不可用，请稍后重试'
         default:
-          return errorData.message || `请求失败 (${response.status})`
+          return `请求失败 (${response.status})`
       }
     } catch (e) {
       return `网络错误 (${response.status})`
@@ -156,7 +160,9 @@ export class ApiClient {
               
               // 检查重试后的响应
               if (!retryResponse.ok && !skipErrorHandling) {
-                const errorMessage = await this.parseErrorResponse(retryResponse)
+                // clone so we don't consume the original response body (caller may want to read it)
+                const clone = retryResponse.clone()
+                const errorMessage = await this.parseErrorResponse(clone)
                 this.showError(errorMessage)
               }
               
@@ -182,7 +188,9 @@ export class ApiClient {
 
       // 处理其他HTTP错误
       if (!response.ok && !skipErrorHandling) {
-        const errorMessage = await this.parseErrorResponse(response)
+        // clone so caller can still read response.json()
+        const clone = response.clone()
+        const errorMessage = await this.parseErrorResponse(clone)
         this.showError(errorMessage)
       }
 

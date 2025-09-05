@@ -3,6 +3,10 @@ import { prisma } from '@/lib/api/db'
 import { teacherAvailabilitySchema } from '@/lib/api/validation'
 import { withRole, AuthenticatedRequest } from '@/lib/api/middleware'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { env } from '@/lib/env'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 类型定义
 interface TeacherAvailability {
@@ -70,14 +74,13 @@ async function detectAvailabilityConflicts(
 ): Promise<ConflictResult> {
   const conflicts: TimeConflict[] = []
   const overlappingSlots: TeacherAvailability[] = []
-
-  console.log(`检测可用性冲突 - 教师ID: ${teacherId}`)
-  console.log(`请求数据:`, request)
+  const DEBUG_AV = env.NODE_ENV === 'development' || (env.DEBUG_AVAILABILITY_LOGS || 'false').toLowerCase() === 'true'
+  if (DEBUG_AV) logger.debug(`availability.detect start`, { teacherId, request })
 
   // 验证时间格式和逻辑
   const timeValidation = validateTimeLogic(request.startTime, request.endTime)
   if (!timeValidation.isValid) {
-    console.log('时间验证失败:', timeValidation.message)
+    if (DEBUG_AV) logger.debug('availability.detect invalid_time', { message: timeValidation.message })
     conflicts.push({
       type: 'invalid_time',
       message: timeValidation.message
@@ -129,27 +132,29 @@ async function detectAvailabilityConflicts(
     }))
   }
 
-  console.log(`找到 ${existingSlots.length} 个现有时间段`)
-  existingSlots.forEach((slot, index) => {
-    console.log(`现有时间段 ${index + 1}: ${slot.startTime}-${slot.endTime}`)
-  })
+  if (DEBUG_AV) {
+    logger.debug('availability.detect found_slots', { count: existingSlots.length })
+    existingSlots.forEach((slot, index) => {
+      logger.debug('availability.detect slot', { index: index + 1, start: slot.startTime, end: slot.endTime })
+    })
+  }
 
   // 检查与现有时间段的冲突
   for (const slot of existingSlots) {
-    console.log(`\n检查与时间段 ${slot.startTime}-${slot.endTime} 的冲突`)
+    if (DEBUG_AV) logger.debug('availability.detect check_slot', { start: slot.startTime, end: slot.endTime })
     const overlapType = analyzeTimeOverlap(slot.startTime, slot.endTime, request.startTime, request.endTime)
-    console.log(`重叠类型: ${overlapType.type}`)
+    if (DEBUG_AV) logger.debug('availability.detect overlap_type', { type: overlapType.type })
     
     if (overlapType.type !== 'no_overlap') {
       if (overlapType.type === 'exact_match') {
-        console.log('发现完全匹配冲突')
+        if (DEBUG_AV) logger.debug('availability.detect conflict exact_match')
         conflicts.push({
           type: 'exact_match',
           existingSlot: slot,
           message: `这个时间段已经存在了！您设置的时间 ${slot.startTime}-${slot.endTime} 与现有时间段完全重复。`
         })
       } else if (overlapType.type === 'overlap') {
-        console.log('发现重叠冲突')
+        if (DEBUG_AV) logger.debug('availability.detect conflict overlap')
         overlappingSlots.push(slot)
         conflicts.push({
           type: 'overlap',
@@ -158,14 +163,14 @@ async function detectAvailabilityConflicts(
           message: `时间冲突！您设置的时间段与现有时间段 ${slot.startTime}-${slot.endTime} 有重叠。重叠时间：${overlapType.overlap}`
         })
       } else if (overlapType.type === 'contained') {
-        console.log('发现包含冲突')
+        if (DEBUG_AV) logger.debug('availability.detect conflict contained')
         conflicts.push({
           type: 'contained',
           existingSlot: slot,
           message: `您设置的时间段完全包含在现有时间段 ${slot.startTime}-${slot.endTime} 内。`
         })
       } else if (overlapType.type === 'contains') {
-        console.log('发现包含冲突')
+        if (DEBUG_AV) logger.debug('availability.detect conflict contains')
         conflicts.push({
           type: 'contains',
           existingSlot: slot,
@@ -173,11 +178,11 @@ async function detectAvailabilityConflicts(
         })
       }
     } else {
-      console.log('没有冲突')
+      if (DEBUG_AV) logger.debug('availability.detect no_conflict')
     }
   }
 
-  console.log(`总共发现 ${conflicts.length} 个冲突`)
+  if (DEBUG_AV) logger.debug('availability.detect done', { conflicts: conflicts.length })
   return { conflicts, overlappingSlots }
 }
 
@@ -229,33 +234,32 @@ function analyzeTimeOverlap(start1: string, end1: string, start2: string, end2: 
   const e1 = timeToMinutes(end1)
   const s2 = timeToMinutes(start2)
   const e2 = timeToMinutes(end2)
-  
-  console.log(`分析时间重叠: [${start1}-${end1}] vs [${start2}-${end2}]`)
-  console.log(`转换为分钟: [${s1}-${e1}] vs [${s2}-${e2}]`)
+  const DEBUG_AV = env.NODE_ENV === 'development' || (env.DEBUG_AVAILABILITY_LOGS || 'false').toLowerCase() === 'true'
+  if (DEBUG_AV) logger.debug('availability.overlap.analyze', { start1, end1, start2, end2, s1, e1, s2, e2 })
   
   // 没有重叠的情况：
   // 1. 第一个时间段完全在第二个时间段之前 (e1 <= s2)
   // 2. 第二个时间段完全在第一个时间段之前 (e2 <= s1)
   if (e1 <= s2 || e2 <= s1) {
-    console.log('没有重叠')
+    if (DEBUG_AV) logger.debug('availability.overlap.no_overlap')
     return { type: 'no_overlap' }
   }
   
   // 完全匹配
   if (s1 === s2 && e1 === e2) {
-    console.log('完全匹配')
+    if (DEBUG_AV) logger.debug('availability.overlap.exact_match')
     return { type: 'exact_match' }
   }
   
   // 包含关系：第一个时间段包含第二个时间段
   if (s1 <= s2 && e1 >= e2) {
-    console.log('第一个时间段包含第二个时间段')
+    if (DEBUG_AV) logger.debug('availability.overlap.contains')
     return { type: 'contains' }
   }
   
   // 包含关系：第二个时间段包含第一个时间段
   if (s2 <= s1 && e2 >= e1) {
-    console.log('第二个时间段包含第一个时间段')
+    if (DEBUG_AV) logger.debug('availability.overlap.contained')
     return { type: 'contained' }
   }
   
@@ -263,8 +267,7 @@ function analyzeTimeOverlap(start1: string, end1: string, start2: string, end2: 
   const overlapStart = Math.max(s1, s2)
   const overlapEnd = Math.min(e1, e2)
   const overlapMinutes = overlapEnd - overlapStart
-  
-  console.log(`部分重叠: ${overlapStart}-${overlapEnd} (${overlapMinutes}分钟)`)
+  if (DEBUG_AV) logger.debug('availability.overlap.partial', { overlapStart, overlapEnd, overlapMinutes })
   
   return {
     type: 'overlap',
@@ -703,18 +706,12 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
       })
       
       if (!currentTeacher) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teacher record not found' },
-          { status: 403 }
-        )
+        return fail('Teacher record not found', 403, E.FORBIDDEN)
       }
       
       // 确保教师只能操作自己的资源
       if (currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only access their own availability' },
-          { status: 403 }
-        )
+        return fail('Teachers can only access their own availability', 403, E.FORBIDDEN)
       }
       
       // 权限验证通过，继续执行
@@ -737,7 +734,7 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     const optimizationSuggestions = weeklyAvailability.length > 0 ?
       generateTimeOptimizationSuggestions(teacherId, weeklyAvailability) : []
 
-    return NextResponse.json({
+    return ok({
       availability,
       optimizationSuggestions,
       summary: {
@@ -752,11 +749,8 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     })
 
   } catch (error) {
-    console.error('Get availability error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch availability' },
-      { status: 500 }
-    )
+    logger.error('availability.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch availability', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -780,18 +774,12 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       })
       
       if (!currentTeacher) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teacher record not found' },
-          { status: 403 }
-        )
+        return fail('Teacher record not found', 403, E.FORBIDDEN)
       }
       
       // 确保教师只能操作自己的资源
       if (currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only modify their own availability' },
-          { status: 403 }
-        )
+        return fail('Teachers can only modify their own availability', 403, E.FORBIDDEN)
       }
       
       // 权限验证通过，继续执行
@@ -803,10 +791,7 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     })
 
     if (!targetTeacher) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Teacher record not found' },
-        { status: 404 }
-      )
+      return fail('Teacher record not found', 404, E.NOT_FOUND)
     }
 
     // 智能冲突检测和管理
@@ -817,13 +802,11 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
 
     if (conflicts.length > 0) {
       const friendlyMessage = generateFriendlyConflictMessage(conflicts)
-      return NextResponse.json({
-        error: 'CONFLICT',
-        message: friendlyMessage,
+      return fail(friendlyMessage, 409, E.AVAILABILITY_CONFLICT_GENERAL, {
         conflicts,
         suggestions: generateConflictSuggestions(conflicts, validatedData),
         help: '请选择以下解决方案之一，或调整您的时间设置'
-      }, { status: 409 })
+      })
     }
 
     // 检查是否与阻塞时间冲突
@@ -836,7 +819,7 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     let blockedTimeWarnings: any[] = []
     if (blockedTimeConflicts.length > 0) {
       blockedTimeWarnings = blockedTimeConflicts
-      console.log('Set availability - blocked time conflicts detected:', blockedTimeConflicts)
+      logger.info('availability.set.blocked_time_conflicts', { count: blockedTimeConflicts.length })
     }
 
     // 检查是否与已有预约冲突
@@ -847,12 +830,10 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
 
     if (appointmentConflicts.length > 0) {
       const friendlyMessage = generateFriendlyConflictMessage(appointmentConflicts)
-      return NextResponse.json({
-        error: 'APPOINTMENT_CONFLICT',
-        message: friendlyMessage,
+      return fail(friendlyMessage, 409, E.AVAILABILITY_CONFLICT_APPOINTMENT, {
         conflicts: appointmentConflicts,
         help: '您设置的时间段与已有预约冲突，请选择其他时间',
-                  suggestions: [
+        suggestions: [
             {
               action: 'choose_other_time',
               description: '选择其他时间：避开预约时间段',
@@ -864,7 +845,7 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
               recommendation: '您可以先查看完整的预约安排，找到空闲时间段'
             }
           ]
-      }, { status: 409 })
+      })
     }
 
     // 查找重叠的可用性时间段
@@ -876,19 +857,12 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
         overlappingSlots
       )
       
-      return NextResponse.json({
-        message: 'Availability slots merged successfully',
-        mergedSlots,
-        originalRequest: validatedData
-      })
+      return ok({ message: 'Availability slots merged successfully', mergedSlots, originalRequest: validatedData })
     }
 
     // 确保是周循环模式（系统目前只支持这种模式）
     if (validatedData.dayOfWeek === undefined) {
-      return NextResponse.json({
-        error: 'BAD_REQUEST',
-        message: 'dayOfWeek is required for weekly recurring availability'
-      }, { status: 400 })
+      return fail('dayOfWeek is required for weekly recurring availability', 400, E.AVAILABILITY_INVALID_MODE)
     }
 
     // 创建新的可用性记录
@@ -915,20 +889,14 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     })
 
   // 如果存在与 blockedTime 的冲突，返回 warnings 供前端提示（非阻塞）
-  return NextResponse.json({ ok: true, availability: newAvailability, blockedTimeWarnings })
+  return ok({ availability: newAvailability, blockedTimeWarnings })
 
   } catch (error) {
-    console.error('Set availability error:', error)
+    logger.error('availability.set.exception', { ...getRequestMeta(request), error: String(error) })
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      )
+      return fail('Invalid input data', 400, E.BAD_REQUEST, error.errors)
     }
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to set availability' },
-      { status: 500 }
-    )
+    return fail('Failed to set availability', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -944,10 +912,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
     
     // 验证批量数据
     if (!Array.isArray(body.slots) || body.slots.length === 0) {
-      return NextResponse.json({
-        error: 'BAD_REQUEST',
-        message: '请提供有效的时间段数组'
-      }, { status: 400 })
+      return fail('请提供有效的时间段数组', 400, E.BAD_REQUEST)
     }
     
     // 检查权限
@@ -957,10 +922,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
       })
       
       if (!currentTeacher || currentTeacher.id !== teacherId) {
-        return NextResponse.json({
-          error: 'FORBIDDEN',
-          message: '您只能设置自己的可用性时间'
-        }, { status: 403 })
+        return fail('您只能设置自己的可用性时间', 403, E.FORBIDDEN)
       }
     }
     
@@ -1034,7 +996,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
       })
     }
     
-    return NextResponse.json({
+    return ok({
       message: `批量设置完成：成功 ${results.length} 个，失败 ${errors.length} 个`,
       results,
       errors,
@@ -1046,11 +1008,8 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
     })
     
   } catch (error) {
-    console.error('Batch set availability error:', error)
-    return NextResponse.json({
-      error: 'BAD_REQUEST',
-      message: '批量设置失败'
-    }, { status: 500 })
+    logger.error('availability.batch.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('批量设置失败', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -1058,78 +1017,3 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
 export const GET = withRole('teacher')(getAvailabilityHandler)
 export const POST = withRole('teacher')(setAvailabilityHandler)
 export const PUT = withRole('teacher')(batchSetAvailabilityHandler)
-
-// 测试时间重叠算法（仅用于开发调试）
-function testTimeOverlapAlgorithm() {
-  console.log('=== 测试时间重叠算法 ===')
-  
-  const testCases = [
-    // 没有重叠的情况
-    { start1: '09:00', end1: '10:00', start2: '10:00', end2: '11:00', expected: 'no_overlap' },
-    { start1: '10:00', end1: '11:00', start2: '09:00', end2: '10:00', expected: 'no_overlap' },
-    
-    // 完全匹配
-    { start1: '09:00', end1: '10:00', start2: '09:00', end2: '10:00', expected: 'exact_match' },
-    
-    // 包含关系
-    { start1: '08:00', end1: '12:00', start2: '09:00', end2: '11:00', expected: 'contains' },
-    { start1: '09:00', end1: '11:00', start2: '08:00', end2: '12:00', expected: 'contained' },
-    
-    // 部分重叠
-    { start1: '09:00', end1: '11:00', start2: '10:00', end2: '12:00', expected: 'overlap' },
-    { start1: '10:00', end1: '12:00', start2: '09:00', end2: '11:00', expected: 'overlap' },
-    
-    // 边界情况
-    { start1: '09:00', end1: '10:00', start2: '10:00', end2: '11:00', expected: 'no_overlap' },
-    { start1: '10:00', end1: '11:00', start2: '09:00', end2: '10:00', expected: 'no_overlap' }
-  ]
-  
-  testCases.forEach((testCase, index) => {
-    const result = analyzeTimeOverlap(testCase.start1, testCase.end1, testCase.start2, testCase.end2)
-    const passed = result.type === testCase.expected
-    console.log(`测试 ${index + 1}: [${testCase.start1}-${testCase.end1}] vs [${testCase.start2}-${testCase.end2}]`)
-    console.log(`  期望: ${testCase.expected}, 实际: ${result.type}, ${passed ? '✅ 通过' : '❌ 失败'}`)
-  })
-  
-  console.log('=== 测试完成 ===\n')
-}
-
-// 测试星期几逻辑（确保不同星期几的时间段不重叠）
-function testDayOfWeekLogic() {
-  console.log('=== 测试星期几逻辑 ===')
-  
-  // 模拟不同星期几的时间段
-  const mondaySlots = [
-    { dayOfWeek: 1, startTime: '09:00', endTime: '10:00' },
-    { dayOfWeek: 1, startTime: '14:00', endTime: '15:00' }
-  ]
-  
-  const tuesdaySlots = [
-    { dayOfWeek: 2, startTime: '09:00', endTime: '10:00' }, // 与周一相同时间，但不同星期几
-    { dayOfWeek: 2, startTime: '14:00', endTime: '15:00' }  // 与周一相同时间，但不同星期几
-  ]
-  
-  console.log('周一时间段:', mondaySlots.map(s => `${s.startTime}-${s.endTime}`))
-  console.log('周二时间段:', tuesdaySlots.map(s => `${s.startTime}-${s.endTime}`))
-  console.log('✅ 不同星期几的相同时间段不会被认为是重叠的')
-  console.log('✅ 只有同一个星期几内的时间段才会进行重叠检测')
-  
-  // 测试同一星期几内的重叠检测
-  console.log('\n测试同一星期几内的重叠检测:')
-  const mondayNewSlot = { dayOfWeek: 1, startTime: '09:30', endTime: '10:30' }
-  console.log(`新时间段: 周一 ${mondayNewSlot.startTime}-${mondayNewSlot.endTime}`)
-  
-  // 检查与周一现有时间段的冲突
-  mondaySlots.forEach(slot => {
-    const overlapType = analyzeTimeOverlap(slot.startTime, slot.endTime, mondayNewSlot.startTime, mondayNewSlot.endTime)
-    console.log(`与周一 ${slot.startTime}-${slot.endTime} 比较: ${overlapType.type}`)
-  })
-  
-  console.log('=== 星期几逻辑测试完成 ===\n')
-}
-
-// 在开发环境下运行测试
-if (process.env.NODE_ENV === 'development') {
-  testTimeOverlapAlgorithm()
-  testDayOfWeekLogic()
-}

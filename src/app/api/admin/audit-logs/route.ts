@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 async function getAuditLogsHandler(request: NextRequest, context?: any) {
   try {
@@ -61,7 +64,7 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
       timestamp: log.createdAt.toISOString()
     }))
 
-    return NextResponse.json({
+    return ok({
       logs: formattedLogs,
       total,
       page,
@@ -70,11 +73,8 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
     })
 
   } catch (error) {
-    console.error('Get audit logs error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to fetch audit logs' },
-      { status: 500 }
-    )
+    logger.error('admin.audit_logs.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch audit logs', 500, E.INTERNAL_ERROR)
   }
 }
 

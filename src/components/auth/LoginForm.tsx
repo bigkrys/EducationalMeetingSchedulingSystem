@@ -8,6 +8,8 @@ import RoleSelector from '@/components/shared/RoleSelector'
 import StudentFields from '@/components/shared/StudentFields'
 import TeacherFields from '@/components/shared/TeacherFields'
 import { message } from 'antd'
+import { showApiError } from '@/lib/api/global-error-handler'
+import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
 
 interface FormData {
   email: string
@@ -143,14 +145,13 @@ export default function LoginForm() {
           setError(errorMessage)
         } else if (!isLogin && errorData.error === 'EMAIL_EXISTS') {
           // 处理邮箱已存在错误
-          const errorMessage = '该邮箱已被注册，请使用其他邮箱或直接登录'
-          message.error(errorMessage)
-          setError(errorMessage)
+          const friendly = getFriendlyErrorMessage({ code: errorData?.error, message: errorData?.message })
+          message.error(friendly)
+          setError(friendly)
         } else {
           // 处理其他错误
-          const errorMessage = errorData.message || '操作失败'
-          message.error(errorMessage)
-          setError(errorMessage)
+          showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
+          setError(getFriendlyErrorMessage({ code: errorData?.code ?? errorData?.error, message: errorData?.message }))
         }
       }
     } catch (error) {

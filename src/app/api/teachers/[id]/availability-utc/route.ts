@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole, AuthenticatedRequest } from '@/lib/api/middleware'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 验证模式 - 继续使用HH:mm格式，但加强时区处理说明
 const availabilitySchema = z.object({
@@ -34,10 +37,7 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
       })
       
       if (!currentTeacher || currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Access denied' },
-          { status: 403 }
-        )
+        return fail('Access denied', 403, E.FORBIDDEN)
       }
     }
 
@@ -56,7 +56,7 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     // 读取教师时区
     const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } })
 
-    return NextResponse.json({
+    return ok({
       teacherId,
       availabilities,
       timezone: (teacher as any)?.timezone || 'UTC',
@@ -64,11 +64,8 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     })
 
   } catch (error) {
-    console.error('Get availability error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to get availability' },
-      { status: 500 }
-    )
+    logger.error('availability_utc.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to get availability', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -90,10 +87,7 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       })
       
       if (!currentTeacher || currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Access denied' },
-          { status: 403 }
-        )
+        return fail('Access denied', 403, E.FORBIDDEN)
       }
     }
 
@@ -102,39 +96,23 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     const endMinutes = timeToMinutes(validatedData.endTime)
     
     if (startMinutes >= endMinutes) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Start time must be before end time' },
-        { status: 400 }
-      )
+      return fail('Start time must be before end time', 400, E.BAD_REQUEST)
     }
 
     const durationMinutes = endMinutes - startMinutes
     
     if (durationMinutes < 15) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Duration must be at least 15 minutes' },
-        { status: 400 }
-      )
+      return fail('Duration must be at least 15 minutes', 400, E.BAD_REQUEST)
     }
 
     if (durationMinutes > 480) { // 8小时
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Duration cannot exceed 8 hours' },
-        { status: 400 }
-      )
+      return fail('Duration cannot exceed 8 hours', 400, E.BAD_REQUEST)
     }
 
     // 检查冲突
     const conflicts = await checkTimeConflicts(teacherId, validatedData)
     if (conflicts.length > 0) {
-      return NextResponse.json(
-        { 
-          error: 'CONFLICT', 
-          message: 'Time conflicts detected',
-          conflicts 
-        },
-        { status: 409 }
-      )
+      return fail('Time conflicts detected', 409, E.AVAILABILITY_CONFLICT_GENERAL, { conflicts })
     }
 
     // 创建可用性记录
@@ -149,25 +127,14 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
       }
     })
 
-    return NextResponse.json({
-      message: 'Availability set successfully',
-      availability,
-      timezone: validatedData.timezone
-    })
+    return ok({ message: 'Availability set successfully', availability, timezone: validatedData.timezone })
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'VALIDATION_ERROR', message: error.errors[0].message },
-        { status: 400 }
-      )
+      return fail(error.errors[0].message, 400, E.BAD_REQUEST)
     }
-
-    console.error('Set availability error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to set availability' },
-      { status: 500 }
-    )
+    logger.error('availability_utc.set.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to set availability', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -189,10 +156,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
       })
       
       if (!currentTeacher || currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Access denied' },
-          { status: 403 }
-        )
+        return fail('Access denied', 403, E.FORBIDDEN)
       }
     }
 
@@ -230,7 +194,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
       createdAvailabilities.push(availability)
     }
 
-    return NextResponse.json({
+    return ok({
       message: 'Batch availability set successfully',
       availabilities: createdAvailabilities,
       action: validatedData.action,
@@ -239,17 +203,10 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'VALIDATION_ERROR', message: error.errors[0].message },
-        { status: 400 }
-      )
+      return fail(error.errors[0].message, 400, E.BAD_REQUEST)
     }
-
-    console.error('Batch set availability error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to batch set availability' },
-      { status: 500 }
-    )
+    logger.error('availability_utc.batch.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to batch set availability', 500, E.INTERNAL_ERROR)
   }
 }
 

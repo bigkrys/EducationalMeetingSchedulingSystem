@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 
 const { Option } = Select
@@ -91,7 +92,8 @@ export default function Waitlist() {
       setAddModalVisible(false)
       fetchWaitlist()
     } catch (error: any) {
-      message.error(error.message || '加入候补队列失败')
+      // httpClient 已经触发全局消息，这里兜底展示
+      showApiError({ message: error?.message })
     } finally {
       setAdding(false)
     }
@@ -112,7 +114,7 @@ export default function Waitlist() {
       setSelectedEntry(null)
       fetchWaitlist()
     } catch (error: any) {
-      message.error(error.message || '移除失败')
+      showApiError({ message: error?.message })
     }
   }
 

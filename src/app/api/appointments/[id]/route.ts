@@ -5,6 +5,9 @@ import { withRoles } from '@/lib/api/middleware'
 import { deleteCachePattern } from '@/lib/api/cache'
 import { sendAppointmentApprovedNotification, sendAppointmentCancelledNotification, sendAppointmentRejectedNotification } from '@/lib/api/email'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 更新预约状态
 async function updateAppointmentHandler(request: NextRequest, { params }: { params: { id: string } }) {
@@ -23,10 +26,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
     })
 
     if (!appointment) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Appointment not found' },
-        { status: 404 }
-      )
+      return fail('Appointment not found', 404, E.NOT_FOUND)
     }
 
     // 检查权限
@@ -38,17 +38,11 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
       })
       
       if (!currentStudent) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Student record not found' },
-          { status: 403 }
-        )
+        return fail('Student record not found', 403, E.FORBIDDEN)
       }
       
       if (appointment.studentId !== currentStudent.id) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Cannot modify other students\' appointments' },
-          { status: 403 }
-        )
+        return fail("Cannot modify other students' appointments", 403, E.FORBIDDEN)
       }
     }
 
@@ -59,17 +53,11 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
       })
       
       if (!currentTeacher) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teacher record not found' },
-          { status: 403 }
-        )
+        return fail('Teacher record not found', 403, E.FORBIDDEN)
       }
       
       if (appointment.teacherId !== currentTeacher.id) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Cannot modify other teachers\' appointments' },
-          { status: 403 }
-        )
+        return fail("Cannot modify other teachers' appointments", 403, E.FORBIDDEN)
       }
     }
 
@@ -91,10 +79,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
       case 'reject':
         if (user.role === 'teacher' && appointment.status === 'pending') {
           if (!validatedData.reason) {
-            return NextResponse.json(
-              { error: 'BAD_REQUEST', message: 'Reason is required for rejection' },
-              { status: 400 }
-            )
+            return fail('Reason is required for rejection', 400, 'APPOINTMENT_REJECT_REASON_REQUIRED')
           }
           updateData = {
             status: 'rejected'
@@ -132,10 +117,7 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
     }
 
     if (!canUpdate) {
-      return NextResponse.json(
-        { error: 'STATE_CONFLICT', message: 'Cannot perform this action on current appointment status' },
-        { status: 409 }
-      )
+      return fail('Cannot perform this action on current appointment status', 409, 'APPOINTMENT_STATE_CONFLICT')
     }
 
     // 更新预约
@@ -178,18 +160,18 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                 }
               )
             } catch (error) {
-              console.error('Failed to send approval notification emails:', error)
+              logger.error('appointment.notify.approval.failed', { error: String(error) })
             }
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
             await _sendApprovalNotifications()
           } else {
-            _sendApprovalNotifications().catch(err => console.error('Async email send error:', err))
+            _sendApprovalNotifications().catch(err => logger.error('appointment.notify.approval.async_failed', { error: String(err) }))
           }
         }
       } catch (error) {
-        console.error('Failed to prepare approval notification emails:', error)
+        logger.error('appointment.notify.approval.prepare_failed', { error: String(error) })
       }
     }
 
@@ -223,18 +205,18 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                 }
               )
             } catch (error) {
-              console.error('Failed to send rejection notification emails:', error)
+              logger.error('appointment.notify.reject.failed', { error: String(error) })
             }
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
             await _sendRejectionNotifications()
           } else {
-            _sendRejectionNotifications().catch(err => console.error('Async email send error:', err))
+            _sendRejectionNotifications().catch(err => logger.error('appointment.notify.reject.async_failed', { error: String(err) }))
           }
         }
       } catch (error) {
-        console.error('Failed to prepare rejection notification emails:', error)
+        logger.error('appointment.notify.reject.prepare_failed', { error: String(error) })
       }
     }
 
@@ -268,18 +250,18 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                 }
               )
             } catch (error) {
-              console.error('Failed to send cancellation notification emails:', error)
+              logger.error('appointment.notify.cancel.failed', { error: String(error) })
             }
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
             await _sendCancelNotifications()
           } else {
-            _sendCancelNotifications().catch(err => console.error('Async email send error:', err))
+            _sendCancelNotifications().catch(err => logger.error('appointment.notify.cancel.async_failed', { error: String(err) }))
           }
         }
       } catch (error) {
-        console.error('Failed to prepare cancellation notification emails:', error)
+        logger.error('appointment.notify.cancel.prepare_failed', { error: String(error) })
       }
     }
 
@@ -317,12 +299,12 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
                 }
               }
             } catch (error) {
-              console.error('Waitlist promotion error:', error)
+              logger.error('waitlist.promote.invoke_failed', { error: String(error) })
             }
           }, 1000) // 延迟1秒执行，确保预约更新完成
         }
       } catch (error) {
-        console.error('Failed to trigger waitlist promotion:', error)
+        logger.error('waitlist.promote.trigger_failed', { error: String(error) })
       }
     }
 
@@ -341,21 +323,15 @@ async function updateAppointmentHandler(request: NextRequest, { params }: { para
       }
     })
 
-    return NextResponse.json({ ok: true })
+    return ok()
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data' },
-        { status: 400 }
-      )
+      return fail('Invalid input data', 400, E.BAD_REQUEST)
     }
 
-    console.error('Update appointment error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to update appointment' },
-      { status: 500 }
-    )
+    logger.error('appointment.update.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to update appointment', 500, E.INTERNAL_ERROR)
   }
 }
 

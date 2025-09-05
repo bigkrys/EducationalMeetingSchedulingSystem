@@ -1,15 +1,15 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Card, Button, Space, message, Modal, Form, Select, DatePicker, Tag, Empty } from 'antd'
+import { Card, Button, Space, Modal, Form, Tag, Empty } from 'antd'
+import { showApiError, showSuccessMessage, showErrorMessage, showWarningMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { api } from '@/lib/api/http-client'
-
+import { createUtcDateTime } from '@/lib/utils/timezone-client'
 import AddAvailabilityModal from './AddAvailabilityModal'
+import AddBlockedTimeModal from './AddBlockedTimeModal'
 
-const { Option } = Select
-const { RangePicker } = DatePicker
 
 export interface TeacherAvailabilityData {
   id: string
@@ -49,14 +49,15 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form] = Form.useForm()
   const [blockForm] = Form.useForm()
-
+  const [conflictsVisible, setConflictsVisible] = useState(false)
+  const [conflicts, setConflicts] = useState<any[]>([])
   // 获取可用性数据
   const fetchAvailability = React.useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
@@ -81,7 +82,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           console.warn('API返回的可用性数据格式不支持:', data)
           availabilityArray = []
         }
-        
+
         // 确保数据是数组
         if (availabilityArray.length > 0) {
           const availabilityData = availabilityArray.map((item: any) => {
@@ -99,10 +100,10 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         }
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '获取可用性数据失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      message.error('获取可用性数据失败')
+      showErrorMessage('获取可用性数据失败')
     } finally {
       setLoading(false)
     }
@@ -125,7 +126,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // 处理不同的API返回格式
         let blockedTimesArray = []
         if (Array.isArray(data)) {
@@ -138,16 +139,16 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           console.warn('API返回的阻塞时间数据格式不支持:', data)
           blockedTimesArray = []
         }
-        
+
         // 过滤当前教师的阻塞时间
         const teacherBlockedTimes = blockedTimesArray.filter((item: any) => item.teacherId === teacherId)
         setBlockedTimes(teacherBlockedTimes)
       } else {
         const errorData = await response.json()
-        console.error('获取阻塞时间失败:', errorData.message)
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      console.error('获取阻塞时间失败:', error)
+      showErrorMessage('获取阻塞时间失败')
     }
   }, [teacherId])
 
@@ -156,6 +157,14 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     fetchBlockedTimes()
   }, [fetchAvailability, fetchBlockedTimes])
 
+  useEffect(() => {
+    return () => {
+      // 清空表单数据
+      form.resetFields()
+      blockForm.resetFields()
+    }
+  })
+
   // 添加可用性
   const handleAddAvailability = async (values: any) => {
     if (submittingAdd) return
@@ -163,7 +172,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         setSubmittingAdd(false)
         return
       }
@@ -186,33 +195,49 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
           // 使用新的HTTP客户端，它会自动处理错误
           const response = await api.post(`/api/teachers/${teacherId}/availability`, availabilityData)
-          
           if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.message || '添加可用性失败')
+            // 安全解析响应体（可能不是 JSON）
+            let errorData: any = null
+            try {
+              errorData = await response.json()
+            } catch (e) {
+              console.warn('无法解析错误响应为 JSON', e)
+            }
+
+            const code = errorData?.code ?? errorData?.error ?? 'UNKNOWN_ERROR'
+            const message = errorData?.message ?? '添加可用性失败'
+
+
+            // 后端可能把冲突信息放在 details.conflicts 或 top-level conflicts
+            const conflictsArr = errorData?.details?.conflicts ?? errorData?.conflicts ?? null
+            if (Array.isArray(conflictsArr) && conflictsArr.length > 0) {
+              setConflicts(conflictsArr)
+              setConflictsVisible(true)
+            }
+            // showApiError({ code, message: message })
+            throw new Error(message)
           }
 
           const result = await response.json()
           // 如果后端返回与 blockedTime 的 warnings，提示用户（但仍视为成功）
           if (result && result.blockedTimeWarnings && Array.isArray(result.blockedTimeWarnings) && result.blockedTimeWarnings.length > 0) {
-            message.warning('已创建可用时间，但检测到与阻塞时间的冲突，相关时段将不会对学生显示为可预约。')
+            showWarningMessage('已创建可用时间，但检测到与阻塞时间的冲突，相关时段将不会对学生显示为可预约。')
           }
 
           return result
         })
 
         await Promise.all(promises)
-        message.success('可用性设置成功')
-        setIsAddModalVisible(false)
+        showSuccessMessage('可用性设置成功')
         form.resetFields()
+        setIsAddModalVisible(false)
         fetchAvailability()
         onRefresh?.()
       } else {
-        message.error('时间段数据格式错误')
+        showErrorMessage('时间段数据格式错误')
       }
     } catch (error) {
-      console.error('添加可用性错误:', error)
-      message.error(error instanceof Error ? error.message : '添加可用性失败')
+      // showErrorMessage(error instanceof Error ? error.message : '添加可用性失败')
     } finally {
       setSubmittingAdd(false)
     }
@@ -220,15 +245,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
   // 删除可用性
   const handleDeleteAvailability = async (id: string) => {
+
     if (deletingId) return
     setDeletingId(id)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         setDeletingId(null)
         return
       }
+      setLoading(true)
 
       const response = await fetch(`/api/teachers/${teacherId}/availability/${id}`, {
         method: 'DELETE',
@@ -236,41 +263,63 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           'Authorization': `Bearer ${token}`
         }
       })
-
+      setLoading(false)
       if (response.ok) {
-        message.success('可用性已删除')
+        showSuccessMessage('可用性已删除')
         fetchAvailability()
         onRefresh?.()
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '删除失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      message.error('删除失败')
+      showErrorMessage('删除失败')
     } finally {
       setDeletingId(null)
+      setLoading(false)
     }
   }
 
   // 添加阻塞时间
   const handleAddBlockedTime = async (values: any) => {
-    if (submittingBlock) return
+    if (submittingBlock) {
+      return
+    }
     setSubmittingBlock(true)
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         setSubmittingBlock(false)
         return
       }
 
-      const [startTime, endTime] = values.timeRange
+      const timeRange = values?.timeRange
+      if (!Array.isArray(timeRange) || timeRange.length < 2 || !timeRange[0] || !timeRange[1]) {
+        showErrorMessage('请选择开始和结束时间')
+        setSubmittingBlock(false)
+        return
+      }
+      const [startTime, endTime] = timeRange
+
+      const toISO = (v: any) => {
+        try {
+          if (v && typeof v.toISOString === 'function') return v.toISOString()
+          if (v && typeof v.toDate === 'function') return v.toDate().toISOString()
+          return new Date(v).toISOString()
+        } catch {
+          return new Date().toISOString()
+        }
+      }
+
       const blockedTimeData = {
         teacherId: teacherId,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        startTime: toISO(startTime),
+        endTime: toISO(endTime),
         reason: values.reason
       }
+
+      setLoading(true)
 
       const response = await fetch('/api/blocked-times', {
         method: 'POST',
@@ -280,7 +329,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         },
         body: JSON.stringify(blockedTimeData)
       })
-
+      setLoading(false)
       if (response.ok) {
         const result = await response.json()
         // 如果后端返回 availabilityConflicts，提示用户但仍认为创建成功
@@ -298,21 +347,22 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                 <p>这些可用时间段在学生查询/创建预约时会被过滤。</p>
               </div>
             ),
-            onOk() {}
+            onOk() { }
           })
         } else {
-          message.success('阻塞时间已添加')
+          showSuccessMessage('阻塞时间已添加')
         }
 
-        setIsBlockModalVisible(false)
         blockForm.resetFields()
+        setIsBlockModalVisible(false)
         fetchBlockedTimes()
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '添加阻塞时间失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      message.error('添加阻塞时间失败')
+      console.error(error)
+      showErrorMessage('添加阻塞时间失败')
     } finally {
       setSubmittingBlock(false)
     }
@@ -323,11 +373,11 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) {
-        message.error('请先登录')
+        showErrorMessage('请先登录')
         return
       }
 
-      const response = await fetch(`/api/blocked-times/${id}`, {
+      const response = await fetch(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -335,27 +385,27 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       })
 
       if (response.ok) {
-        message.success('阻塞时间已删除')
+        showSuccessMessage('阻塞时间已删除')
         fetchBlockedTimes()
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '删除失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
-      message.error('删除失败')
+      showErrorMessage('删除失败')
     }
   }
 
   // 按星期分组可用性
-  const groupedAvailability = Array.isArray(availability) 
+  const groupedAvailability = Array.isArray(availability)
     ? availability.reduce((groups, item) => {
-        const day = item.dayOfWeek
-        if (!groups[day]) {
-          groups[day] = []
-        }
-        groups[day].push(item)
-        return groups
-      }, {} as Record<number, TeacherAvailabilityData[]>)
+      const day = item.dayOfWeek
+      if (!groups[day]) {
+        groups[day] = []
+      }
+      groups[day].push(item)
+      return groups
+    }, {} as Record<number, TeacherAvailabilityData[]>)
     : {}
 
   if (loading) {
@@ -378,17 +428,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           <Button
             type="primary"
             icon={<PlusOutlined />}
-              onClick={() => setIsAddModalVisible(true)}
-              loading={submittingAdd}
-              disabled={submittingAdd}
+            onClick={() => setIsAddModalVisible(true)}
+            loading={submittingAdd}
+            disabled={submittingAdd}
           >
             添加可用时间
           </Button>
           <Button
             icon={<ClockCircleOutlined />}
-              onClick={() => setIsBlockModalVisible(true)}
-              loading={submittingBlock}
-              disabled={submittingBlock}
+            onClick={() => setIsBlockModalVisible(true)}
+            loading={submittingBlock}
+            disabled={submittingBlock}
           >
             添加阻塞时间
           </Button>
@@ -405,7 +455,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             <p>• 例如：周一 09:00-10:00 和周二 09:00-10:00 可以同时存在</p>
           </div>
         </div>
-        
+
         {!Array.isArray(availability) || Object.keys(groupedAvailability).length === 0 ? (
           <Empty description="暂无可用性设置" />
         ) : (
@@ -422,7 +472,16 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                         <span className="font-medium">
                           {item.startTime} - {item.endTime}
                         </span>
-                        
+                        {
+                          (() => {
+                            try {
+                              const sUtc = new Date(createUtcDateTime(item.startTime)).toISOString().slice(11, 16)
+                              const eUtc = new Date(createUtcDateTime(item.endTime)).toISOString().slice(11, 16)
+                              return <Tag color="geekblue" style={{ marginLeft: 8 }}>UTC: {sUtc} - {eUtc}</Tag>
+                            } catch { return null }
+                          })()
+                        }
+
                       </div>
                       <Button
                         type="text"
@@ -442,6 +501,32 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         )}
       </Card>
 
+      {/* 冲突详情弹窗 */}
+      <Modal
+        title="时间冲突详情"
+        open={conflictsVisible}
+        onCancel={() => setConflictsVisible(false)}
+        onOk={() => setConflictsVisible(false)}
+      >
+        {Array.isArray(conflicts) && conflicts.length > 0 ? (
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {conflicts.map((c: any, idx: number) => (
+              <div key={idx} style={{ marginBottom: 12 }}>
+                <Tag color="red" style={{ marginBottom: 6 }}>{c.type || 'conflict'}</Tag>
+                <div style={{ color: '#444' }}>{c.message || '存在时间冲突'}</div>
+                {c.existingSlot && (
+                  <div style={{ color: '#666', fontSize: 12 }}>
+                    现有：{c.existingSlot.startTime}-{c.existingSlot.endTime}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>存在时间冲突，请调整后重试。</div>
+        )}
+      </Modal>
+
       {/* 阻塞时间 */}
       <Card title="阻塞时间" style={{ marginTop: '20px' }}>
         {!Array.isArray(blockedTimes) || blockedTimes.length === 0 ? (
@@ -455,7 +540,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
               >
                 <div>
                   <div className="font-medium ">
-                    {format(parseISO(blockedTime.startTime), 'yyyy年MM月dd日 HH:mm')} - 
+                    {format(parseISO(blockedTime.startTime), 'yyyy年MM月dd日 HH:mm')} -
                     {format(parseISO(blockedTime.endTime), 'HH:mm')}
                   </div>
                   {blockedTime.reason && (
@@ -485,60 +570,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         onCancel={() => setIsAddModalVisible(false)}
         onSubmit={handleAddAvailability}
         form={form}
-  submitting={submittingAdd}
+        submitting={submittingAdd}
       />
 
-      {/* 添加阻塞时间弹窗 */}
-      <Modal
-        title="添加阻塞时间"
-        open={isBlockModalVisible}
+      {/* 添加阻塞时间弹窗（独立组件） */}
+      <AddBlockedTimeModal
+        visible={isBlockModalVisible}
         onCancel={() => setIsBlockModalVisible(false)}
-        footer={null}
-        width={500}
-      >
-        <Form
-          form={blockForm}
-          layout="vertical"
-          onFinish={handleAddBlockedTime}
-        >
-          <Form.Item
-            name="timeRange"
-            label="时间范围"
-            rules={[{ required: true, message: '请选择时间范围' }]}
-          >
-            <RangePicker
-              showTime
-              format="YYYY-MM-DD HH:mm:ss"
-              placeholder={['开始时间', '结束时间']}
-              className="w-full"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="reason"
-            label="阻塞原因"
-            rules={[{ required: true, message: '请输入阻塞原因' }]}
-          >
-            <Select placeholder="请选择阻塞原因">
-              <Option value="会议">会议</Option>
-              <Option value="个人事务">个人事务</Option>
-              <Option value="休假">休假</Option>
-              <Option value="其他">其他</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item className="mb-0">
-            <div className="flex justify-end space-x-3">
-              <Button onClick={() => setIsBlockModalVisible(false)}>
-                取消
-              </Button>
-              <Button type="primary" htmlType="submit">
-                添加
-              </Button>
-            </div>
-          </Form.Item>
-        </Form>
-      </Modal>
+        onSubmit={handleAddBlockedTime}
+        form={blockForm}
+        submitting={submittingBlock}
+      />
     </div>
   )
 }

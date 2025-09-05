@@ -1,6 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole, withRoles } from '@/lib/api/middleware'
+import { withRole, withRoles, withValidation } from '@/lib/api/middleware'
+import { waitlistAddSchema, waitlistRemoveSchema } from '@/lib/api/schemas'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 获取候补队列
 async function getWaitlistHandler(request: NextRequest, context?: any) {
@@ -11,13 +15,10 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
     // 移除status过滤，因为Waitlist模型中没有status字段
 
     if (!studentId && !teacherId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'studentId or teacherId is required' },
-        { status: 400 }
-      )
+      return fail('studentId or teacherId is required', 400, E.WAITLIST_MISSING_FIELDS)
     }
 
-    const where: any = { status }
+    const where: any = {}
     if (studentId) where.studentId = studentId
     if (teacherId) where.teacherId = teacherId
 
@@ -32,7 +33,7 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
       ]
     })
 
-    return NextResponse.json({
+    return ok({
       items: waitlistItems.map((item: any) => ({
         id: item.id,
         teacherId: item.teacherId,
@@ -49,11 +50,8 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
     })
 
   } catch (error) {
-    console.error('Get waitlist error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch waitlist' },
-      { status: 500 }
-    )
+    logger.error('waitlist.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch waitlist', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -64,10 +62,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
     const { teacherId, date, slot, studentId, subject } = body
 
     if (!teacherId || !date || !slot || !studentId || !subject) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Missing required fields' },
-        { status: 400 }
-      )
+      return fail('Missing required fields', 400, E.WAITLIST_MISSING_FIELDS)
     }
 
     // 检查学生是否已经在候补队列中
@@ -82,10 +77,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
     })
 
     if (existingEntry) {
-      return NextResponse.json(
-        { error: 'DUPLICATE_ENTRY', message: 'Student already in waitlist for this slot' },
-        { status: 409 }
-      )
+      return fail('Student already in waitlist for this slot', 409, E.WAITLIST_DUPLICATE_ENTRY)
     }
 
     // 获取学生信息，包括服务级别和userId
@@ -126,17 +118,11 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
       })
     }
 
-    return NextResponse.json({
-      message: 'Added to waitlist successfully',
-      id: waitlistEntry.id
-    }, { status: 201 })
+    return ok({ message: 'Added to waitlist successfully', id: waitlistEntry.id }, { status: 201 })
 
   } catch (error) {
-    console.error('Add to waitlist error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to add to waitlist' },
-      { status: 500 }
-    )
+    logger.error('waitlist.add.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to add to waitlist', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -147,10 +133,7 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
     const { id, studentId } = body
 
     if (!id || !studentId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Missing required fields' },
-        { status: 400 }
-      )
+      return fail('Missing required fields', 400, E.WAITLIST_MISSING_FIELDS)
     }
 
     // 验证权限（只能移除自己的条目）
@@ -160,17 +143,11 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
     })
 
     if (!waitlistEntry) {
-      return NextResponse.json(
-        { error: 'NOT_FOUND', message: 'Waitlist entry not found' },
-        { status: 404 }
-      )
+      return fail('Waitlist entry not found', 404, E.WAITLIST_ENTRY_NOT_FOUND)
     }
 
     if (waitlistEntry.studentId !== studentId) {
-      return NextResponse.json(
-        { error: 'FORBIDDEN', message: 'Cannot remove other student\'s waitlist entry' },
-        { status: 403 }
-      )
+      return fail("Cannot remove other student's waitlist entry", 403, E.WAITLIST_FORBIDDEN_REMOVE)
     }
 
     // 删除候补队列条目
@@ -190,19 +167,16 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
       }
     })
 
-    return NextResponse.json({
-      message: 'Removed from waitlist successfully'
-    })
+    return ok({ message: 'Removed from waitlist successfully' })
 
   } catch (error) {
-    console.error('Remove from waitlist error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to remove from waitlist' },
-      { status: 500 }
-    )
+    logger.error('waitlist.remove.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to remove from waitlist', 500, E.INTERNAL_ERROR)
   }
 }
 
-export const GET = withRoles(['student', 'teacher'])(getWaitlistHandler)
-export const POST = withRole('student')(addToWaitlistHandler)
-export const DELETE = withRole('student')(removeFromWaitlistHandler)
+import { withRateLimit } from '@/lib/api/middleware'
+
+export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(withRoles(['student', 'teacher'])(getWaitlistHandler))
+export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(withValidation(waitlistAddSchema)(addToWaitlistHandler)))
+export const DELETE = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(withValidation(waitlistRemoveSchema)(removeFromWaitlistHandler)))

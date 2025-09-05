@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
+import { authorizeJobRequest } from '@/lib/api/job-auth'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 import { addHours, subHours } from 'date-fns'
 
 export async function POST(request: NextRequest) {
   try {
-    // 验证触发密钥
-    const headerSecret = request.headers.get('x-job-secret') || ''
-    const auth = request.headers.get('authorization') || ''
-    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
-    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
-      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
-    }
+  // 读取原始 body 用于 HMAC 校验（如果启用），并在解析 JSON 前执行授权检查
+  const rawBody = await request.text().catch(() => '')
+  const authCheck = await authorizeJobRequest(request, rawBody)
+  if (authCheck) return authCheck
 
-    const body = await request.json()
+  const body = rawBody ? JSON.parse(rawBody) : {}
     const { offsetHours } = body
 
     if (!offsetHours || ![1, 24].includes(offsetHours)) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'offsetHours must be 1 or 24' },
-        { status: 400 }
-      )
+      return fail('offsetHours must be 1 or 24', 400, E.BAD_REQUEST)
     }
 
     // 计算需要发送提醒的时间范围
@@ -49,10 +46,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (appointments.length === 0) {
-      return NextResponse.json({
-        message: `No appointments need ${offsetHours}h reminder`,
-        sent: 0
-      })
+      return ok({ message: `No appointments need ${offsetHours}h reminder`, sent: 0 })
     }
 
     // 发送提醒并记录
@@ -92,7 +86,7 @@ export async function POST(request: NextRequest) {
     const successful = results.filter(r => r.success).length
     const failed = results.filter(r => !r.success).length
 
-    return NextResponse.json({
+    return ok({
       message: `Reminders sent successfully`,
       sent: successful,
       failed,
@@ -105,11 +99,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Send reminders error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to send reminders' },
-      { status: 500 }
-    )
+    logger.error('jobs.remind.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to send reminders', 500, E.INTERNAL_ERROR)
   }
 }
 

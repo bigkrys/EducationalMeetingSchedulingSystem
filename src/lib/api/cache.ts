@@ -70,6 +70,11 @@ export async function initRedis() {
   }
 }
 
+// 获取 Redis 客户端（健康检查/状态使用）
+export function getRedisClient() {
+  return redisClient
+}
+
 // 设置缓存
 export async function setCache(key: string, value: any, ttlSeconds: number = 300) {
   const expires = Date.now() + ttlSeconds * 1000

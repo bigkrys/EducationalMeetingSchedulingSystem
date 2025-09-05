@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { hashPassword } from '@/lib/api/auth.server'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { ApiErrorCode as E } from '@/lib/api/errors'
+import { logger, getRequestMeta } from '@/lib/logger'
 
 // 学生注册验证 schema
 const studentRegisterSchema = z.object({
@@ -48,10 +51,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'EMAIL_EXISTS', message: 'Email already registered' },
-        { status: 409 }
-      )
+      return fail('Email already registered', 409, 'EMAIL_EXISTS')
     }
 
     // 处理科目：支持科目名称和ID两种方式
@@ -74,13 +74,7 @@ export async function POST(request: NextRequest) {
       if (subjects.length !== validatedData.subjectIds.length) {
         const foundNames = subjects.map(s => s.name)
         const missingNames = validatedData.subjectIds.filter(name => !foundNames.includes(name))
-        return NextResponse.json(
-          { 
-            error: 'BAD_REQUEST', 
-            message: `Subjects not found: ${missingNames.join(', ')}` 
-          },
-          { status: 400 }
-        )
+        return fail(`Subjects not found: ${missingNames.join(', ')}`, 400, E.BAD_REQUEST)
       }
       
       subjectIds = subjects.map(s => s.id)
@@ -95,10 +89,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (subjects.length !== subjectIds.length) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Some subjects are invalid or inactive' },
-        { status: 400 }
-      )
+      return fail('Some subjects are invalid or inactive', 400, E.BAD_REQUEST)
     }
 
     // 创建用户和对应的角色记录
@@ -133,11 +124,7 @@ export async function POST(request: NextRequest) {
         }))
       })
 
-      return NextResponse.json({
-        ok: true,
-        userId: user.id,
-        role: 'student'
-      }, { status: 201 })
+      return ok({ userId: user.id, role: 'student' }, { status: 201 })
 
     } else if (validatedData.role === 'teacher') {
       const user = await prisma.user.create({
@@ -168,17 +155,10 @@ export async function POST(request: NextRequest) {
         }))
       })
 
-      return NextResponse.json({
-        ok: true,
-        userId: user.id,
-        role: 'teacher'
-      }, { status: 201 })
+      return ok({ userId: user.id, role: 'teacher' }, { status: 201 })
     }
 
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Invalid role' },
-      { status: 400 }
-    )
+    return fail('Invalid role', 400, E.BAD_REQUEST)
 
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -204,27 +184,18 @@ export async function POST(request: NextRequest) {
         }
       })
       
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: '输入数据验证失败', details: friendlyErrors },
-        { status: 400 }
-      )
+      return fail('输入数据验证失败', 400, E.BAD_REQUEST, friendlyErrors)
     }
 
-    console.error('Registration error:', error)
+    logger.error('auth.register.exception', { ...getRequestMeta(request), error: String(error) })
     
     // 处理 Prisma 错误
     if (error && typeof error === 'object' && 'code' in error) {
       const prismaError = error as any
       if (prismaError.code === 'P2002') {
-        return NextResponse.json(
-          { error: 'EMAIL_EXISTS', message: '该邮箱已被注册' },
-          { status: 409 }
-        )
+        return fail('该邮箱已被注册', 409, 'EMAIL_EXISTS')
       } else if (prismaError.code === 'P2003') {
-        return NextResponse.json(
-          { error: 'BAD_REQUEST', message: '关联数据无效，请检查科目选择' },
-          { status: 400 }
-        )
+        return fail('关联数据无效，请检查科目选择', 400, E.BAD_REQUEST)
       }
     }
     
@@ -236,9 +207,6 @@ export async function POST(request: NextRequest) {
       errorMessage = error
     }
     
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: errorMessage },
-      { status: 500 }
-    )
+    return fail(errorMessage, 500, E.INTERNAL_ERROR)
   }
 }

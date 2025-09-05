@@ -1,13 +1,15 @@
 import nodemailer from 'nodemailer'
+import { env } from '@/lib/env'
+import { logger } from '@/lib/logger'
 
 // 邮件配置
 const emailConfig = {
-  host: process.env.SMTP_HOST || 'smtp.163.com',
-  port: parseInt(process.env.SMTP_PORT || '465'),
-  secure: process.env.SMTP_PORT === '465', 
+  host: env.SMTP_HOST || 'smtp.163.com',
+  port: parseInt(env.SMTP_PORT || '465'),
+  secure: (env.SMTP_PORT || '465') === '465', 
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS
   },
   // 163邮箱特殊配置
   tls: {
@@ -116,10 +118,10 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 
   const info = await transporter.sendMail(mailOptions)
   // 更详细的日志：包含收件人与主题，便于排查某个收件人未收到邮件的原因
-  console.log('Email sent successfully:', { to, subject, messageId: info.messageId })
+  logger.info('email.sent', { to, subject, messageId: info.messageId })
   return true
   } catch (error) {
-  console.error('Failed to send email', { to, subject, error })
+  logger.error('email.failed', { to, subject, error: String(error) })
   return false
   }
 }
@@ -144,7 +146,7 @@ export async function sendAppointmentApprovedNotification(
       emailTemplates.appointmentApproved.studentTemplate(data)
     )
     if (!studentSent) {
-      console.error('Appointment approval email failed for student', { studentEmail, appointment: data })
+      logger.error('email.approval.student_failed', { studentEmail, appointment: data })
     }
 
     // 发送给教师
@@ -154,13 +156,13 @@ export async function sendAppointmentApprovedNotification(
       emailTemplates.appointmentApproved.teacherTemplate(data)
     )
     if (!teacherSent) {
-      console.error('Appointment approval email failed for teacher', { teacherEmail, appointment: data })
+      logger.error('email.approval.teacher_failed', { teacherEmail, appointment: data })
     }
 
-    console.log('Appointment approved notifications attempted', { studentSent, teacherSent })
+    logger.info('email.approval.attempted', { studentSent, teacherSent })
     return { studentSent, teacherSent }
   } catch (error) {
-    console.error('Failed to send appointment approved notifications:', error)
+    logger.error('email.approval.exception', { error: String(error) })
     return { studentSent: false, teacherSent: false }
   }
 }
@@ -192,10 +194,10 @@ export async function sendAppointmentCancelledNotification(
       emailTemplates.appointmentCancelled.teacherTemplate(data)
     )
 
-    console.log('Appointment cancelled notifications attempted', { studentSent, teacherSent })
+    logger.info('email.cancelled.attempted', { studentSent, teacherSent })
     return { studentSent, teacherSent }
   } catch (error) {
-    console.error('Failed to send appointment cancelled notifications:', error)
+    logger.error('email.cancelled.exception', { error: String(error) })
     return { studentSent: false, teacherSent: false }
   }
 }
@@ -263,10 +265,10 @@ export async function sendAppointmentRejectedNotification(
       `
     )
 
-    console.log('Appointment rejected notifications attempted', { studentSent, teacherSent })
+    logger.info('email.rejected.attempted', { studentSent, teacherSent })
     return { studentSent, teacherSent }
   } catch (error) {
-    console.error('Failed to send appointment rejected notifications:', error)
+    logger.error('email.rejected.exception', { error: String(error) })
     return { studentSent: false, teacherSent: false }
   }
 }
@@ -332,10 +334,10 @@ export async function sendAppointmentExpiredNotification(
       `
     )
 
-    console.log('Appointment expired notifications attempted', { studentSent, teacherSent })
+    logger.info('email.expired.attempted', { studentSent, teacherSent })
     return { studentSent, teacherSent }
   } catch (error) {
-    console.error('Failed to send appointment expired notifications:', error)
+    logger.error('email.expired.exception', { error: String(error) })
     return { studentSent: false, teacherSent: false }
   }
 }
@@ -376,13 +378,13 @@ export async function sendNewAppointmentRequestNotification(
       `
     )
     if (!teacherSent) {
-      console.error('New appointment request email failed for teacher', { teacherEmail, appointment: data })
+      logger.error('email.request.teacher_failed', { teacherEmail, appointment: data })
     } else {
-      console.log('New appointment request notification sent successfully', { teacherEmail })
+      logger.info('email.request.sent', { teacherEmail })
     }
     return { teacherSent }
   } catch (error) {
-    console.error('Failed to send new appointment request notification:', error)
+    logger.error('email.request.exception', { error: String(error) })
     return { teacherSent: false }
   }
 }
@@ -391,10 +393,10 @@ export async function sendNewAppointmentRequestNotification(
 export async function testEmailConnection(): Promise<boolean> {
   try {
     await transporter.verify()
-    console.log('Email server connection verified')
+    logger.info('email.verify.ok')
     return true
   } catch (error) {
-    console.error('Email server connection failed:', error)
+    logger.error('email.verify.failed', { error: String(error) })
     return false
   }
 }

@@ -1,19 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/api/db'
+import { authorizeJobRequest } from '@/lib/api/job-auth'
 import { sendAppointmentExpiredNotification } from '@/lib/api/email'
 import { deleteCachePattern } from '@/lib/api/cache'
 import { DEFAULT_EXPIRE_HOURS } from '@/constants'
+import { ok, fail } from '@/lib/api/response'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
-    // 验证触发密钥，防止外部滥用
-    const headerSecret = request.headers.get('x-job-secret') || ''
-    const auth = request.headers.get('authorization') || ''
-    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-    const triggerSecret = process.env.JOB_TRIGGER_SECRET || ''
-    if (!triggerSecret || (headerSecret !== triggerSecret && bearer !== triggerSecret)) {
-      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
-    }
+  const rawBody = await request.text().catch(() => '')
+  // 统一授权检查（根据环境在内部调度器/私有调用中更严格）
+  const authCheck = await authorizeJobRequest(request, rawBody)
+  if (authCheck) return authCheck
 
     // 计算过期阈值：优先级 -> ENV JOB_EXPIRE_HOURS > servicePolicy.level='default' or min(policy.expireHours) > DEFAULT_EXPIRE_HOURS
     let expireHours = DEFAULT_EXPIRE_HOURS
@@ -113,7 +112,7 @@ export async function POST(request: NextRequest) {
             }
           })
         } catch (error) {
-          console.error(`Failed to process expired appointment ${item.id}:`, error)
+          logger.error('job.expire.process_failed', { appointmentId: item.id, error: String(error) })
         }
 
         // 继续下一个
@@ -136,11 +135,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (totalExpired === 0) {
-      return NextResponse.json({ message: 'No pending appointments need to expire', updated: 0 })
+      return ok({ message: 'No pending appointments need to expire', updated: 0 })
     }
 
-
-    return NextResponse.json({
+    return ok({
       message: 'Pending appointments expired successfully',
       updated: totalExpired,
       expiredAt: new Date().toISOString(),
@@ -150,10 +148,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Expire pending appointments error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to expire pending appointments' },
-      { status: 500 }
-    )
+    logger.error('job.expire.exception', { error: String(error) })
+    return fail('Failed to expire pending appointments', 500, 'INTERNAL_ERROR')
   }
 }

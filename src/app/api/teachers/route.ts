@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole, withRoles, AuthenticatedRequest } from '@/lib/api/middleware'
+import { withRole, withRoles, AuthenticatedRequest, withValidation } from '@/lib/api/middleware'
+import { createTeacherSchema } from '@/lib/api/schemas'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 获取教师列表
 async function getTeachersHandler(request: AuthenticatedRequest, context?: any) {
@@ -67,19 +71,11 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
       bufferMinutes: teacher.bufferMinutes
     }))
 
-    return NextResponse.json({
-      teachers: formattedTeachers,
-      total: formattedTeachers.length,
-      limit,
-      offset
-    })
+    return ok({ teachers: formattedTeachers, total: formattedTeachers.length, limit, offset })
 
   } catch (error) {
-    console.error('Get teachers error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch teachers' },
-      { status: 500 }
-    )
+    logger.error('teachers.list.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch teachers', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -90,20 +86,14 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
     
     // 检查权限
     if (user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'FORBIDDEN', message: 'Only admins can create teachers' },
-        { status: 403 }
-      )
+      return fail('Only admins can create teachers', 403, E.FORBIDDEN)
     }
 
     const body = await request.json()
     
     // 验证必需字段
     if (!body.userId || !body.subjects) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'userId and subjects are required' },
-        { status: 400 }
-      )
+      return fail('userId and subjects are required', 400, E.BAD_REQUEST)
     }
 
     // 检查用户是否存在且是教师角色
@@ -112,17 +102,11 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
     })
 
     if (!existingUser) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'User not found' },
-        { status: 404 }
-      )
+      return fail('User not found', 404, E.NOT_FOUND)
     }
 
     if (existingUser.role !== 'teacher') {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'User is not a teacher' },
-        { status: 400 }
-      )
+      return fail('User is not a teacher', 400, E.BAD_REQUEST)
     }
 
     // 检查是否已经是教师
@@ -131,10 +115,7 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
     })
 
     if (existingTeacher) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Teacher already exists for this user' },
-        { status: 409 }
-      )
+      return fail('Teacher already exists for this user', 409, E.CONFLICT)
     }
 
     // 创建教师记录
@@ -168,21 +149,14 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
       }
     })
 
-    return NextResponse.json({
-      ok: true,
-      teacher,
-      message: 'Teacher created successfully'
-    }, { status: 201 })
+    return ok({ teacher, message: 'Teacher created successfully' }, { status: 201 })
 
   } catch (error) {
-    console.error('Create teacher error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to create teacher' },
-      { status: 500 }
-    )
+    logger.error('teachers.create.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to create teacher', 500, E.INTERNAL_ERROR)
   }
 }
 
 // 导出处理函数
 export const GET = withRoles(['student', 'teacher', 'admin'])(getTeachersHandler)
-export const POST = withRole('admin')(createTeacherHandler)
+export const POST = withRole('admin')(withValidation(createTeacherSchema)(createTeacherHandler))

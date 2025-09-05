@@ -2,11 +2,15 @@
   "name": "edu-scheduler",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@8.11.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"No tests specified\" && exit 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -14,7 +18,8 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:simple": "ts-node prisma/seed-simple.ts",
-  "vercel-build": "pnpm install && npx prisma generate && next build"
+  "vercel-build": "pnpm install && npx prisma generate && next build",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.24.0",
@@ -56,6 +61,11 @@
     "typescript": "^5",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "husky": "^9.1.6",
+    "prettier": "^3.4.2",
+    "lint-staged": "^15.2.10"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

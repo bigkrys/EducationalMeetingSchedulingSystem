@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 提升候补队列中的学生
 export async function POST(request: NextRequest) {
@@ -9,10 +12,7 @@ export async function POST(request: NextRequest) {
     const { teacherId, slot, subject } = body
 
     if (!teacherId || !slot || !subject) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'teacherId, slot, and subject are required' },
-        { status: 400 }
-      )
+      return fail('teacherId, slot, and subject are required', 400, E.WAITLIST_PROMOTE_MISSING_FIELDS)
     }
 
     const slotDate = new Date(slot)
@@ -37,10 +37,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!waitlistEntry) {
-      return NextResponse.json({
-        message: 'No students in waitlist for this slot',
-        promoted: 0
-      })
+      return ok({ message: 'No students in waitlist for this slot', promoted: 0, code: E.WAITLIST_EMPTY })
     }
 
     // 检查学生是否还有月度配额
@@ -49,10 +46,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!student) {
-      return NextResponse.json(
-        { error: 'STUDENT_NOT_FOUND', message: 'Student not found' },
-        { status: 404 }
-      )
+      return fail('Student not found', 404, E.STUDENT_NOT_FOUND)
     }
 
     // 检查月度配额
@@ -112,10 +106,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (conflictingAppointments.length > 0) {
-      return NextResponse.json({
-        message: 'Slot is no longer available',
-        promoted: 0
-      })
+      return ok({ message: 'Slot is no longer available', promoted: 0, code: E.WAITLIST_SLOT_UNAVAILABLE })
     }
 
     // 根据服务级别决定是否需要审批
@@ -180,7 +171,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
+    return ok({
       message: 'Student promoted successfully',
       promoted: 1,
       appointment: {
@@ -196,11 +187,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Promote waitlist error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to promote waitlist student' },
-      { status: 500 }
-    )
+    logger.error('waitlist.promote.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to promote waitlist student', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -227,20 +215,14 @@ async function promoteNextStudent(teacherId: string, slot: string, subject: stri
     })
 
     if (!nextEntry) {
-      return NextResponse.json({
-        message: 'No more students in waitlist for this slot',
-        promoted: 0
-      })
+      return ok({ message: 'No more students in waitlist for this slot', promoted: 0, code: E.WAITLIST_EMPTY })
     }
 
     // 递归调用提升逻辑
     return await promoteNextStudent(teacherId, slot, subject)
   } catch (error) {
-    console.error('Promote next student error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to promote next student' },
-      { status: 500 }
-    )
+    logger.error('waitlist.promote.next.exception', { error: String(error) })
+    return fail('Failed to promote next student', 500, E.INTERNAL_ERROR)
   }
 }
 

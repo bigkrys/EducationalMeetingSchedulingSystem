@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole, AuthenticatedRequest } from '@/lib/api/middleware'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 验证模式
 const blockedTimeSchema = z.object({
@@ -18,10 +21,7 @@ async function getBlockedTimesHandler(request: AuthenticatedRequest, context?: a
     const teacherId = searchParams.get('teacherId')
     
     if (!teacherId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Teacher ID is required' },
-        { status: 400 }
-      )
+      return fail('Teacher ID is required', 400, E.BAD_REQUEST)
     }
 
     const user = request.user!
@@ -33,10 +33,7 @@ async function getBlockedTimesHandler(request: AuthenticatedRequest, context?: a
       })
       
       if (!currentTeacher || currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only view their own blocked times' },
-          { status: 403 }
-        )
+        return fail('Teachers can only view their own blocked times', 403, E.FORBIDDEN)
       }
     }
 
@@ -45,14 +42,11 @@ async function getBlockedTimesHandler(request: AuthenticatedRequest, context?: a
       orderBy: { startTime: 'asc' }
     })
 
-    return NextResponse.json({ blockedTimes })
+    return ok({ blockedTimes })
 
   } catch (error) {
-    console.error('Get blocked times error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch blocked times' },
-      { status: 500 }
-    )
+    logger.error('blocked_times.list.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch blocked times', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -70,10 +64,7 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
       })
       
       if (!currentTeacher || currentTeacher.id !== validatedData.teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only set blocked times for themselves' },
-          { status: 403 }
-        )
+        return fail('Teachers can only set blocked times for themselves', 403, E.FORBIDDEN)
       }
     }
 
@@ -82,17 +73,11 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
     const endTime = new Date(validatedData.endTime)
     
     if (startTime >= endTime) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Start time must be before end time' },
-        { status: 400 }
-      )
+      return fail('Start time must be before end time', 400, E.BAD_REQUEST)
     }
 
     if (endTime.getTime() - startTime.getTime() < 15 * 60 * 1000) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Blocked time must be at least 15 minutes' },
-        { status: 400 }
-      )
+      return fail('Blocked time must be at least 15 minutes', 400, E.BAD_REQUEST)
     }
 
     // 检查是否与现有可用时间冲突（只检查周循环模式）
@@ -108,7 +93,7 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
     let availabilityConflicts: any[] = []
     if (conflictingAvailability.length > 0) {
       availabilityConflicts = conflictingAvailability
-      console.log('Create blocked time - found conflicting weekly availability:', availabilityConflicts)
+      logger.info('blocked_times.create.availability_conflicts', { count: availabilityConflicts.length })
     }
 
     // 检查是否与现有预约冲突
@@ -136,11 +121,7 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
         return `${timeStr} (${apt.durationMinutes}分钟)`
       }).join('、')
       
-      return NextResponse.json({
-        error: 'CONFLICT',
-        message: `阻塞时间与现有预约冲突：${conflictDetails}`,
-        conflicts: conflictingAppointments
-      }, { status: 409 })
+      return fail(`阻塞时间与现有预约冲突：${conflictDetails}`, 409, E.BLOCKEDTIME_CONFLICT_APPOINTMENT, { conflicts: conflictingAppointments })
     }
 
     // 创建阻塞时间
@@ -165,8 +146,7 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
       }
     })
 
-    return NextResponse.json({ 
-      ok: true, 
+    return ok({ 
       blockedTime,
       // 把与 weekly availability 的冲突作为 warnings 返回给前端（非阻塞）
       availabilityConflicts,
@@ -174,17 +154,11 @@ async function createBlockedTimeHandler(request: AuthenticatedRequest, context?:
     })
 
   } catch (error) {
-    console.error('Create blocked time error:', error)
+    logger.error('blocked_times.create.exception', { ...getRequestMeta(request), error: String(error) })
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      )
+      return fail('Invalid input data', 400, E.BAD_REQUEST, error.errors)
     }
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to create blocked time' },
-      { status: 500 }
-    )
+    return fail('Failed to create blocked time', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -195,10 +169,7 @@ async function deleteBlockedTimeHandler(request: AuthenticatedRequest, context?:
     const blockedTimeId = searchParams.get('id')
     
     if (!blockedTimeId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Blocked time ID is required' },
-        { status: 400 }
-      )
+      return fail('Blocked time ID is required', 400, E.BAD_REQUEST)
     }
 
     const user = request.user!
@@ -209,10 +180,7 @@ async function deleteBlockedTimeHandler(request: AuthenticatedRequest, context?:
     })
 
     if (!blockedTime) {
-      return NextResponse.json(
-        { error: 'NOT_FOUND', message: 'Blocked time not found' },
-        { status: 404 }
-      )
+      return fail('Blocked time not found', 404, E.NOT_FOUND)
     }
 
     // 检查权限 - 教师只能删除自己的阻塞时间
@@ -222,10 +190,7 @@ async function deleteBlockedTimeHandler(request: AuthenticatedRequest, context?:
       })
       
       if (!currentTeacher || currentTeacher.id !== blockedTime.teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only delete their own blocked times' },
-          { status: 403 }
-        )
+        return fail('Teachers can only delete their own blocked times', 403, E.FORBIDDEN)
       }
     }
 
@@ -246,17 +211,11 @@ async function deleteBlockedTimeHandler(request: AuthenticatedRequest, context?:
       }
     })
 
-    return NextResponse.json({ 
-      ok: true, 
-      message: 'Blocked time deleted successfully'
-    })
+    return ok({ message: 'Blocked time deleted successfully' })
 
   } catch (error) {
-    console.error('Delete blocked time error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to delete blocked time' },
-      { status: 500 }
-    )
+    logger.error('blocked_times.delete.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to delete blocked time', 500, E.INTERNAL_ERROR)
   }
 }
 

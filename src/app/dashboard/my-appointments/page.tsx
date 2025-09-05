@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
@@ -98,7 +99,7 @@ export default function MyAppointments() {
       setCancelReason('')
       fetchAppointments() // 刷新列表
     } catch (error: any) {
-      message.error(error.message || '取消预约失败')
+      showApiError({ message: error?.message })
     } finally {
       setCancelling(false)
     }

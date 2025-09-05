@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole } from '@/lib/api/middleware'
+import { withRole, withRateLimit } from '@/lib/api/middleware'
 import { z } from 'zod'
+import { ok, fail } from '@/lib/api/response'
+import { logger } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 科目验证 schema
 const subjectSchema = z.object({
@@ -12,22 +15,21 @@ const subjectSchema = z.object({
 })
 
 // 获取所有科目
-export async function GET() {
+const getHandler = async function GET() {
   try {
     const subjects = await prisma.subject.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' }
     })
 
-    return NextResponse.json(subjects)
+    return ok({ subjects })
   } catch (error) {
-    console.error('Get subjects error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch subjects' },
-      { status: 500 }
-    )
+    logger.error('subjects.get.exception', { error: String(error) })
+    return fail('Failed to fetch subjects', 500, E.INTERNAL_ERROR)
   }
 }
+
+export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(getHandler)
 
 // 创建新科目
 async function createSubjectHandler(request: NextRequest, context?: any) {
@@ -46,10 +48,7 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
     })
 
     if (existingSubject) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Subject name or code already exists' },
-        { status: 409 }
-      )
+      return fail('Subject name or code already exists', 409, E.SUBJECT_CONFLICT)
     }
 
     const subject = await prisma.subject.create({
@@ -67,20 +66,14 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
       }
     })
 
-    return NextResponse.json(subject, { status: 201 })
+    return ok({ subject }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data' },
-        { status: 400 }
-      )
+      return fail('Invalid input data', 400, E.SUBJECT_INVALID_INPUT)
     }
 
-    console.error('Create subject error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to create subject' },
-      { status: 500 }
-    )
+    logger.error('subjects.create.exception', { error: String(error) })
+    return fail('Failed to create subject', 500, E.INTERNAL_ERROR)
   }
 }
 

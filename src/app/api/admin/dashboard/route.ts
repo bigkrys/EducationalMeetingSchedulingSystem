@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 async function getAdminDashboardHandler(request: NextRequest, context?: any) {
   try {
@@ -69,14 +72,11 @@ async function getAdminDashboardHandler(request: NextRequest, context?: any) {
       systemHealth
     }
 
-    return NextResponse.json(dashboardData)
+    return ok(dashboardData)
 
   } catch (error) {
-    console.error('Get admin dashboard error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to fetch dashboard data' },
-      { status: 500 }
-    )
+    logger.error('admin.dashboard.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch dashboard data', 500, E.INTERNAL_ERROR)
   }
 }
 

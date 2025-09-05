@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { memoryCache } from '@/lib/api/cache'
 import { calculateAvailableSlots } from '@/lib/scheduling'
+import { withRateLimit } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
 
-export async function GET(request: NextRequest) {
+const getHandler = async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const teacherId = searchParams.get('teacherId')
@@ -13,24 +16,18 @@ export async function GET(request: NextRequest) {
 
     // 验证 duration 为正整数
     if (!Number.isFinite(duration) || duration <= 0) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'duration must be a positive integer' },
-        { status: 400 }
-      )
+      return fail('duration must be a positive integer', 400, 'BAD_REQUEST')
     }
 
     if (!teacherId || !date) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'teacherId and date are required' },
-        { status: 400 }
-      )
+      return fail('teacherId and date are required', 400, 'BAD_REQUEST')
     }
 
     // 检查缓存
   const cacheKey = `slots:${teacherId}:${date}:${duration}`
     const cachedSlots = memoryCache.get(cacheKey)
     if (cachedSlots) {
-      return NextResponse.json(cachedSlots)
+      return ok(cachedSlots)
     }
 
     // 验证教师是否存在
@@ -45,10 +42,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!teacher) {
-      return NextResponse.json(
-        { error: 'TEACHER_NOT_FOUND', message: 'Teacher not found' },
-        { status: 404 }
-      )
+      return fail('Teacher not found', 404, 'TEACHER_NOT_FOUND')
     }
 
   // 计算可用槽位（逻辑已移动到 lib/scheduling）
@@ -63,15 +57,13 @@ export async function GET(request: NextRequest) {
     }
     memoryCache.set(cacheKey, result, 5 * 60 * 1000)
 
-    return NextResponse.json(result)
+    return ok(result)
 
   } catch (error) {
-    console.error('Get slots error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch slots' },
-      { status: 500 }
-    )
+    logger.error('slots.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch slots', 500, 'INTERNAL_ERROR')
   }
 }
 
+export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(getHandler)
 

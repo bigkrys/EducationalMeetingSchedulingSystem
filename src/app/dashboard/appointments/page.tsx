@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
 import AuthGuard from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
@@ -104,7 +105,7 @@ export default function AppointmentsManagement() {
       setSelectedAppointment(null)
       fetchAppointments()
     } catch (error: any) {
-      message.error(error.message || '确认预约失败')
+      showApiError({ message: error?.message })
     } finally {
       setProcessing(false)
     }
@@ -136,7 +137,7 @@ export default function AppointmentsManagement() {
       setRejectReason('')
       fetchAppointments()
     } catch (error: any) {
-      message.error(error.message || '拒绝预约失败')
+      showApiError({ message: error?.message })
     } finally {
       setProcessing(false)
     }

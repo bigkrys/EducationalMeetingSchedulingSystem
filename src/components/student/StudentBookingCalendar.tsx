@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Space, message, DatePicker, Modal, Form, Select } from 'antd'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { CalendarOutlined, ClockCircleOutlined, UserOutlined, BookOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 
@@ -75,7 +76,7 @@ export default function StudentBookingCalendar({
         return teachersData
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '获取教师列表失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
         setAllTeachers([])
         return []
       }
@@ -228,7 +229,7 @@ export default function StudentBookingCalendar({
         setTimeSlots(slots)
       } else {
         const errorData = await response.json()
-        message.error(errorData.message || '获取可用时间失败')
+        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
         setTimeSlots([])
       }
     } catch (error) {
@@ -366,9 +367,8 @@ export default function StudentBookingCalendar({
         console.error('预约失败详情:', errorData)
 
         // 如果是 SLOT_TAKEN，使用更友好的提示并刷新可约时间
-        if (errorData && errorData.error === 'SLOT_TAKEN') {
-          const friendly = errorData.message || '该时间已被其他学生预订，请重新选择时间进行预约'
-          message.error(friendly)
+        if (errorData && (errorData.error === 'SLOT_TAKEN' || errorData.code === 'SLOT_TAKEN')) {
+          showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
           // 关闭弹窗并刷新可约时间列表
           setBookingModalVisible(false)
           form.resetFields()
@@ -377,16 +377,7 @@ export default function StudentBookingCalendar({
             fetchTimeSlots()
           }, 200)
         } else {
-          // 显示更详细的错误信息
-          let errorMessage = '预约失败，请重试'
-          if (errorData.error && errorData.message) {
-            errorMessage = `${errorData.error}: ${errorData.message}`
-          } else if (errorData.message) {
-            errorMessage = errorData.message
-          }
-          
-          message.error(errorMessage)
-          
+          showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
           // 如果是验证错误，显示详细信息
           if (errorData.details) {
             console.error('验证错误详情:', errorData.details)

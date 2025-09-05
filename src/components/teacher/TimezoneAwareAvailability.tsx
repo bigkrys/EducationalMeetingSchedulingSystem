@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { Card, Button, TimePicker, Select, Space, message, Divider, Tag, Alert } from 'antd'
+import React, { useState } from 'react'
+import { Card, Button, TimePicker, Select, Space, message, Divider, Tag, Alert, Modal } from 'antd'
+import { showApiError } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import { 
-  formatUtcToLocal, 
-  getLocalTimeOnly, 
-  convertLocalToUtc, 
   createUtcDateTime,
   getUserTimezone,
   getTimezoneInfo
@@ -40,6 +38,8 @@ export default function TimezoneAwareAvailability({
   initialData = []
 }: TimezoneAwareAvailabilityProps) {
   const [loading, setLoading] = useState(false)
+  const [conflictsVisible, setConflictsVisible] = useState(false)
+  const [conflicts, setConflicts] = useState<any[]>([])
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData>({
     dayOfWeek: 1, // 默认周一
     timeSlots: [{ id: `slot_${Date.now()}` }],
@@ -85,6 +85,31 @@ export default function TimezoneAwareAvailability({
         slot.id === id ? { ...slot, [field]: value } : slot
       )
     }))
+  }
+
+  // 便捷：为时间段一键设置时长
+  const quickSetDuration = (id: string, minutes: number) => {
+    setAvailabilityData(prev => ({
+      ...prev,
+      timeSlots: prev.timeSlots.map(slot => {
+        if (slot.id !== id) return slot
+        if (!slot.startTime) return slot
+        const end = slot.startTime.add(minutes, 'minute')
+        return { ...slot, endTime: end }
+      })
+    }))
+  }
+
+  // 显示提交给服务器的 UTC 预览
+  const renderUtcPreview = (slot: TimeSlot) => {
+    if (!slot.startTime || !slot.endTime) return null
+    const startLocal = slot.startTime.format('HH:mm')
+    const endLocal = slot.endTime.format('HH:mm')
+    const startUtc = createUtcDateTime(startLocal)
+    const endUtc = createUtcDateTime(endLocal)
+    const startUtcStr = new Date(startUtc).toISOString().slice(11, 16)
+    const endUtcStr = new Date(endUtc).toISOString().slice(11, 16)
+    return <Tag color="geekblue">UTC: {startUtcStr} - {endUtcStr}</Tag>
   }
 
   // 提交数据
@@ -135,7 +160,7 @@ export default function TimezoneAwareAvailability({
         timezone: getUserTimezone()
       }
 
-      console.log('提交的可用性数据:', submitData)
+      // console.debug('提交的可用性数据:', submitData)
 
       const token = localStorage.getItem('accessToken')
       const response = await fetch(`/api/teachers/${teacherId}/availability-utc`, {
@@ -162,10 +187,11 @@ export default function TimezoneAwareAvailability({
       } else {
         const error = await response.json()
         if (response.status === 409) {
-          message.error(`时间冲突: ${error.message}`)
-          console.log('冲突详情:', error.conflicts)
+          setConflicts(Array.isArray(error?.conflicts) ? error.conflicts : [])
+          setConflictsVisible(true)
+          showApiError({ code: error?.code ?? error?.error, message: error?.message })
         } else {
-          message.error(error.message || '设置失败')
+          showApiError({ code: error?.code ?? error?.error, message: error?.message })
         }
       }
 
@@ -253,12 +279,20 @@ export default function TimezoneAwareAvailability({
                     style={{ width: 120 }}
                   />
 
+                  {/* 快捷设置与时长 */}
+                  <Space size={6}>
+                    <Button size="small" onClick={() => quickSetDuration(slot.id, 30)}>＋30分</Button>
+                    <Button size="small" onClick={() => quickSetDuration(slot.id, 60)}>＋60分</Button>
+                  </Space>
+
                   {/* 显示时长 */}
                   {slot.startTime && slot.endTime && (
                     <Tag color="green">
                       时长: {slot.endTime.diff(slot.startTime, 'minute')}分钟
                     </Tag>
                   )}
+
+                  {renderUtcPreview(slot)}
 
                   {availabilityData.timeSlots.length > 1 && (
                     <Button
@@ -290,6 +324,30 @@ export default function TimezoneAwareAvailability({
           </Button>
         </div>
       </Space>
+      <Modal
+        title="时间冲突详情"
+        open={conflictsVisible}
+        onCancel={() => setConflictsVisible(false)}
+        onOk={() => setConflictsVisible(false)}
+      >
+        {Array.isArray(conflicts) && conflicts.length > 0 ? (
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {conflicts.map((c: any, idx: number) => (
+              <div key={idx} style={{ marginBottom: 12 }}>
+                <Tag color="red" style={{ marginBottom: 6 }}>{c.type || 'conflict'}</Tag>
+                <div style={{ color: '#444' }}>{c.message || '存在时间冲突'}</div>
+                {c.existingSlot && (
+                  <div style={{ color: '#666', fontSize: 12 }}>
+                    现有：{c.existingSlot.startTime}-{c.existingSlot.endTime}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>存在时间冲突，请调整后重试。</div>
+        )}
+      </Modal>
     </Card>
   )
 }

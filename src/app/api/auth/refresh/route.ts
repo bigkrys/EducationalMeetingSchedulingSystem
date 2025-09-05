@@ -3,6 +3,9 @@ import { verifyRefreshToken, generateAccessToken, generateRefreshToken, revokeRe
 import { prisma } from '@/lib/api/db'
 import { JWTPayload } from '@/lib/api/jwt'
 import crypto from 'crypto'
+import { prisma as prismaClient } from '@/lib/api/db'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,19 +14,13 @@ export async function POST(request: NextRequest) {
                         request.headers.get('refresh-token')
 
     if (!refreshToken) {
-      return NextResponse.json(
-        { error: 'INVALID', message: 'Refresh token required' },
-        { status: 401 }
-      )
+      return fail('Refresh token required', 401, 'AUTH_MISSING_REFRESH_TOKEN')
     }
 
     // 验证 refresh token
     const payload = verifyRefreshToken(refreshToken)
     if (!payload) {
-      return NextResponse.json(
-        { error: 'INVALID', message: 'Invalid refresh token' },
-        { status: 401 }
-      )
+      return fail('Invalid refresh token', 401, 'AUTH_INVALID_REFRESH_TOKEN')
     }
 
     // 检查 token 是否在数据库中且未撤销（数据库中存储的是 refresh token 的 sha256 哈希）
@@ -34,10 +31,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!tokenRecord || tokenRecord.revoked || tokenRecord.expiresAt < new Date()) {
-      return NextResponse.json(
-        { error: 'INVALID', message: 'Refresh token expired or revoked' },
-        { status: 401 }
-      )
+      return fail('Refresh token expired or revoked', 401, 'AUTH_INVALID_REFRESH_TOKEN')
     }
 
     // 生成新的 token
@@ -64,10 +58,7 @@ export async function POST(request: NextRequest) {
     ])
 
     // 设置新的 HttpOnly cookie
-    const response = NextResponse.json({
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken
-    })
+    const response = ok({ accessToken: newAccessToken, refreshToken: newRefreshToken })
 
     response.cookies.set('refreshToken', newRefreshToken, {
       httpOnly: true,
@@ -76,13 +67,23 @@ export async function POST(request: NextRequest) {
       maxAge: 30 * 24 * 60 * 60 // 30 days
     })
 
+    // 记录审计日志（refresh token 成功）
+    try {
+      await prismaClient.auditLog.create({
+        data: {
+          actorId: payload.userId,
+          action: 'refresh_token',
+          details: JSON.stringify({ ip: request.headers.get('x-forwarded-for') || 'unknown' })
+        }
+      })
+    } catch (e) {
+      logger.warn('audit.refresh.write_failed', { ...getRequestMeta(request), error: String(e) })
+    }
+
     return response
 
   } catch (error) {
-    console.error('Token refresh error:', error)
-    return NextResponse.json(
-      { error: 'INVALID', message: 'Token refresh failed' },
-      { status: 500 }
-    )
+    logger.error('token.refresh.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Token refresh failed', 500, 'INVALID')
   }
 }

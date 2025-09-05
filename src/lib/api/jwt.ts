@@ -1,7 +1,5 @@
 import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret'
+import { env } from '@/lib/env'
 
 export interface JWTPayload {
   userId: string
@@ -63,12 +61,12 @@ const tokenVerifyCache = new LRUCache<string, { payload: JWTPayload; expiresAt: 
 
 export function generateAccessToken(payload: JWTPayload): string {
   // 开发环境使用更长的token有效期，生产环境使用15分钟
-  const ttl = parseInt(process.env.ACCESS_TOKEN_TTL_MIN || '60')
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: `${ttl}m` as any })
+  const ttl = parseInt(env.ACCESS_TOKEN_TTL_MIN || '60')
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: `${ttl}m` as any })
 }
 
 export function generateRefreshToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d' })
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: '30d' })
 }
 
 export function verifyAccessToken(token: string): JWTPayload | null {
@@ -79,10 +77,10 @@ export function verifyAccessToken(token: string): JWTPayload | null {
       return cached.payload
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload & { exp?: number }
+    const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload & { exp?: number }
 
     // compute expiry ms from token exp if present, otherwise use short TTL
-    const expiresAt = decoded.exp ? decoded.exp * 1000 : Date.now() + (parseInt(process.env.ACCESS_TOKEN_TTL_MIN || '60') * 60 * 1000)
+    const expiresAt = decoded.exp ? decoded.exp * 1000 : Date.now() + (parseInt(env.ACCESS_TOKEN_TTL_MIN || '60') * 60 * 1000)
     tokenVerifyCache.set(token, { payload: decoded as JWTPayload, expiresAt })
     // occasional cleanup: keep cache bounded (naive)
     const CACHE_HIGH_WATER = 5000
@@ -107,7 +105,7 @@ export function verifyAccessToken(token: string): JWTPayload | null {
 
 export function verifyRefreshToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET) as JWTPayload
+    return jwt.verify(token, env.JWT_REFRESH_SECRET) as JWTPayload
   } catch {
     return null
   }

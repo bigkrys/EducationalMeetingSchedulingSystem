@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole } from '@/lib/api/middleware'
+import { withRole, withValidation } from '@/lib/api/middleware'
+import { createUserSchema, updateUserSchema } from '@/lib/api/schemas'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 async function getUsersHandler(request: NextRequest, context?: any) {
   try {
@@ -44,20 +48,11 @@ async function getUsersHandler(request: NextRequest, context?: any) {
       take: limit
     })
 
-    return NextResponse.json({
-      users,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit)
-    })
+    return ok({ users, total, page, limit, totalPages: Math.ceil(total / limit) })
 
   } catch (error) {
-    console.error('Get users error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to fetch users' },
-      { status: 500 }
-    )
+    logger.error('admin.users.get.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to fetch users', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -67,10 +62,7 @@ async function createUserHandler(request: NextRequest, context?: any) {
     const { email, name, role, password } = body
 
     if (!email || !name || !role || !password) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Missing required fields' },
-        { status: 400 }
-      )
+      return fail('Missing required fields', 400, E.BAD_REQUEST)
     }
 
     // 检查邮箱是否已存在
@@ -79,10 +71,7 @@ async function createUserHandler(request: NextRequest, context?: any) {
     })
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'EMAIL_EXISTS', message: 'Email already registered' },
-        { status: 409 }
-      )
+      return fail('Email already registered', 409, 'EMAIL_EXISTS')
     }
 
     // 创建用户
@@ -116,22 +105,14 @@ async function createUserHandler(request: NextRequest, context?: any) {
       })
     }
 
-    return NextResponse.json({
+    return ok({
       message: 'User created successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
-      }
+      user: { id: user.id, email: user.email, name: user.name, role: user.role }
     }, { status: 201 })
 
   } catch (error) {
-    console.error('Create user error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to create user' },
-      { status: 500 }
-    )
+    logger.error('admin.users.create.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to create user', 500, E.INTERNAL_ERROR)
   }
 }
 
@@ -141,10 +122,7 @@ async function updateUserHandler(request: NextRequest, context?: any) {
     const { userId, updates } = body
 
     if (!userId || !updates) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Missing userId or updates' },
-        { status: 400 }
-      )
+      return fail('Missing userId or updates', 400, E.BAD_REQUEST)
     }
 
     // 更新用户基本信息
@@ -179,20 +157,14 @@ async function updateUserHandler(request: NextRequest, context?: any) {
       })
     }
 
-    return NextResponse.json({
-      message: 'User updated successfully',
-      userId: user.id
-    })
+    return ok({ message: 'User updated successfully', userId: user.id })
 
   } catch (error) {
-    console.error('Update user error:', error)
-    return NextResponse.json(
-      { error: 'INTERNAL_ERROR', message: 'Failed to update user' },
-      { status: 500 }
-    )
+    logger.error('admin.users.update.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to update user', 500, E.INTERNAL_ERROR)
   }
 }
 
 export const GET = withRole('admin')(getUsersHandler)
-export const POST = withRole('admin')(createUserHandler)
-export const PUT = withRole('admin')(updateUserHandler)
+export const POST = withRole('admin')(withValidation(createUserSchema)(createUserHandler))
+export const PUT = withRole('admin')(withValidation(updateUserSchema)(updateUserHandler))

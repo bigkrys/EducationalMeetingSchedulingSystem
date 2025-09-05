@@ -6,6 +6,9 @@ import { deleteCachePattern } from '@/lib/api/cache'
 import { z } from 'zod'
 import { addMinutes, isBefore, isAfter } from 'date-fns'
 import { sendNewAppointmentRequestNotification, sendAppointmentApprovedNotification } from '@/lib/api/email'
+import { withRateLimit } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
 
 // 查询预约列表
 async function getAppointmentsHandler(request: NextRequest, context?: any) {
@@ -24,41 +27,26 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
 
     // 验证必需参数
     if (!queryData.role) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Role is required' },
-        { status: 400 }
-      )
+      return fail('Role is required', 400, 'BAD_REQUEST')
     }
 
     if (queryData.role === 'student' && !queryData.studentId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'StudentId is required for student role' },
-        { status: 400 }
-      )
+      return fail('StudentId is required for student role', 400, 'BAD_REQUEST')
     }
 
     if (queryData.role === 'teacher' && !queryData.teacherId) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'TeacherId is required for teacher role' },
-        { status: 400 }
-      )
+      return fail('TeacherId is required for teacher role', 400, 'BAD_REQUEST')
     }
 
     // 验证UUID格式（如果提供了的话）
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     
     if (queryData.studentId && !uuidRegex.test(queryData.studentId)) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid studentId format' },
-        { status: 400 }
-      )
+      return fail('Invalid studentId format', 400, 'BAD_REQUEST')
     }
 
     if (queryData.teacherId && !uuidRegex.test(queryData.teacherId)) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid teacherId format' },
-        { status: 400 }
-      )
+      return fail('Invalid teacherId format', 400, 'BAD_REQUEST')
     }
 
     // 构建查询条件
@@ -71,10 +59,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
       })
       
       if (!student) {
-        return NextResponse.json(
-          { error: 'BAD_REQUEST', message: 'Student not found for this user' },
-          { status: 400 }
-        )
+        return fail('Student not found for this user', 400, 'BAD_REQUEST')
       }
       
       where.studentId = student.id
@@ -85,10 +70,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
       })
       
       if (!teacher) {
-        return NextResponse.json(
-          { error: 'BAD_REQUEST', message: 'Teacher not found for this user' },
-          { status: 400 }
-        )
+        return fail('Teacher not found for this user', 400, 'BAD_REQUEST')
       }
       
       where.teacherId = teacher.id
@@ -142,7 +124,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
     const items = appointments.slice(0, take)
     const nextCursor = hasNext ? items[items.length - 1]?.id : null
 
-    return NextResponse.json({
+    return ok({
       items: items.map((apt: any) => ({
         id: apt.id,
         scheduledTime: apt.scheduledTime.toISOString(),
@@ -170,11 +152,8 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
     })
 
   } catch (error) {
-    console.error('Get appointments error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to fetch appointments' },
-      { status: 500 }
-    )
+    logger.error('appointments.list.exception', { error: String(error) })
+    return fail('Failed to fetch appointments', 500, 'INTERNAL_ERROR')
   }
 }
 
@@ -197,7 +176,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
         include: { student: { include: { user: true } }, teacher: { include: { user: true } }, subject: true }
       })
       if (apt) {
-        return NextResponse.json({
+        return ok({
           id: apt.id,
           scheduledTime: apt.scheduledTime.toISOString(),
           status: apt.status,
@@ -221,10 +200,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     })
 
     if (!student || student.user.status !== 'active') {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Student not found or inactive' },
-        { status: 400 }
-      )
+      return fail('Student not found or inactive', 400, 'BAD_REQUEST')
     }
 
     // 检查教师是否存在
@@ -234,10 +210,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     })
 
     if (!teacher || teacher.user.status !== 'active') {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Teacher not found or inactive' },
-        { status: 400 }
-      )
+      return fail('Teacher not found or inactive', 400, 'BAD_REQUEST')
     }
 
     // 检查科目是否匹配
@@ -251,10 +224,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     })
 
     if (!teacherSubject) {
-      return NextResponse.json(
-        { error: 'SUBJECT_MISMATCH', message: 'Teacher does not teach this subject' },
-        { status: 400 }
-      )
+      return fail('Teacher does not teach this subject', 400, 'SUBJECT_MISMATCH')
     }
 
     // 检查学生是否已注册该科目
@@ -268,10 +238,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     })
 
     if (!studentSubject) {
-      return NextResponse.json(
-        { error: 'SUBJECT_MISMATCH', message: 'Student is not enrolled in this subject' },
-        { status: 400 }
-      )
+      return fail('Student is not enrolled in this subject', 400, 'SUBJECT_MISMATCH')
     }
 
     // 首先查找或创建科目（需要在事务前准备好 subject.id）
@@ -410,17 +377,17 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     } catch (err: any) {
       // 事务内部产生的特定错误映射为友好 HTTP 响应
       if (err?.code === 'SLOT_TAKEN_TX') {
-        return NextResponse.json({ error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' }, { status: 409 })
+        return fail('该时间已被其他学生预订，请重新选择时间进行预约', 409, 'SLOT_TAKEN')
       }
       if (err?.code === 'MAX_DAILY_REACHED_TX') {
-        return NextResponse.json({ error: 'MAX_DAILY_REACHED', message: 'Teacher has reached maximum daily appointments' }, { status: 409 })
+        return fail('Teacher has reached maximum daily appointments', 409, 'MAX_DAILY_REACHED')
       }
       if (err?.code === 'QUOTA_EXCEEDED_TX') {
-        return NextResponse.json({ error: 'QUOTA_EXCEEDED', message: 'Monthly appointment quota exceeded' }, { status: 409 })
+        return fail('Monthly appointment quota exceeded', 409, 'QUOTA_EXCEEDED')
       }
       // Prisma 唯一约束错误代码 P2002
       if (err?.code === 'P2002') {
-        return NextResponse.json({ error: 'SLOT_TAKEN', message: '该时间已被其他学生预订，请重新选择时间进行预约' }, { status: 409 })
+        return fail('该时间已被其他学生预订，请重新选择时间进行预约', 409, 'SLOT_TAKEN')
       }
 
       throw err
@@ -495,7 +462,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
               return { studentSent: res?.studentSent, teacherSent: res?.teacherSent }
               }
           } catch (error) {
-            console.error('Failed to send appointment notification emails:', error)
+            logger.error('appointment.notify.create.failed', { error: String(error) })
             return { error: String(error) }
           }
           return { }
@@ -509,16 +476,16 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
             const result = await _sendAppointmentNotifications()
             emailDebug = result
           } catch (e) {
-            console.error('Sync email send error:', e)
+            logger.error('appointment.notify.create.sync_failed', { error: String(e) })
             emailDebug = { error: String(e) }
           }
         } else {
           // fire-and-forget：启动发送但不阻塞响应（比 setTimeout 更可靠）
-          _sendAppointmentNotifications().catch(err => console.error('Async email send error:', err))
+          _sendAppointmentNotifications().catch(err => logger.error('appointment.notify.create.async_failed', { error: String(err) }))
         }
       }
     } catch (error) {
-      console.error('Failed to prepare appointment notification emails:', error)
+      logger.error('appointment.notify.create.prepare_failed', { error: String(error) })
     }
 
     const responseBody: any = {
@@ -528,17 +495,14 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     }
     if (emailDebug) responseBody.emailDebug = emailDebug
 
-    return NextResponse.json(responseBody, { status: 201 })
+    return ok(responseBody, { status: 201 })
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      )
+      return fail('Invalid input data', 400, 'BAD_REQUEST', error.errors)
     }
 
-    console.error('Create appointment error:', error)
+    logger.error('appointments.create.exception', { ...getRequestMeta(request), error: String(error) })
     
     // 返回更详细的错误信息
     let errorMessage = 'Failed to create appointment'
@@ -546,16 +510,10 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       errorMessage = error.message
     }
     
-    return NextResponse.json(
-      { 
-        error: 'BAD_REQUEST', 
-        message: errorMessage,
-        details: error instanceof Error ? error.stack : undefined
-      },
-      { status: 500 }
-    )
+    return fail(errorMessage, 500, 'INTERNAL_ERROR')
   }
 }
 
+
 export const GET = withRoles(['student', 'teacher'])(getAppointmentsHandler)
-export const POST = withRole('student')(createAppointmentHandler)
+export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(createAppointmentHandler))

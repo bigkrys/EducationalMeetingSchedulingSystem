@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
 import { withRole, AuthenticatedRequest } from '@/lib/api/middleware'
+import { ok, fail } from '@/lib/api/response'
+import { logger, getRequestMeta } from '@/lib/logger'
+import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 删除教师可用性
 async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?: any) {
@@ -21,18 +24,12 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
       })
       
       if (!currentTeacher) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teacher record not found' },
-          { status: 403 }
-        )
+        return fail('Teacher record not found', 403, E.FORBIDDEN)
       }
       
       // 确保教师只能操作自己的资源
       if (currentTeacher.id !== teacherId) {
-        return NextResponse.json(
-          { error: 'FORBIDDEN', message: 'Teachers can only delete their own availability' },
-          { status: 403 }
-        )
+        return fail('Teachers can only delete their own availability', 403, E.FORBIDDEN)
       }
       
       // 验证可用性记录确实属于该教师
@@ -44,10 +41,7 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
       })
       
       if (!availability) {
-        return NextResponse.json(
-          { error: 'NOT_FOUND', message: 'Availability record not found' },
-          { status: 404 }
-        )
+        return fail('Availability record not found', 404, E.NOT_FOUND)
       }
     }
 
@@ -68,14 +62,11 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
       }
     })
 
-    return NextResponse.json({ ok: true })
+    return ok()
 
   } catch (error) {
-    console.error('Delete availability error:', error)
-    return NextResponse.json(
-      { error: 'BAD_REQUEST', message: 'Failed to delete availability' },
-      { status: 500 }
-    )
+    logger.error('availability.delete.exception', { ...getRequestMeta(request), error: String(error) })
+    return fail('Failed to delete availability', 500, E.INTERNAL_ERROR)
   }
 }
 

@@ -1,0 +1,7 @@
+{
+  // 指定 VS Code 的包管理器首选项，这有助于团队和工具知道使用 pnpm
+  "npm.packageManager": "pnpm",
+
+  // 选填：让 VS Code 的终端默认使用 bash（你的环境是 macOS + bash）
+  "terminal.integrated.defaultProfile.osx": "bash"
+}
