@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
@@ -36,12 +37,12 @@ async function main() {
   const studentUser = await prisma.user.upsert({
     where: { email: 'student@test.com' },
     update: {
-      passwordHash: 'Password123', // 强制更新密码
+      passwordHash: await bcrypt.hash('Password123', 12), // 强制更新密码
       status: 'active',
     },
     create: {
       email: 'student@test.com',
-      passwordHash: 'Password123', // 明文密码，仅用于测试
+      passwordHash: await bcrypt.hash('Password123', 12),
       role: 'student',
       status: 'active',
       name: '测试学生',
@@ -52,12 +53,12 @@ async function main() {
   const teacherUser = await prisma.user.upsert({
     where: { email: 'teacher@test.com' },
     update: {
-      passwordHash: 'Password123', // 强制更新密码
+      passwordHash: await bcrypt.hash('Password123', 12),
       status: 'active',
     },
     create: {
       email: 'teacher@test.com',
-      passwordHash: 'Password123', // 明文密码，仅用于测试
+      passwordHash: await bcrypt.hash('Password123', 12),
       role: 'teacher',
       status: 'active',
       name: '测试教师',
@@ -94,25 +95,39 @@ async function main() {
 
   console.log('✅ User profiles created')
 
-  // 创建管理员用户
-  console.log('👑 Creating admin user...')
+  // 创建超级管理员 & 管理员用户
+  console.log('👑 Creating superadmin and admin users...')
+  const superAdminUser = await prisma.user.upsert({
+    where: { email: 'superadmin@edu.com' },
+    update: {
+      passwordHash: await bcrypt.hash('superadmin123', 12),
+      status: 'active',
+    },
+    create: {
+      email: 'superadmin@edu.com',
+      passwordHash: await bcrypt.hash('superadmin123', 12),
+      role: 'superadmin',
+      status: 'active',
+      name: '超级管理员',
+    },
+  })
+
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@edu.com' },
     update: {
-      passwordHash: 'admin123', // 强制更新密码
+      passwordHash: await bcrypt.hash('admin123', 12),
       status: 'active',
     },
     create: {
       email: 'admin@edu.com',
-      passwordHash: 'admin123', // 明文密码，仅用于测试
+      passwordHash: await bcrypt.hash('admin123', 12),
       role: 'admin',
       status: 'active',
       name: '系统管理员',
     },
   })
 
-  // Admin用户已创建，无需额外的admin表
-  console.log('✅ Admin user created')
+  console.log('✅ Superadmin and admin users created')
 
   // 关联教师和科目
   console.log('🔗 Linking teacher to subjects...')
@@ -210,6 +225,7 @@ async function main() {
   console.log('Student: student@test.com / Password123')
   console.log('Teacher: teacher@test.com / Password123')
   console.log('Admin: admin@edu.com / admin123')
+  console.log('Superadmin: superadmin@edu.com / superadmin123')
 }
 
 main()

@@ -4,7 +4,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'student' | 'teacher' | 'admin'
+  role: 'student' | 'teacher' | 'admin' | 'superadmin'
   student?: {
     id: string
     serviceLevel: 'level1' | 'level2' | 'premium'
@@ -41,16 +41,26 @@ export class UserService {
     // otherwise start fetch and keep reference
     this._inflight = (async () => {
       try {
-        const response = await api.get('/api/users/me')
+        // 简单重试策略：对 502/503/504 重试最多 2 次，间隔 500ms
+        let attempt = 0
+        let response: Response | null = null
+        while (attempt < 3) {
+          response = await api.get('/api/users/me')
+          if (response.ok) break
+          if (![502, 503, 504].includes(response.status)) break
+          attempt++
+          await new Promise((r) => setTimeout(r, 500))
+        }
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch user data: ${response.status}`)
+        if (!response || !response.ok) {
+          throw new Error(`Failed to fetch user data: ${response ? response.status : 'network'}`)
         }
 
         const data = await response.json()
 
         // normalize and cache
-        this._cachedUser = data as User
+        const user = (data.user ?? data) as User
+        this._cachedUser = user
         this._cacheExpiresAt = Date.now() + this._cacheTtlMs
 
         return this._cachedUser

@@ -83,29 +83,18 @@ export default function BookAppointment() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* 页面头部 */}
-          <div className="mb-6">
-            <div className="flex items-center space-x-4 mb-4">
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={() => router.back()}
-                className="flex items-center"
-              >
-                返回
-              </Button>
-              <div className="flex items-center space-x-2">
-                <UserOutlined className="text-blue-600 text-xl" />
-                <h1 className="text-2xl font-bold text-gray-900">预约 - {studentName}</h1>
-              </div>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserOutlined className="text-blue-600 text-lg" />
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">预约 · {studentName}</h1>
             </div>
 
             <Card className="bg-blue-50 border-blue-200">
-              <div className="text-blue-800">
-                <h3 className="font-medium mb-2">预约说明</h3>
-                <ul className="text-sm space-y-1">
-                  <li>• 选择教师后，系统会显示该教师未来30天的可用时间段</li>
-                  <li>• 点击任意可用时间段即可进行预约</li>
-                  <li>• 预约成功后，教师会收到通知并确认</li>
-                  <li>• 如需取消或改期，请在预约管理中进行操作</li>
+              <div className="text-blue-800 text-sm">
+                <ul className="space-y-1 list-disc pl-5">
+                  <li>选择教师后将展示未来 30 天可用时间段</li>
+                  <li>点击可用时间即可预约；成功后教师会收到通知</li>
+                  <li>取消/改期请到“我的预约”处理</li>
                 </ul>
               </div>
             </Card>

@@ -84,7 +84,7 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
     const user = request.user!
 
     // 检查权限
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
       return fail('Only admins can create teachers', 403, E.FORBIDDEN)
     }
 
@@ -157,4 +157,6 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
 
 // 导出处理函数
 export const GET = withRoles(['student', 'teacher', 'admin'])(getTeachersHandler)
-export const POST = withRole('admin')(withValidation(createTeacherSchema)(createTeacherHandler))
+export const POST = withRoles(['admin', 'superadmin'])(
+  withValidation(createTeacherSchema)(createTeacherHandler)
+)
