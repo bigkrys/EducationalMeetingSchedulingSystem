@@ -104,11 +104,6 @@ jobs:
           echo "Resolved Preview URL: $URL"
           echo "URL=$URL" >> $GITHUB_ENV
 
-      - name: Wait staging up
-        run: |
-          echo "Staging URL: $URL"
-          npx wait-on --timeout 180000 "$URL"
-
       - name: Attach environment URL to Preview deployment
         uses: actions/github-script@v7
         env:
