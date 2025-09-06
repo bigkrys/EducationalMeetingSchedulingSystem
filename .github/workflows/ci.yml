@@ -60,6 +60,8 @@ jobs:
           esac
       - name: Prisma migrate deploy (staging)
         run: pnpm db:migrate:deploy
+      - name: Prisma migrate status (staging)
+        run: pnpm exec prisma migrate status
 
   deploy-staging:
     name: Deploy Staging (develop branch)
