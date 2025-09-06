@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert } from 'antd'
 import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
@@ -45,11 +45,7 @@ export default function MyAppointments() {
   
   const router = useRouter()
 
-  useEffect(() => {
-    fetchAppointments()
-  }, [])
-
-  const fetchAppointments = async () => {
+  const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true)
       setError('')
@@ -72,7 +68,11 @@ export default function MyAppointments() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchAppointments()
+  }, [fetchAppointments])
 
   const handleCancelAppointment = (appointment: Appointment) => {
     setSelectedAppointment(appointment)

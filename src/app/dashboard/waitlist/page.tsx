@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert } from 'antd'
 import { 
-  CalendarOutlined, 
-  ClockCircleOutlined, 
+  ClockCircleOutlined,
   UserOutlined, 
   BookOutlined,
   ClockCircleOutlined as WaitlistIcon,
@@ -41,18 +40,11 @@ export default function Waitlist() {
   const [addModalVisible, setAddModalVisible] = useState(false)
   const [removeModalVisible, setRemoveModalVisible] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(null)
-  const [selectedTeacher, setSelectedTeacher] = useState<string>('')
-  const [selectedDate, setSelectedDate] = useState<string>('')
-  const [selectedSlot, setSelectedSlot] = useState<string>('')
   const [adding, setAdding] = useState(false)
   
   const router = useRouter()
 
-  useEffect(() => {
-    fetchWaitlist()
-  }, [])
-
-  const fetchWaitlist = async () => {
+  const fetchWaitlist = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -75,7 +67,11 @@ export default function Waitlist() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchWaitlist()
+  }, [fetchWaitlist])
 
   const handleAddToWaitlist = async (values: any) => {
     setAdding(true)

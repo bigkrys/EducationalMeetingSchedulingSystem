@@ -20,7 +20,7 @@ jobs:
         with:
           version: 8
 
-      - run: pnpm i --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test --if-present
@@ -40,7 +40,7 @@ jobs:
         uses: pnpm/action-setup@v3
         with:
           version: 8
-      - run: pnpm i --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm db:generate
       - name: Prisma migrate deploy (staging)
         env:
@@ -86,5 +86,5 @@ jobs:
           BASE_URL: https://${{ steps.vercel.outputs.preview-url }}
           DATABASE_URL: ${{ secrets.NEON_STAGING_URL }}
         run: |
-          pnpm i --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm run --if-present smoke

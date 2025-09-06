@@ -28,5 +28,3 @@ console.log('- 定期更换密钥');
 console.log('- 不要在代码中硬编码这些密钥');
 
 console.log('\n✅ 密钥生成完成！');
-https://github.com/bigkrys/EducationalMeetingSchedulingSystem
-https://EducationalMeetingSchedulingSystem-git-develop-bigkrys.vercel.app

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, Button, DatePicker, Input, Table, Popconfirm, Space } from 'antd'
 import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
@@ -9,7 +9,6 @@ import { getCurrentUserId } from '@/lib/api/auth'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
-const { TextArea } = Input
 
 interface BlockedTime {
   id: string
@@ -35,12 +34,7 @@ export default function BlockedTimes() {
   const [teacherId, setTeacherId] = useState<string>('')
   const router = useRouter()
 
-  useEffect(() => {
-    fetchUserInfo()
-    fetchBlockedTimes()
-  }, [])
-
-  const fetchUserInfo = async () => {
+  const fetchUserInfo = useCallback(async () => {
     try {
       const userId = getCurrentUserId()
       if (!userId) {
@@ -67,9 +61,9 @@ export default function BlockedTimes() {
     } catch (error) {
       console.error('获取用户信息失败:', error)
     }
-  }
+  }, [router])
 
-  const fetchBlockedTimes = async () => {
+  const fetchBlockedTimes = useCallback(async () => {
     if (!teacherId) return
     
     setLoading(true)
@@ -89,7 +83,15 @@ export default function BlockedTimes() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [teacherId])
+
+  useEffect(() => {
+    fetchUserInfo()
+  }, [fetchUserInfo])
+
+  useEffect(() => {
+    fetchBlockedTimes()
+  }, [fetchBlockedTimes])
 
   const handleSubmit = async () => {
     if (submittingBlocked) return

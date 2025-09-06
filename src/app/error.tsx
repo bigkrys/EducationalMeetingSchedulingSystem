@@ -21,7 +21,6 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
             <button onClick={() => reset()} style={{ padding: '8px 16px', background: '#1677ff', color: '#fff', border: 0, borderRadius: 6, cursor: 'pointer' }}>重试</button>
-            <a href="/" style={{ padding: '8px 16px', background: '#f0f0f0', color: '#333', borderRadius: 6, textDecoration: 'none' }}>返回首页</a>
           </div>
           <details style={{ marginTop: 20, color: '#777' }}>
             <summary>错误详情（开发用）</summary>

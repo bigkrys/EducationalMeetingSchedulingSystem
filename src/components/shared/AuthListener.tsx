@@ -3,7 +3,7 @@
 // 导入Ant Design React兼容性补丁
 import '@ant-design/v5-patch-for-react-19'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   isAuthenticated, 
@@ -26,7 +26,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
   const originalWarnRef = useRef<typeof console.warn | null>(null)
 
   // 处理用户活动
-  const handleUserActivity = () => {
+  const handleUserActivity = useCallback(() => {
     lastActivityRef.current = Date.now()
     
     // 清除之前的活动超时
@@ -41,10 +41,54 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
         router.push('/')
       }
     }, 15 * 60 * 1000) // 15分钟
-  }
+  }, [router])
+
+  // 刷新token
+  const refreshTokenIfNeeded = useCallback(async () => {
+    const { refreshToken } = getStoredTokens()
+    
+    if (!refreshToken) {
+      clearStoredTokens()
+      router.push('/')
+      return
+    }
+
+    try {
+      const newAccessToken = await refreshAccessToken(refreshToken)
+      
+      if (newAccessToken) {
+        // 更新存储的token
+        localStorage.setItem('accessToken', newAccessToken)
+        
+        // 直接根据新 token 安排下一次刷新（提前5分钟）
+        try {
+          const decoded = JSON.parse(atob(newAccessToken.split('.')[1]))
+          const expirationTime = decoded.exp * 1000
+          const currentTime = Date.now()
+          const refreshTime = expirationTime - currentTime - (5 * 60 * 1000)
+          if (refreshTime > 0) {
+            refreshTimeoutRef.current = setTimeout(() => {
+              // 再次刷新
+              refreshTokenIfNeeded()
+            }, refreshTime)
+          }
+        } catch (err) {
+          console.error('Failed to parse token after refresh:', err)
+        }
+      } else {
+        // 刷新失败，清除token并跳转登录
+        clearStoredTokens()
+        router.push('/')
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      clearStoredTokens()
+      router.push('/')
+    }
+  }, [router])
 
   // 自动刷新token
-  const setupTokenRefresh = () => {
+  const setupTokenRefresh = useCallback(() => {
     const { accessToken, refreshToken } = getStoredTokens()
     
     if (!accessToken || !refreshToken) {
@@ -71,38 +115,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
         console.error('Failed to parse token for refresh timing:', error)
       }
     }
-  }
-
-  // 刷新token
-  const refreshTokenIfNeeded = async () => {
-    const { refreshToken } = getStoredTokens()
-    
-    if (!refreshToken) {
-      clearStoredTokens()
-      router.push('/')
-      return
-    }
-
-    try {
-      const newAccessToken = await refreshAccessToken(refreshToken)
-      
-      if (newAccessToken) {
-        // 更新存储的token
-        localStorage.setItem('accessToken', newAccessToken)
-        
-        // 设置下次刷新
-        setupTokenRefresh()
-      } else {
-        // 刷新失败，清除token并跳转登录
-        clearStoredTokens()
-        router.push('/')
-      }
-    } catch (error) {
-      console.error('Token refresh failed:', error)
-      clearStoredTokens()
-      router.push('/')
-    }
-  }
+  }, [refreshTokenIfNeeded])
 
   // 设置事件监听器
   useEffect(() => {
@@ -134,7 +147,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
     // 使用节流的事件监听，减少性能开销
     let timeoutId: NodeJS.Timeout | null = null
-    const throttledHandleUserActivity = (event: Event) => {
+    const throttledHandleUserActivity = () => {
       if (timeoutId) return
       
       timeoutId = setTimeout(() => {
@@ -176,14 +189,14 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
         originalWarnRef.current = null
       }
     }
-  }, [router])
+  }, [router, handleUserActivity, setupTokenRefresh])
 
   // 监听路由变化，重新设置token刷新
   useEffect(() => {
     if (typeof window !== 'undefined' && isAuthenticated()) {
       setupTokenRefresh()
     }
-  }, [router])
+  }, [router, setupTokenRefresh])
 
   return <>{children}</>
 }
