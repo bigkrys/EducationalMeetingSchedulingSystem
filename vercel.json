@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "echo Skip Git auto deployments; use GitHub Actions pipeline && exit 0",
+  "ignoreCommand": "echo 'Skipping Git auto deployments - controlled by GitHub Actions' && exit 0",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
