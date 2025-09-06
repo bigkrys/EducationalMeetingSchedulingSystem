@@ -24,7 +24,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test --if-present
-      - run: pnpm build
 
   migrate-staging:
     name: DB Migrate (staging on develop)

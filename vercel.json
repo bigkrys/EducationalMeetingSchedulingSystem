@@ -8,7 +8,7 @@
   "regions": ["hkg1"],
   "headers": [],
   "buildCommand": "pnpm vercel-build",
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install --ignore-scripts",
   "crons": [
     {
       "path": "/api/jobs/reset-quota",
