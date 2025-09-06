@@ -15,7 +15,7 @@ async function main() {
       { name: '化学', code: 'CHEMISTRY', description: '化学基础' },
       { name: '生物', code: 'BIOLOGY', description: '生物学基础' },
       { name: '语文', code: 'CHINESE', description: '中文语言文学' },
-      { name: '英语', code: 'ENGLISH', description: '英语语言学习' }
+      { name: '英语', code: 'ENGLISH', description: '英语语言学习' },
     ]
 
     const createdSubjects = []
@@ -23,7 +23,7 @@ async function main() {
       const created = await prisma.subject.upsert({
         where: { code: subject.code },
         update: subject,
-        create: subject
+        create: subject,
       })
       createdSubjects.push(created)
     }
@@ -37,22 +37,22 @@ async function main() {
         password: 'password123',
         name: '学生A',
         serviceLevel: 'level1',
-        subjects: ['MATH', 'PHYSICS']
+        subjects: ['MATH', 'PHYSICS'],
       },
       {
         email: 'student-b@test.com',
         password: 'password123',
         name: '学生B',
         serviceLevel: 'level2',
-        subjects: ['CHEMISTRY', 'BIOLOGY']
+        subjects: ['CHEMISTRY', 'BIOLOGY'],
       },
       {
         email: 'student-c@test.com',
         password: 'password123',
         name: '学生C',
         serviceLevel: 'premium',
-        subjects: ['CHINESE', 'ENGLISH']
-      }
+        subjects: ['CHINESE', 'ENGLISH'],
+      },
     ]
 
     const createdStudents = []
@@ -62,15 +62,15 @@ async function main() {
         where: { email: studentData.email },
         update: {
           passwordHash: await bcrypt.hash(studentData.password, 12),
-          status: 'active'
+          status: 'active',
         },
         create: {
           email: studentData.email,
           passwordHash: await bcrypt.hash(studentData.password, 12),
           name: studentData.name,
           role: 'student',
-          status: 'active'
-        }
+          status: 'active',
+        },
       })
 
       // 创建学生档案
@@ -81,28 +81,26 @@ async function main() {
           userId: user.id,
           serviceLevel: studentData.serviceLevel,
           monthlyMeetingsUsed: 0,
-          lastQuotaReset: new Date()
-        }
+          lastQuotaReset: new Date(),
+        },
       })
 
       // 关联科目
-      const studentSubjects = createdSubjects.filter(s => 
-        studentData.subjects.includes(s.code)
-      )
-      
+      const studentSubjects = createdSubjects.filter((s) => studentData.subjects.includes(s.code))
+
       for (const subject of studentSubjects) {
         await prisma.studentSubject.upsert({
           where: {
             studentId_subjectId: {
               studentId: student.id,
-              subjectId: subject.id
-            }
+              subjectId: subject.id,
+            },
           },
           update: {},
           create: {
             studentId: student.id,
-            subjectId: subject.id
-          }
+            subjectId: subject.id,
+          },
         })
       }
 
@@ -117,29 +115,29 @@ async function main() {
         email: 'teacher-a@test.com',
         password: 'password123',
         name: '教师A',
-  timezone: 'Asia/Shanghai',
+        timezone: 'Asia/Shanghai',
         subjects: ['MATH', 'PHYSICS'],
         maxDailyMeetings: 8,
-        bufferMinutes: 15
+        bufferMinutes: 15,
       },
       {
         email: 'teacher-b@test.com',
         password: 'password123',
         name: '教师B',
-  timezone: 'America/Los_Angeles',
+        timezone: 'America/Los_Angeles',
         subjects: ['CHEMISTRY', 'BIOLOGY'],
         maxDailyMeetings: 6,
-        bufferMinutes: 20
+        bufferMinutes: 20,
       },
       {
         email: 'teacher-c@test.com',
         password: 'password123',
         name: '教师C',
-  timezone: 'Europe/London',
+        timezone: 'Europe/London',
         subjects: ['CHINESE', 'ENGLISH'],
         maxDailyMeetings: 10,
-        bufferMinutes: 10
-      }
+        bufferMinutes: 10,
+      },
     ]
 
     const createdTeachers = []
@@ -149,15 +147,15 @@ async function main() {
         where: { email: teacherData.email },
         update: {
           passwordHash: await bcrypt.hash(teacherData.password, 12),
-          status: 'active'
+          status: 'active',
         },
         create: {
           email: teacherData.email,
           passwordHash: await bcrypt.hash(teacherData.password, 12),
           name: teacherData.name,
           role: 'teacher',
-          status: 'active'
-        }
+          status: 'active',
+        },
       })
 
       // 创建教师档案
@@ -169,27 +167,25 @@ async function main() {
           maxDailyMeetings: teacherData.maxDailyMeetings,
           bufferMinutes: teacherData.bufferMinutes,
           // timezone set later via raw SQL for demo
-        }
+        },
       })
 
       // 关联科目
-      const teacherSubjects = createdSubjects.filter(s => 
-        teacherData.subjects.includes(s.code)
-      )
-      
+      const teacherSubjects = createdSubjects.filter((s) => teacherData.subjects.includes(s.code))
+
       for (const subject of teacherSubjects) {
         await prisma.teacherSubject.upsert({
           where: {
             teacherId_subjectId: {
               teacherId: teacher.id,
-              subjectId: subject.id
-            }
+              subjectId: subject.id,
+            },
           },
           update: {},
           create: {
             teacherId: teacher.id,
-            subjectId: subject.id
-          }
+            subjectId: subject.id,
+          },
         })
       }
 
@@ -210,15 +206,14 @@ async function main() {
       for (const avail of availabilityData) {
         await prisma.teacherAvailability.upsert({
           where: {
-            id: `${teacher.id}-${avail.dayOfWeek}`
+            id: `${teacher.id}-${avail.dayOfWeek}`,
           },
           update: {},
           create: {
             id: `${teacher.id}-${avail.dayOfWeek}`,
             teacherId: teacher.id,
             ...avail,
-
-          }
+          },
         })
       }
     }
@@ -252,15 +247,15 @@ async function main() {
       where: { email: 'admin@test.com' },
       update: {
         passwordHash: await bcrypt.hash('admin123', 12),
-        status: 'active'
+        status: 'active',
       },
       create: {
         email: 'admin@test.com',
         passwordHash: await bcrypt.hash('admin123', 12),
         name: '系统管理员',
         role: 'admin',
-        status: 'active'
-      }
+        status: 'active',
+      },
     })
 
     // Admin用户已创建，无需额外的admin表
@@ -283,7 +278,7 @@ async function main() {
       console.log(`   Password: ${teacher.password}`)
       console.log(`   Subjects: ${teacher.subjects.join(', ')}`)
       console.log(`   Max Daily: ${teacher.maxDailyMeetings}`)
-  console.log(`   Timezone: ${teacher.timezone}`)
+      console.log(`   Timezone: ${teacher.timezone}`)
     })
 
     console.log('\n👑 Admin:')
@@ -292,9 +287,8 @@ async function main() {
 
     console.log('\n🔗 Subject Coverage:')
     console.log('- 数学/物理: 学生A + 教师A')
-    console.log('- 化学/生物: 学生B + 教师B') 
+    console.log('- 化学/生物: 学生B + 教师B')
     console.log('- 语文/英语: 学生C + 教师C')
-
   } catch (error) {
     console.error('❌ Seeding failed:', error)
     throw error

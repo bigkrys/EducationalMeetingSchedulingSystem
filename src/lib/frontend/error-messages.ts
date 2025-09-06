@@ -96,7 +96,10 @@ const bundles: Record<SupportedLocale, Record<string, string>> = {
   en,
 }
 
-export function errorCodeToMessage(code?: string, locale: SupportedLocale = 'zh-CN'): string | undefined {
+export function errorCodeToMessage(
+  code?: string,
+  locale: SupportedLocale = 'zh-CN'
+): string | undefined {
   if (!code) return undefined
   const dict = bundles[locale] || zhCN
   return dict[code] || dict.ERROR
@@ -127,8 +130,9 @@ export function isRetryableError(code?: string): boolean {
 // 某些错误建议触发登出/跳转登录
 export function shouldForceRelogin(code?: string): boolean {
   if (!code) return false
-  return [ApiErrorCode.UNAUTHORIZED, ApiErrorCode.AUTH_MISSING_REFRESH_TOKEN, ApiErrorCode.AUTH_INVALID_REFRESH_TOKEN].includes(
-    code as ApiErrorCode
-  )
+  return [
+    ApiErrorCode.UNAUTHORIZED,
+    ApiErrorCode.AUTH_MISSING_REFRESH_TOKEN,
+    ApiErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+  ].includes(code as ApiErrorCode)
 }
-

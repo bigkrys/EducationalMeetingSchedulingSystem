@@ -4,8 +4,8 @@ import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
-    const refreshToken = request.cookies.get('refreshToken')?.value || 
-                        request.headers.get('refresh-token')
+    const refreshToken =
+      request.cookies.get('refreshToken')?.value || request.headers.get('refresh-token')
 
     if (refreshToken) {
       // 撤销 refresh token（数据库中存储的是 sha256）
@@ -14,12 +14,11 @@ export async function POST(request: NextRequest) {
     }
 
     const response = new NextResponse(null, { status: 204 })
-    
+
     // 清除 cookie
     response.cookies.delete('refreshToken')
-    
-    return response
 
+    return response
   } catch (error) {
     console.error('Logout error:', error)
     // 即使出错也要清除 cookie

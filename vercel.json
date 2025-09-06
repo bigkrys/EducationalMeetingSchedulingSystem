@@ -5,9 +5,7 @@
       "maxDuration": 30
     }
   },
-  "regions": [
-    "hkg1"
-  ],
+  "regions": ["hkg1"],
   "headers": [],
   "buildCommand": "pnpm vercel-build",
   "installCommand": "pnpm install",

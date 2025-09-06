@@ -15,11 +15,24 @@ export default function StudentFields({
   serviceLevel,
   enrolledSubjects,
   onServiceLevelChange,
-  onEnrolledSubjectsChange
+  onEnrolledSubjectsChange,
 }: StudentFieldsProps) {
   const subjects = [
-    '数学', '物理', '化学', '生物', '语文', '英语', '历史', '地理', 
-    '政治', '计算机科学', '经济学', '心理学', '艺术', '音乐', '体育'
+    '数学',
+    '物理',
+    '化学',
+    '生物',
+    '语文',
+    '英语',
+    '历史',
+    '地理',
+    '政治',
+    '计算机科学',
+    '经济学',
+    '心理学',
+    '艺术',
+    '音乐',
+    '体育',
   ]
 
   return (
@@ -50,7 +63,7 @@ export default function StudentFields({
           placeholder="请选择已注册的科目"
           size="large"
           className="w-full"
-          options={subjects.map(subject => ({ label: subject, value: subject }))}
+          options={subjects.map((subject) => ({ label: subject, value: subject }))}
         />
       </div>
     </div>

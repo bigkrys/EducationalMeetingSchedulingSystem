@@ -9,11 +9,11 @@ export interface User {
     id: string
     serviceLevel: 'level1' | 'level2' | 'premium'
     monthlyMeetingsUsed: number
-  enrolledSubjects: string[]
+    enrolledSubjects: string[]
   }
   teacher?: {
     id: string
-  subjects: string[]
+    subjects: string[]
     maxDailyMeetings: number
     bufferMinutes: number
   }
@@ -66,11 +66,11 @@ export class UserService {
   // 更新用户信息
   static async updateUser(userId: string, data: Partial<User>): Promise<User> {
     const response = await api.patch(`/api/users/${userId}`, data)
-    
+
     if (!response.ok) {
       throw new Error(`Failed to update user: ${response.status}`)
     }
-    
+
     return response.json()
   }
 
@@ -78,9 +78,9 @@ export class UserService {
   static async changePassword(oldPassword: string, newPassword: string): Promise<void> {
     const response = await api.patch('/api/users/me/password', {
       oldPassword,
-      newPassword
+      newPassword,
     })
-    
+
     if (!response.ok) {
       throw new Error(`Failed to change password: ${response.status}`)
     }
@@ -91,7 +91,8 @@ export class UserService {
 export const userService = {
   getCurrentUser: () => UserService.getCurrentUser(),
   updateUser: (userId: string, data: Partial<User>) => UserService.updateUser(userId, data),
-  changePassword: (oldPassword: string, newPassword: string) => UserService.changePassword(oldPassword, newPassword)
+  changePassword: (oldPassword: string, newPassword: string) =>
+    UserService.changePassword(oldPassword, newPassword),
 }
 
 // 清除缓存（在 logout 或 token 变更时调用）

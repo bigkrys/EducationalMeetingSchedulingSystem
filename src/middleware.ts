@@ -6,7 +6,7 @@ function buildCorsHeaders(req: NextRequest) {
   const origin = req.headers.get('origin') || ''
   const allowed = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
   if (process.env.NEXT_PUBLIC_APP_URL) allowed.push(process.env.NEXT_PUBLIC_APP_URL)
   const isAllowed = allowed.length > 0 && allowed.includes(origin)
@@ -27,7 +27,7 @@ function securityHeaders() {
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   }
   // HSTS (only meaningful over HTTPS)
   h['Strict-Transport-Security'] = 'max-age=63072000; includeSubDomains; preload'
@@ -63,6 +63,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*']
+  matcher: ['/api/:path*'],
 }
-

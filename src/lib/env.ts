@@ -45,7 +45,9 @@ if (!parsed.success) {
   // Fail fast with clear message in non-dev
   const isProd = process.env.NODE_ENV === 'production'
   const issues = parsed.error.flatten().fieldErrors
-  const missing = Object.entries(issues).map(([k, v]) => `${k}: ${v?.join(', ')}`).join('; ')
+  const missing = Object.entries(issues)
+    .map(([k, v]) => `${k}: ${v?.join(', ')}`)
+    .join('; ')
   const msg = `Environment validation failed: ${missing}`
   if (isProd) {
     throw new Error(msg)
@@ -62,7 +64,10 @@ export const env = {
 }
 
 export function allowedOrigins(): string[] {
-  const list = env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || []
+  const list =
+    env.ALLOWED_ORIGINS?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean) || []
   if (env.NEXT_PUBLIC_APP_URL) list.push(env.NEXT_PUBLIC_APP_URL)
   // de-duplicate
   return Array.from(new Set(list))

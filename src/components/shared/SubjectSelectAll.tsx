@@ -2,7 +2,11 @@
 
 import { SubjectSelectAllProps } from '@/lib/types'
 
-export default function SubjectSelectAll({ isAllSelected, onSelectAll, disabled = false }: SubjectSelectAllProps) {
+export default function SubjectSelectAll({
+  isAllSelected,
+  onSelectAll,
+  disabled = false,
+}: SubjectSelectAllProps) {
   return (
     <div className="border border-gray-200 rounded-md p-3 mb-2">
       <label className="flex items-center space-x-3 cursor-pointer">

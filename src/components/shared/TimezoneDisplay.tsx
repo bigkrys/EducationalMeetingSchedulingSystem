@@ -1,13 +1,13 @@
 import React from 'react'
 import { Tag, Tooltip } from 'antd'
 import { ClockCircleOutlined } from '@ant-design/icons'
-import { 
-  formatUtcToLocal, 
-  getLocalTimeOnly, 
+import {
+  formatUtcToLocal,
+  getLocalTimeOnly,
   getLocalDateOnly,
   getRelativeTime,
   getUserTimezone,
-  getTimezoneInfo
+  getTimezoneInfo,
 } from '@/lib/utils/timezone-client'
 
 interface TimezoneDisplayProps {
@@ -22,15 +22,15 @@ interface TimezoneDisplayProps {
  * 时区感知的时间显示组件
  * 自动将UTC时间转换为用户本地时间显示
  */
-export default function TimezoneDisplay({ 
-  utcTime, 
+export default function TimezoneDisplay({
+  utcTime,
   format = 'full',
   showTimezone = false,
   showTooltip = true,
-  className 
+  className,
 }: TimezoneDisplayProps) {
   const timezoneInfo = getTimezoneInfo()
-  
+
   // 获取格式化的本地时间
   const getFormattedTime = () => {
     switch (format) {
@@ -48,13 +48,13 @@ export default function TimezoneDisplay({
 
   const formattedTime = getFormattedTime()
   const utcString = typeof utcTime === 'string' ? utcTime : utcTime.toISOString()
-  
+
   const timeDisplay = (
     <span className={className}>
       {formattedTime}
       {showTimezone && (
-        <Tag 
-          color="blue" 
+        <Tag
+          color="blue"
           style={{ marginLeft: 8, fontSize: '12px' }}
           icon={<ClockCircleOutlined />}
         >
@@ -66,12 +66,14 @@ export default function TimezoneDisplay({
 
   if (showTooltip) {
     return (
-      <Tooltip 
+      <Tooltip
         title={
           <div>
             <div>本地时间: {formatUtcToLocal(utcTime)}</div>
             <div>UTC时间: {utcString}</div>
-            <div>时区: {timezoneInfo.timezone} ({timezoneInfo.name})</div>
+            <div>
+              时区: {timezoneInfo.timezone} ({timezoneInfo.name})
+            </div>
           </div>
         }
       >
@@ -87,12 +89,12 @@ export default function TimezoneDisplay({
  * 时间槽显示组件
  * 专门用于显示可预约的时间段
  */
-export function TimeSlotDisplay({ 
-  startTime, 
-  endTime, 
+export function TimeSlotDisplay({
+  startTime,
+  endTime,
   className,
-  showDuration = true 
-}: { 
+  showDuration = true,
+}: {
   startTime: string | Date
   endTime: string | Date
   className?: string
@@ -101,17 +103,13 @@ export function TimeSlotDisplay({
   const start = new Date(startTime)
   const end = new Date(endTime)
   const duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60))
-  
+
   return (
     <div className={className}>
       <span style={{ fontWeight: 500 }}>
         {getLocalTimeOnly(startTime)} - {getLocalTimeOnly(endTime)}
       </span>
-      {showDuration && (
-        <Tag style={{ marginLeft: 8, fontSize: '12px' }}>
-          {duration}分钟
-        </Tag>
-      )}
+      {showDuration && <Tag style={{ marginLeft: 8, fontSize: '12px' }}>{duration}分钟</Tag>}
     </div>
   )
 }
@@ -120,11 +118,11 @@ export function TimeSlotDisplay({
  * 预约时间显示组件
  * 显示预约的完整时间信息
  */
-export function AppointmentTimeDisplay({ 
+export function AppointmentTimeDisplay({
   scheduledTime,
   durationMinutes = 30,
   status,
-  className 
+  className,
 }: {
   scheduledTime: string | Date
   durationMinutes?: number
@@ -133,33 +131,31 @@ export function AppointmentTimeDisplay({
 }) {
   const startTime = new Date(scheduledTime)
   const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000)
-  
+
   const getStatusColor = () => {
     switch (status) {
-      case 'pending': return 'orange'
-      case 'approved': return 'green'
-      case 'completed': return 'blue'
-      case 'cancelled': return 'red'
-      case 'expired': return 'default'
-      default: return 'default'
+      case 'pending':
+        return 'orange'
+      case 'approved':
+        return 'green'
+      case 'completed':
+        return 'blue'
+      case 'cancelled':
+        return 'red'
+      case 'expired':
+        return 'default'
+      default:
+        return 'default'
     }
   }
 
   return (
     <div className={className}>
       <div style={{ marginBottom: 4 }}>
-        <TimezoneDisplay 
-          utcTime={scheduledTime} 
-          format="full"
-          showTooltip={true}
-        />
+        <TimezoneDisplay utcTime={scheduledTime} format="full" showTooltip={true} />
       </div>
       <div>
-        <TimeSlotDisplay 
-          startTime={scheduledTime}
-          endTime={endTime}
-          showDuration={true}
-        />
+        <TimeSlotDisplay startTime={scheduledTime} endTime={endTime} showDuration={true} />
         {status && (
           <Tag color={getStatusColor()} style={{ marginLeft: 8 }}>
             {status}

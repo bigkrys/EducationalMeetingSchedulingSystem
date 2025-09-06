@@ -26,7 +26,7 @@ export default function BlockedTimes() {
   const [formData, setFormData] = useState({
     startTime: '',
     endTime: '',
-    reason: ''
+    reason: '',
   })
   // 防止重复提交/删除
   const [submittingBlocked, setSubmittingBlocked] = useState(false)
@@ -45,8 +45,8 @@ export default function BlockedTimes() {
 
       const response = await fetch('/api/users/me', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
       })
 
       if (response.ok) {
@@ -65,13 +65,13 @@ export default function BlockedTimes() {
 
   const fetchBlockedTimes = useCallback(async () => {
     if (!teacherId) return
-    
+
     setLoading(true)
     try {
       const response = await fetch(`/api/blocked-times?teacherId=${teacherId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
       })
 
       if (response.ok) {
@@ -107,16 +107,16 @@ export default function BlockedTimes() {
         teacherId,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        reason: formData.reason
+        reason: formData.reason,
       }
 
       const response = await fetch('/api/blocked-times', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
@@ -143,8 +143,8 @@ export default function BlockedTimes() {
       const response = await fetch(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
       })
 
       if (response.ok) {
@@ -152,7 +152,10 @@ export default function BlockedTimes() {
         fetchBlockedTimes()
       } else {
         const errorData = await response.json().catch(() => ({}))
-        showApiError({ code: (errorData as any)?.code ?? (errorData as any)?.error, message: (errorData as any)?.message })
+        showApiError({
+          code: (errorData as any)?.code ?? (errorData as any)?.error,
+          message: (errorData as any)?.message,
+        })
       }
     } catch (error) {
       showErrorMessage('删除失败')
@@ -166,7 +169,7 @@ export default function BlockedTimes() {
     setFormData({
       startTime: record.startTime,
       endTime: record.endTime,
-      reason: record.reason || ''
+      reason: record.reason || '',
     })
     setFormVisible(true)
   }
@@ -176,36 +179,32 @@ export default function BlockedTimes() {
       title: '开始时间',
       dataIndex: 'startTime',
       key: 'startTime',
-      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm')
+      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '结束时间',
       dataIndex: 'endTime',
       key: 'endTime',
-      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm')
+      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '原因',
       dataIndex: 'reason',
       key: 'reason',
-      render: (reason: string) => reason || '-'
+      render: (reason: string) => reason || '-',
     },
     {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm')
+      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '操作',
       key: 'action',
       render: (_: any, record: BlockedTime) => (
         <Space>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
           <Popconfirm
@@ -219,8 +218,8 @@ export default function BlockedTimes() {
             </Button>
           </Popconfirm>
         </Space>
-      )
-    }
+      ),
+    },
   ]
 
   return (
@@ -255,9 +254,7 @@ export default function BlockedTimes() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    时间范围
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">时间范围</label>
                   <RangePicker
                     showTime
                     format="YYYY-MM-DD HH:mm"
@@ -266,7 +263,7 @@ export default function BlockedTimes() {
                         setFormData({
                           ...formData,
                           startTime: dates[0].toISOString(),
-                          endTime: dates[1].toISOString()
+                          endTime: dates[1].toISOString(),
                         })
                       }
                     }}
@@ -304,7 +301,7 @@ export default function BlockedTimes() {
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
-              showQuickJumper: true
+              showQuickJumper: true,
             }}
           />
         </Card>

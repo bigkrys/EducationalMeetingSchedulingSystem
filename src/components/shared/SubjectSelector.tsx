@@ -17,12 +17,12 @@ interface SubjectSelectorProps {
   disabled?: boolean
 }
 
-export default function SubjectSelector({ 
-  value, 
-  onChange, 
-  placeholder = "请选择科目",
-  mode = "multiple",
-  disabled = false 
+export default function SubjectSelector({
+  value,
+  onChange,
+  placeholder = '请选择科目',
+  mode = 'multiple',
+  disabled = false,
 }: SubjectSelectorProps) {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,14 +52,14 @@ export default function SubjectSelector({
         mode={mode}
         value={value}
         onChange={onChange}
-        placeholder={loading ? "加载中..." : placeholder}
+        placeholder={loading ? '加载中...' : placeholder}
         disabled={disabled || loading}
         size="large"
         className="w-full"
         loading={loading}
-        options={subjects.map(subject => ({ 
-          label: subject.name, 
-          value: subject.id 
+        options={subjects.map((subject) => ({
+          label: subject.name,
+          value: subject.id,
         }))}
       />
     </div>

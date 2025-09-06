@@ -10,15 +10,15 @@ import { ApiErrorCode as E } from '@/lib/api/errors'
 const availabilitySchema = z.object({
   dayOfWeek: z.number().min(0).max(6),
   startTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/), // HH:mm格式
-  endTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),   // HH:mm格式
+  endTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/), // HH:mm格式
   isRecurring: z.boolean().optional().default(true),
-  timezone: z.string().optional().default('Asia/Shanghai') // 用户时区
+  timezone: z.string().optional().default('Asia/Shanghai'), // 用户时区
 })
 
 const batchAvailabilitySchema = z.object({
   timeSlots: z.array(availabilitySchema),
   action: z.enum(['replace', 'merge']).optional().default('replace'),
-  timezone: z.string().optional().default('Asia/Shanghai')
+  timezone: z.string().optional().default('Asia/Shanghai'),
 })
 
 // 获取教师可用性 - 返回时包含时区信息
@@ -27,15 +27,15 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
     const teacherId = pathParts[pathParts.length - 2]
-    
+
     const user = request.user!
 
     // 权限检查
     if (user.role === 'teacher') {
       const currentTeacher = await prisma.teacher.findUnique({
-        where: { userId: user.userId }
+        where: { userId: user.userId },
       })
-      
+
       if (!currentTeacher || currentTeacher.id !== teacherId) {
         return fail('Access denied', 403, E.FORBIDDEN)
       }
@@ -45,12 +45,9 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
     const availabilities = await prisma.teacherAvailability.findMany({
       where: {
         teacherId,
-        isActive: true
+        isActive: true,
       },
-      orderBy: [
-        { dayOfWeek: 'asc' },
-        { startTime: 'asc' }
-      ]
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
     })
 
     // 读取教师时区
@@ -60,11 +57,13 @@ async function getAvailabilityHandler(request: AuthenticatedRequest, context?: a
       teacherId,
       availabilities,
       timezone: (teacher as any)?.timezone || 'UTC',
-      note: 'Times are stored as local time strings (HH:mm). Frontend should handle timezone conversion for display.'
+      note: 'Times are stored as local time strings (HH:mm). Frontend should handle timezone conversion for display.',
     })
-
   } catch (error) {
-    logger.error('availability_utc.get.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('availability_utc.get.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to get availability', 500, E.INTERNAL_ERROR)
   }
 }
@@ -75,7 +74,7 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
     const teacherId = pathParts[pathParts.length - 2]
-    
+
     const user = request.user!
     const body = await request.json()
     const validatedData = availabilitySchema.parse(body)
@@ -83,9 +82,9 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     // 权限检查
     if (user.role === 'teacher') {
       const currentTeacher = await prisma.teacher.findUnique({
-        where: { userId: user.userId }
+        where: { userId: user.userId },
       })
-      
+
       if (!currentTeacher || currentTeacher.id !== teacherId) {
         return fail('Access denied', 403, E.FORBIDDEN)
       }
@@ -94,18 +93,19 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
     // 验证时间逻辑
     const startMinutes = timeToMinutes(validatedData.startTime)
     const endMinutes = timeToMinutes(validatedData.endTime)
-    
+
     if (startMinutes >= endMinutes) {
       return fail('Start time must be before end time', 400, E.BAD_REQUEST)
     }
 
     const durationMinutes = endMinutes - startMinutes
-    
+
     if (durationMinutes < 15) {
       return fail('Duration must be at least 15 minutes', 400, E.BAD_REQUEST)
     }
 
-    if (durationMinutes > 480) { // 8小时
+    if (durationMinutes > 480) {
+      // 8小时
       return fail('Duration cannot exceed 8 hours', 400, E.BAD_REQUEST)
     }
 
@@ -123,17 +123,23 @@ async function setAvailabilityHandler(request: AuthenticatedRequest, context?: a
         startTime: validatedData.startTime,
         endTime: validatedData.endTime,
         isRecurring: validatedData.isRecurring,
-        isActive: true
-      }
+        isActive: true,
+      },
     })
 
-    return ok({ message: 'Availability set successfully', availability, timezone: validatedData.timezone })
-
+    return ok({
+      message: 'Availability set successfully',
+      availability,
+      timezone: validatedData.timezone,
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return fail(error.errors[0].message, 400, E.BAD_REQUEST)
     }
-    logger.error('availability_utc.set.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('availability_utc.set.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to set availability', 500, E.INTERNAL_ERROR)
   }
 }
@@ -144,7 +150,7 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
     const teacherId = pathParts[pathParts.length - 2]
-    
+
     const user = request.user!
     const body = await request.json()
     const validatedData = batchAvailabilitySchema.parse(body)
@@ -152,9 +158,9 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
     // 权限检查
     if (user.role === 'teacher') {
       const currentTeacher = await prisma.teacher.findUnique({
-        where: { userId: user.userId }
+        where: { userId: user.userId },
       })
-      
+
       if (!currentTeacher || currentTeacher.id !== teacherId) {
         return fail('Access denied', 403, E.FORBIDDEN)
       }
@@ -164,18 +170,18 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
     if (validatedData.action === 'replace') {
       await prisma.teacherAvailability.updateMany({
         where: { teacherId, isActive: true },
-        data: { isActive: false }
+        data: { isActive: false },
       })
     }
 
     // 批量创建新的可用性记录
     const createdAvailabilities = []
-    
+
     for (const timeSlot of validatedData.timeSlots) {
       // 基本验证
       const startMinutes = timeToMinutes(timeSlot.startTime)
       const endMinutes = timeToMinutes(timeSlot.endTime)
-      
+
       if (startMinutes >= endMinutes) {
         continue // 跳过无效的时间段
       }
@@ -187,8 +193,8 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
           startTime: timeSlot.startTime,
           endTime: timeSlot.endTime,
           isRecurring: timeSlot.isRecurring ?? true,
-          isActive: true
-        }
+          isActive: true,
+        },
       })
 
       createdAvailabilities.push(availability)
@@ -198,24 +204,29 @@ async function batchSetAvailabilityHandler(request: AuthenticatedRequest, contex
       message: 'Batch availability set successfully',
       availabilities: createdAvailabilities,
       action: validatedData.action,
-      timezone: validatedData.timezone
+      timezone: validatedData.timezone,
     })
-
   } catch (error) {
     if (error instanceof z.ZodError) {
       return fail(error.errors[0].message, 400, E.BAD_REQUEST)
     }
-    logger.error('availability_utc.batch.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('availability_utc.batch.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to batch set availability', 500, E.INTERNAL_ERROR)
   }
 }
 
 // 辅助函数：检查时间冲突
-async function checkTimeConflicts(teacherId: string, newSlot: {
-  dayOfWeek: number
-  startTime: string
-  endTime: string
-}) {
+async function checkTimeConflicts(
+  teacherId: string,
+  newSlot: {
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+  }
+) {
   const conflicts = []
 
   // 检查与现有可用性的冲突
@@ -223,19 +234,26 @@ async function checkTimeConflicts(teacherId: string, newSlot: {
     where: {
       teacherId,
       dayOfWeek: newSlot.dayOfWeek,
-      isActive: true
-    }
+      isActive: true,
+    },
   })
 
   for (const existing of existingAvailabilities) {
-    if (hasTimeOverlap(String((existing as any).startTime), String((existing as any).endTime), newSlot.startTime, newSlot.endTime)) {
+    if (
+      hasTimeOverlap(
+        String((existing as any).startTime),
+        String((existing as any).endTime),
+        newSlot.startTime,
+        newSlot.endTime
+      )
+    ) {
       conflicts.push({
         type: 'availability_overlap',
         existingSlot: {
           id: existing.id,
           startTime: String((existing as any).startTime),
-          endTime: String((existing as any).endTime)
-        }
+          endTime: String((existing as any).endTime),
+        },
       })
     }
   }
@@ -255,7 +273,7 @@ function hasTimeOverlap(start1: string, end1: string, start2: string, end2: stri
   const e1 = timeToMinutes(end1)
   const s2 = timeToMinutes(start2)
   const e2 = timeToMinutes(end2)
-  
+
   return s1 < e2 && s2 < e1
 }
 

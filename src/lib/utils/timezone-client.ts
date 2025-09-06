@@ -21,7 +21,7 @@ export function formatUtcToLocal(
   options?: Intl.DateTimeFormatOptions
 ): string {
   const date = typeof utcTime === 'string' ? new Date(utcTime) : utcTime
-  
+
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: '2-digit',
@@ -29,9 +29,9 @@ export function formatUtcToLocal(
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZone: getUserTimezone()
+    timeZone: getUserTimezone(),
   }
-  
+
   return date.toLocaleString('zh-CN', { ...defaultOptions, ...options })
 }
 
@@ -46,7 +46,7 @@ export function getLocalTimeOnly(utcTime: string | Date): string {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZone: getUserTimezone()
+    timeZone: getUserTimezone(),
   })
 }
 
@@ -68,24 +68,24 @@ export function getLocalDateOnly(utcTime: string | Date): string {
  */
 export function convertLocalToUtc(localDateTime: string): string {
   // 处理不同的输入格式
-  const dateTimeString = localDateTime.includes('T') 
-    ? localDateTime 
+  const dateTimeString = localDateTime.includes('T')
+    ? localDateTime
     : localDateTime.replace(' ', 'T')
-  
+
   // 确保有秒的部分
-  const fullDateTime = dateTimeString.includes(':00', dateTimeString.lastIndexOf(':')) 
-    ? dateTimeString 
+  const fullDateTime = dateTimeString.includes(':00', dateTimeString.lastIndexOf(':'))
+    ? dateTimeString
     : dateTimeString + ':00'
-  
+
   // 创建一个临时的Date对象，假设输入是本地时间
   const tempDate = new Date(fullDateTime)
-  
+
   // 获取本地时区偏移量（分钟）
   const timezoneOffset = tempDate.getTimezoneOffset()
-  
+
   // 调整为UTC时间
   const utcTime = new Date(tempDate.getTime() + timezoneOffset * 60000)
-  
+
   return utcTime.toISOString()
 }
 
@@ -109,7 +109,9 @@ export function createUtcDateTime(timeString: string, dateString?: string): stri
 export function isToday(utcTime: string | Date): boolean {
   const date = typeof utcTime === 'string' ? new Date(utcTime) : utcTime
   const localToday = new Date().toDateString()
-  const targetLocalDate = new Date(date.toLocaleString('en-US', { timeZone: getUserTimezone() })).toDateString()
+  const targetLocalDate = new Date(
+    date.toLocaleString('en-US', { timeZone: getUserTimezone() })
+  ).toDateString()
   return localToday === targetLocalDate
 }
 
@@ -124,7 +126,7 @@ export function getRelativeTime(utcTime: string | Date): string {
   const diffMs = date.getTime() - now.getTime()
   const diffHours = Math.round(diffMs / (1000 * 60 * 60))
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
-  
+
   if (Math.abs(diffHours) < 1) {
     const diffMinutes = Math.round(diffMs / (1000 * 60))
     if (diffMinutes > 0) {
@@ -155,7 +157,7 @@ export function getRelativeTime(utcTime: string | Date): string {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   }
 }
@@ -172,16 +174,20 @@ export function getTimezoneInfo(): {
   const now = new Date()
   const offset = -now.getTimezoneOffset() / 60
   const offsetString = `UTC${offset >= 0 ? '+' : ''}${offset}`
-  
+
   // 获取时区名称
-  const name = now.toLocaleString('zh-CN', {
-    timeZoneName: 'long',
-    timeZone: timezone
-  }).split(' ').pop() || timezone
-  
+  const name =
+    now
+      .toLocaleString('zh-CN', {
+        timeZoneName: 'long',
+        timeZone: timezone,
+      })
+      .split(' ')
+      .pop() || timezone
+
   return {
     timezone,
     offset: offsetString,
-    name
+    name,
   }
 }

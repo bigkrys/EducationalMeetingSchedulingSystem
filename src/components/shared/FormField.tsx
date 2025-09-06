@@ -34,14 +34,8 @@ export default function FormField({
   const renderField = () => {
     switch (type) {
       case 'input':
-        return (
-          <Input
-            placeholder={placeholder || `请输入${label}`}
-            disabled={disabled}
-            {...rest}
-          />
-        )
-      
+        return <Input placeholder={placeholder || `请输入${label}`} disabled={disabled} {...rest} />
+
       case 'password':
         return (
           <Input.Password
@@ -50,22 +44,18 @@ export default function FormField({
             {...rest}
           />
         )
-      
+
       case 'select':
         return (
-          <Select
-            placeholder={placeholder || `请选择${label}`}
-            disabled={disabled}
-            {...rest}
-          >
-            {options.map(option => (
+          <Select placeholder={placeholder || `请选择${label}`} disabled={disabled} {...rest}>
+            {options.map((option) => (
               <Option key={option.value} value={option.value}>
                 {option.label}
               </Option>
             ))}
           </Select>
         )
-      
+
       case 'date':
         return (
           <DatePicker
@@ -75,7 +65,7 @@ export default function FormField({
             {...rest}
           />
         )
-      
+
       case 'datetime':
         return (
           <DatePicker
@@ -86,7 +76,7 @@ export default function FormField({
             {...rest}
           />
         )
-      
+
       case 'number':
         return (
           <InputNumber
@@ -96,7 +86,7 @@ export default function FormField({
             {...rest}
           />
         )
-      
+
       case 'textarea':
         return (
           <TextArea
@@ -106,34 +96,17 @@ export default function FormField({
             {...rest}
           />
         )
-      
+
       case 'switch':
-        return (
-          <Switch
-            disabled={disabled}
-            checkedChildren="是"
-            unCheckedChildren="否"
-            {...rest}
-          />
-        )
-      
+        return <Switch disabled={disabled} checkedChildren="是" unCheckedChildren="否" {...rest} />
+
       default:
-        return (
-          <Input
-            placeholder={placeholder || `请输入${label}`}
-            disabled={disabled}
-            {...rest}
-          />
-        )
+        return <Input placeholder={placeholder || `请输入${label}`} disabled={disabled} {...rest} />
     }
   }
 
   return (
-    <Form.Item
-      name={name}
-      label={label}
-      rules={finalRules}
-    >
+    <Form.Item name={name} label={label} rules={finalRules}>
       {renderField()}
     </Form.Item>
   )

@@ -2,8 +2,18 @@
 
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Space, DatePicker, Modal, Form, Select } from 'antd'
-import { showApiError, showErrorMessage, showSuccessMessage, showWarningMessage } from '@/lib/api/global-error-handler'
-import { CalendarOutlined, ClockCircleOutlined, UserOutlined, BookOutlined } from '@ant-design/icons'
+import {
+  showApiError,
+  showErrorMessage,
+  showSuccessMessage,
+  showWarningMessage,
+} from '@/lib/api/global-error-handler'
+import {
+  CalendarOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  BookOutlined,
+} from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 
 const { Option } = Select
@@ -26,7 +36,7 @@ interface StudentBookingCalendarProps {
 export default function StudentBookingCalendar({
   studentId,
   studentName,
-  onBookingSuccess
+  onBookingSuccess,
 }: StudentBookingCalendarProps) {
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -54,13 +64,13 @@ export default function StudentBookingCalendar({
 
       const response = await fetch('/api/teachers', {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // 确保数据是数组
         let teachersData = []
         if (Array.isArray(data)) {
@@ -71,7 +81,7 @@ export default function StudentBookingCalendar({
           console.warn('教师数据格式不支持:', data)
           teachersData = []
         }
-        
+
         setAllTeachers(teachersData)
         return teachersData
       } else {
@@ -98,13 +108,13 @@ export default function StudentBookingCalendar({
 
       const response = await fetch('/api/users/me', {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
         const userData = await response.json()
-        
+
         let subjects = []
         if (userData.student && userData.student.enrolledSubjects) {
           // 处理不同的科目数据格式
@@ -117,16 +127,19 @@ export default function StudentBookingCalendar({
               .split(',')
               .map((s: string) => s.trim())
               .filter((s: string) => s.length > 0)
-
           } else {
-            console.warn('学生科目数据格式不支持:', userData.student.enrolledSubjects, '类型:', typeof userData.student.enrolledSubjects)
+            console.warn(
+              '学生科目数据格式不支持:',
+              userData.student.enrolledSubjects,
+              '类型:',
+              typeof userData.student.enrolledSubjects
+            )
             subjects = []
           }
         } else {
-
           subjects = []
         }
-        
+
         setStudentSubjects(subjects)
         return subjects
       } else {
@@ -150,16 +163,16 @@ export default function StudentBookingCalendar({
     }
 
     // 只显示能教授学生已注册科目的教师
-    const availableTeachers = teachers.filter(teacher => {
+    const availableTeachers = teachers.filter((teacher) => {
       if (!teacher.subjects || !Array.isArray(teacher.subjects)) {
         return false
       }
-      
+
       // 检查教师是否至少能教授学生的一个科目
-      const canTeach = teacher.subjects.some((teacherSubject: string) => 
+      const canTeach = teacher.subjects.some((teacherSubject: string) =>
         subjects.includes(teacherSubject)
       )
-      
+
       return canTeach
     })
 
@@ -174,11 +187,8 @@ export default function StudentBookingCalendar({
     const loadData = async () => {
       setInitialLoading(true) // 开始初始加载
       try {
-        const [teachers, subjects] = await Promise.all([
-          fetchTeachers(),
-          fetchStudentSubjects()
-        ])
-        
+        const [teachers, subjects] = await Promise.all([fetchTeachers(), fetchStudentSubjects()])
+
         filterTeachersAndSubjects(teachers, subjects)
       } catch (error) {
         console.error('初始数据加载失败:', error)
@@ -186,16 +196,16 @@ export default function StudentBookingCalendar({
         setInitialLoading(false) // 完成初始加载
       }
     }
-    
+
     loadData()
   }, [])
 
   const fetchTimeSlots = React.useCallback(async () => {
     if (!selectedDate || !selectedTeacher || !selectedSubject) return
-    
+
     try {
       setLoading(true)
-      
+
       const token = localStorage.getItem('accessToken')
       if (!token) {
         showErrorMessage('请先登录')
@@ -203,28 +213,31 @@ export default function StudentBookingCalendar({
       }
 
       // 调用真实的 slots API
-      const response = await fetch(`/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const response = await fetch(
+        `/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      })
+      )
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // 转换API数据格式
         const slots: CalendarSlot[] = data.slots.map((slot: string, index: number) => {
           const startTime = new Date(slot)
           const endTime = new Date(startTime.getTime() + 30 * 60 * 1000) // 30分钟
-          
+
           return {
             id: `slot_${index}`,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
-            status: 'available'
+            status: 'available',
           }
         })
-        
+
         setTimeSlots(slots)
       } else {
         const errorData = await response.json()
@@ -254,28 +267,25 @@ export default function StudentBookingCalendar({
     setSelectedTeacher(teacherId)
     setSelectedSubject('')
     setTimeSlots([])
-    
+
     if (teacherId) {
-      const teacher = filteredTeachers.find(t => t.id === teacherId)
+      const teacher = filteredTeachers.find((t) => t.id === teacherId)
       if (teacher && teacher.subjects && Array.isArray(teacher.subjects)) {
         // 获取该教师可以教授的且学生ç
-        const teacherStudentCommonSubjects = teacher.subjects.filter(
-          (subject: string) => studentSubjects.includes(subject)
+        const teacherStudentCommonSubjects = teacher.subjects.filter((subject: string) =>
+          studentSubjects.includes(subject)
         )
-        
 
-        
         if (teacherStudentCommonSubjects.length === 0) {
           console.warn('警告：选择的教师与学生没有共同科目，这不应该发生！')
           showWarningMessage('该教师暂时无法教授您的科目，请选择其他教师')
           setSelectedTeacher('')
           return
         }
-        
+
         // 如果只有一个共同科目，自动选择
         if (teacherStudentCommonSubjects.length === 1) {
           setSelectedSubject(teacherStudentCommonSubjects[0])
-
         }
         // 如果有多个科目，保持为空让用户选择
       }
@@ -292,16 +302,16 @@ export default function StudentBookingCalendar({
     if (slot.status !== 'available') {
       return
     }
-    
+
     // 将ISO时间字符串转换为dayjs对象
     const dayjs = require('dayjs')
     const scheduledTime = dayjs(slot.startTime)
-    
+
     form.setFieldsValue({
       teacherId: selectedTeacher,
       subject: selectedSubject,
       scheduledTime: scheduledTime,
-      durationMinutes: 30  // 固定为30分钟
+      durationMinutes: 30, // 固定为30分钟
     })
     setBookingModalVisible(true)
   }
@@ -312,7 +322,7 @@ export default function StudentBookingCalendar({
     try {
       setBookingSubmitting(true)
       setLoading(true)
-      
+
       const token = localStorage.getItem('accessToken')
       if (!token) {
         showErrorMessage('请先登录')
@@ -335,18 +345,17 @@ export default function StudentBookingCalendar({
         teacherId: values.teacherId,
         subject: values.subject,
         scheduledTime: scheduledTime,
-        durationMinutes: 30,  // 固定为30分钟，与时间槽保持一致
-        idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`  // 添加幂等性键
+        durationMinutes: 30, // 固定为30分钟，与时间槽保持一致
+        idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`, // 添加幂等性键
       }
 
-
-  const response = await fetch('/api/appointments', {
+      const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(appointmentData)
+        body: JSON.stringify(appointmentData),
       })
 
       if (response.ok) {
@@ -355,7 +364,7 @@ export default function StudentBookingCalendar({
         setBookingModalVisible(false)
         form.resetFields()
         onBookingSuccess?.()
-        
+
         // 延迟跳转，让用户看到成功消息
         setTimeout(() => {
           router.push('/dashboard/my-appointments')
@@ -414,7 +423,7 @@ export default function StudentBookingCalendar({
         </Card>
       )
     }
-    
+
     if (!filteredTeachers.length) {
       return (
         <Card title="暂无可选老师">
@@ -423,12 +432,10 @@ export default function StudentBookingCalendar({
               <UserOutlined style={{ fontSize: '48px' }} />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">暂无可选老师，请稍后</h3>
-            <p className="text-gray-500 mb-4">
-              您已注册的科目：{studentSubjects.join(', ')}
-            </p>
+            <p className="text-gray-500 mb-4">您已注册的科目：{studentSubjects.join(', ')}</p>
             <p className="text-gray-500">教师们可能正在更新课程安排，请稍后再试</p>
             <div className="mt-6">
-              <button 
+              <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               >
@@ -439,7 +446,7 @@ export default function StudentBookingCalendar({
         </Card>
       )
     }
-    
+
     return null
   }
 
@@ -447,7 +454,7 @@ export default function StudentBookingCalendar({
     <div className="space-y-6">
       {/* 用户提示信息 */}
       {renderUserInfo()}
-      
+
       {/* 选择器 */}
       {!initialLoading && studentSubjects.length > 0 && filteredTeachers.length > 0 && (
         <Card title="选择教师和科目">
@@ -463,11 +470,12 @@ export default function StudentBookingCalendar({
                 placeholder="请选择教师"
                 className="w-full"
               >
-                {Array.isArray(filteredTeachers) && filteredTeachers.map(teacher => (
-                  <Option key={teacher.id} value={teacher.id}>
-                    {teacher.name} - {teacher.subjects?.join(', ') || '无科目'}
-                  </Option>
-                ))}
+                {Array.isArray(filteredTeachers) &&
+                  filteredTeachers.map((teacher) => (
+                    <Option key={teacher.id} value={teacher.id}>
+                      {teacher.name} - {teacher.subjects?.join(', ') || '无科目'}
+                    </Option>
+                  ))}
               </Select>
             </div>
 
@@ -479,27 +487,27 @@ export default function StudentBookingCalendar({
               <Select
                 value={selectedSubject}
                 onChange={handleSubjectChange}
-                placeholder={selectedTeacher ? "请选择科目" : "请先选择教师"}
+                placeholder={selectedTeacher ? '请选择科目' : '请先选择教师'}
                 className="w-full"
                 disabled={!selectedTeacher}
               >
-                {selectedTeacher && Array.isArray(availableSubjects) && 
+                {selectedTeacher &&
+                  Array.isArray(availableSubjects) &&
                   (() => {
-                    const teacher = filteredTeachers.find(t => t.id === selectedTeacher)
+                    const teacher = filteredTeachers.find((t) => t.id === selectedTeacher)
                     if (!teacher || !teacher.subjects) return []
-                    
+
                     // 只显示教师能教授且学生已注册的科目
-                    const commonSubjects = teacher.subjects.filter(
-                      (subject: string) => studentSubjects.includes(subject)
+                    const commonSubjects = teacher.subjects.filter((subject: string) =>
+                      studentSubjects.includes(subject)
                     )
-                    
+
                     return commonSubjects.map((subject: string) => (
                       <Option key={subject} value={subject}>
                         {subject}
                       </Option>
                     ))
-                  })()
-                }
+                  })()}
               </Select>
             </div>
 
@@ -525,14 +533,12 @@ export default function StudentBookingCalendar({
 
       {/* 可用时间列表 */}
       {!initialLoading && selectedDate && selectedTeacher && selectedSubject && (
-        <Card 
+        <Card
           title={
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <CalendarOutlined className="text-blue-600" />
-                <span className="text-lg font-semibold text-gray-900">
-                  {selectedDate} 可用时间
-                </span>
+                <span className="text-lg font-semibold text-gray-900">{selectedDate} 可用时间</span>
               </div>
               <div>
                 <Button onClick={() => fetchTimeSlots()} size="small">
@@ -553,35 +559,38 @@ export default function StudentBookingCalendar({
             </div>
           ) : timeSlots.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {Array.isArray(timeSlots) && timeSlots.map(slot => (
-                <Button
-                  key={slot.id}
-                  type={slot.status === 'available' ? 'default' : 'dashed'}
-                  disabled={slot.status !== 'available'}
-                  className={`h-20 w-full text-sm transition-all duration-200 shadow-sm ${
-                    slot.status === 'available' 
-                      ? 'bg-white hover:bg-blue-50 hover:border-blue-300 border-gray-200' 
-                      : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
-                  }`}
-                  onClick={() => handleSlotClick(slot)}
-                >
-                  <div className="flex flex-col items-center justify-center h-full space-y-1">
-                    <div className="text-center">
-                      <div className={`font-semibold text-base leading-tight `}>
-                        {new Date(slot.startTime).toLocaleTimeString('zh-CN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
+              {Array.isArray(timeSlots) &&
+                timeSlots.map((slot) => (
+                  <Button
+                    key={slot.id}
+                    type={slot.status === 'available' ? 'default' : 'dashed'}
+                    disabled={slot.status !== 'available'}
+                    className={`h-20 w-full text-sm transition-all duration-200 shadow-sm ${
+                      slot.status === 'available'
+                        ? 'bg-white hover:bg-blue-50 hover:border-blue-300 border-gray-200'
+                        : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
+                    }`}
+                    onClick={() => handleSlotClick(slot)}
+                  >
+                    <div className="flex flex-col items-center justify-center h-full space-y-1">
+                      <div className="text-center">
+                        <div className={`font-semibold text-base leading-tight `}>
+                          {new Date(slot.startTime).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                          })}
+                        </div>
+                        <span className={`text-xs font-medium mt-1 `}>
+                          {slot.status === 'available' ? '可预约' : '不可预约'}
+                        </span>
+                        <div className="text-[10px] text-gray-400 mt-1">
+                          UTC {new Date(slot.startTime).toISOString().slice(11, 16)}
+                        </div>
                       </div>
-                      <span className={`text-xs font-medium mt-1 `}>
-                        {slot.status === 'available' ? '可预约' : '不可预约'}
-                      </span>
-                      <div className="text-[10px] text-gray-400 mt-1">UTC {new Date(slot.startTime).toISOString().slice(11,16)}</div>
                     </div>
-                  </div>
-                </Button>
-              ))}
+                  </Button>
+                ))}
             </div>
           ) : (
             <div className="text-center py-12">
@@ -608,22 +617,19 @@ export default function StudentBookingCalendar({
         footer={null}
         width={500}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleBooking}
-        >
+        <Form form={form} layout="vertical" onFinish={handleBooking}>
           <Form.Item
             name="teacherId"
             label="教师"
             rules={[{ required: true, message: '请选择教师' }]}
           >
             <Select placeholder="请选择教师">
-              {Array.isArray(filteredTeachers) && filteredTeachers.map(teacher => (
-                <Option key={teacher.id} value={teacher.id}>
-                  {teacher.name}
-                </Option>
-              ))}
+              {Array.isArray(filteredTeachers) &&
+                filteredTeachers.map((teacher) => (
+                  <Option key={teacher.id} value={teacher.id}>
+                    {teacher.name}
+                  </Option>
+                ))}
             </Select>
           </Form.Item>
 
@@ -633,11 +639,12 @@ export default function StudentBookingCalendar({
             rules={[{ required: true, message: '请选择科目' }]}
           >
             <Select placeholder="请选择科目">
-              {Array.isArray(availableSubjects) && availableSubjects.map(subject => (
-                <Option key={subject} value={subject}>
-                  {subject}
-                </Option>
-              ))}
+              {Array.isArray(availableSubjects) &&
+                availableSubjects.map((subject) => (
+                  <Option key={subject} value={subject}>
+                    {subject}
+                  </Option>
+                ))}
             </Select>
           </Form.Item>
 
@@ -657,11 +664,7 @@ export default function StudentBookingCalendar({
             />
           </Form.Item>
 
-          <Form.Item
-            name="durationMinutes"
-            label="预约时长"
-            initialValue={30}
-          >
+          <Form.Item name="durationMinutes" label="预约时长" initialValue={30}>
             <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded text-gray-700">
               30分钟（固定时长）
             </div>
@@ -672,7 +675,12 @@ export default function StudentBookingCalendar({
               <Button onClick={() => setBookingModalVisible(false)} disabled={bookingSubmitting}>
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" loading={bookingSubmitting} disabled={bookingSubmitting}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={bookingSubmitting}
+                disabled={bookingSubmitting}
+              >
                 确认预约
               </Button>
             </div>

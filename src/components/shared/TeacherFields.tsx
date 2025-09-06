@@ -19,11 +19,24 @@ export default function TeacherFields({
   bufferMinutes,
   onSubjectsChange,
   onMaxDailyMeetingsChange,
-  onBufferMinutesChange
+  onBufferMinutesChange,
 }: TeacherFieldsProps) {
   const availableSubjects = [
-    '数学', '物理', '化学', '生物', '语文', '英语', '历史', '地理', 
-    '政治', '计算机科学', '经济学', '心理学', '艺术', '音乐', '体育'
+    '数学',
+    '物理',
+    '化学',
+    '生物',
+    '语文',
+    '英语',
+    '历史',
+    '地理',
+    '政治',
+    '计算机科学',
+    '经济学',
+    '心理学',
+    '艺术',
+    '音乐',
+    '体育',
   ]
 
   return (
@@ -38,7 +51,7 @@ export default function TeacherFields({
           placeholder="请选择教授的科目"
           size="large"
           className="w-full"
-          options={availableSubjects.map(subject => ({ label: subject, value: subject }))}
+          options={availableSubjects.map((subject) => ({ label: subject, value: subject }))}
         />
       </div>
 
@@ -68,9 +81,7 @@ export default function TeacherFields({
           className="w-full"
           placeholder="请输入缓冲时间"
         />
-        <p className="text-xs text-gray-500 mt-1">
-          预约之间的缓冲时间，避免时间冲突
-        </p>
+        <p className="text-xs text-gray-500 mt-1">预约之间的缓冲时间，避免时间冲突</p>
       </div>
     </div>
   )

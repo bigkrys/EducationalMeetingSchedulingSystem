@@ -1,13 +1,10 @@
 # 教育调度系统设计说明
 
 > 注：我之所以选择该项目进行实践，是我本科毕业设计项目做的“选课系统的设计与实践”，两者在设计思想上有可复用的环节，下面先详细说明本系统的功能设计。
-> 
-
 
 # 一、 业务功能说明
 
 > 该系统是给学校使用的平台。学生在平台选择老师和预约该老师的辅导，老师在平台设置自己的可预约时间段并对学生预约进行审批；系统根据不同的“服务级别”自动/人工批准，限制每月次数，并避免冲突。
-> 
 
 ## 1.1 角色与权限
 
@@ -25,21 +22,21 @@
 
 ## 1.3 功能清单与说明
 
-| 角色 | 功能 | 说明 | 关键规则 |
-| --- | --- | --- | --- |
-| 学生 | 搜索教师可用槽位 | 根据教师与日期返回可预约开始时间列表 | 遵守 availability、blocked、appointments、buffer，不超 maxDailyMeetings |
-| 学生 | 创建预约 | 学生选择槽位创建预约 | 科目匹配、服务级别路由、槽位占用检查、幂等 |
-| 学生 | 取消预约 | 在允许的时限内取消（例如会议开始前≥2h，可配置） | 已完成/已过期不可取消；写审计 |
-| 学生 | 预约改期 | 取决于是否支持“移动”预约；默认实现为“取消+新建” | 改期需重过冲突与配额校验 |
-| 学生 | 查看我的预约 | 按状态/时间范围分页查询 | 默认升序 |
-| 教师 | 维护每周可用性 | 设置/更新 dayOfWeek + start/end | 同一天可多个区间 |
-| 教师 | 维护阻塞时间 | 记录一段不可预约时间（上课/开会等） | 与预约冲突时提示风险 |
-| 教师 | 审批/拒绝预约 | 对所有pending 执行 approve/cancel | 记录原因、时间；通知 |
-| 管理 | 服务级别策略 | 配额阈值、超时阈值、提醒策略等参数化 | 可后续抽象为策略表 |
-| 系统 | 48h 待审批过期 | 定时扫描 pending 超时→expired | 发送过期通知 |
-| 系统 | 月初配额重置 | 每月1日重置 Level1/2 配额计数 | 更新时间戳 |
-| 系统 | 提醒通知 | T-24h / T-1h 提醒学生&教师 | 队列/定时触发 |
-| 系统 | 候补队列 | 若热门时段被占，可加入候补；释放时自动顶替 | 顶替后通知双方 |
+| 角色 | 功能             | 说明                                            | 关键规则                                                                |
+| ---- | ---------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
+| 学生 | 搜索教师可用槽位 | 根据教师与日期返回可预约开始时间列表            | 遵守 availability、blocked、appointments、buffer，不超 maxDailyMeetings |
+| 学生 | 创建预约         | 学生选择槽位创建预约                            | 科目匹配、服务级别路由、槽位占用检查、幂等                              |
+| 学生 | 取消预约         | 在允许的时限内取消（例如会议开始前≥2h，可配置） | 已完成/已过期不可取消；写审计                                           |
+| 学生 | 预约改期         | 取决于是否支持“移动”预约；默认实现为“取消+新建” | 改期需重过冲突与配额校验                                                |
+| 学生 | 查看我的预约     | 按状态/时间范围分页查询                         | 默认升序                                                                |
+| 教师 | 维护每周可用性   | 设置/更新 dayOfWeek + start/end                 | 同一天可多个区间                                                        |
+| 教师 | 维护阻塞时间     | 记录一段不可预约时间（上课/开会等）             | 与预约冲突时提示风险                                                    |
+| 教师 | 审批/拒绝预约    | 对所有pending 执行 approve/cancel               | 记录原因、时间；通知                                                    |
+| 管理 | 服务级别策略     | 配额阈值、超时阈值、提醒策略等参数化            | 可后续抽象为策略表                                                      |
+| 系统 | 48h 待审批过期   | 定时扫描 pending 超时→expired                   | 发送过期通知                                                            |
+| 系统 | 月初配额重置     | 每月1日重置 Level1/2 配额计数                   | 更新时间戳                                                              |
+| 系统 | 提醒通知         | T-24h / T-1h 提醒学生&教师                      | 队列/定时触发                                                           |
+| 系统 | 候补队列         | 若热门时段被占，可加入候补；释放时自动顶替      | 顶替后通知双方                                                          |
 
 # 二、系统整体设计与架构
 
@@ -204,13 +201,13 @@ AUTH-->>W: 204 No Content
 
 1. 前端收集 `teacherId/date/duration` 调用 API。
 2. 服务器先查缓存；未命中则：
-    - 读教师当日 `availability`；
-    - 读当日 `appointments(status in [pending,approved])`；
-    - 读 `blocked_times`；
-    - 读取 `bufferMinutes/maxDailyMeetings`；
-    - 逐槽位切片并做**区间重叠 + 缓冲**检测；
-    - 可按 `maxDailyMeetings` 截断；
-    - 写入短期缓存返回。
+   - 读教师当日 `availability`；
+   - 读当日 `appointments(status in [pending,approved])`；
+   - 读 `blocked_times`；
+   - 读取 `bufferMinutes/maxDailyMeetings`；
+   - 逐槽位切片并做**区间重叠 + 缓冲**检测；
+   - 可按 `maxDailyMeetings` 截断；
+   - 写入短期缓存返回。
 3. 响应 `slots[]`（UTC），前端按用户时区渲染。
 
 ```mermaid
@@ -244,9 +241,9 @@ A-->>W: slots[] (ISO8601 UTC)
 1. 校验主体：学生/教师存在、`subject` 同时包含于 `student.enrolledSubjects` 与 `teacher.subjects`。
 2. **槽位可用性**：可直接重跑 `generateAvailableSlots()` 并校验 `scheduledTime` 在返回集内（规避并发）。
 3. **服务级别路由**：
-    - Level1：若 `monthlyMeetingsUsed < 2` → `approved`，并在事务内 +1；否则 `pending`；
-    - Level2：`pending`；
-    - Premium：`approved`（可选：抢占低优先级 `pending`）。
+   - Level1：若 `monthlyMeetingsUsed < 2` → `approved`，并在事务内 +1；否则 `pending`；
+   - Level2：`pending`；
+   - Premium：`approved`（可选：抢占低优先级 `pending`）。
 4. **幂等**：使用 `idempotencyKey` 唯一键；重复提交返回已创建记录。
 5. **缓存失效**：删除相关 `slots:{tid}:{date}:{duration}`。
 6. **通知**：根据结果发送邮件（已批核/等待审批）。
@@ -478,6 +475,7 @@ A->>E: 发送过期通知（学生+教师）
 ```
 
 ## 3.12 系统｜月初配额重置
+
 **实现说明（与代码一致）**：
 
 - 路由：`POST /api/jobs/reset-quota`（实现文件：`src/app/api/jobs/reset-quota/route.ts`）。
@@ -509,9 +507,7 @@ D-->>A: 返回影响行数
 
 ```json
 {
-  "crons": [
-    { "path": "/api/jobs/reset-quota", "schedule": "5 0 1 * *" }
-  ]
+  "crons": [{ "path": "/api/jobs/reset-quota", "schedule": "5 0 1 * *" }]
 }
 ```
 
@@ -545,7 +541,7 @@ LIMIT 5;
 - 帮你把 `vercel.json` 中的 Cron 片段加入仓库（示例，不会包含 secret），或
 - 把 README 中的该段落改为说明你已经在 `vercel.json` 中添加了 Cron（当前已完成）。
 
-```
+````
 
 ## 3.13 系统｜提醒通知
 
@@ -566,7 +562,7 @@ participant E as Email
 Q->>A: 触发 remind-24h / remind-1h
 A->>D: 查 approved 且 scheduledTime in 窗口
 A->>E: 批量发送提醒（含取消链接）
-```
+````
 
 ## 3.14 系统｜候补队列
 
@@ -598,127 +594,126 @@ A->>E: 通知候补成功/保留时长
 
 ## 4.1 users（统一身份表）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK | 统一用户 ID |
-| email | VARCHAR(255) | UNIQUE, NOT NULL | 登录邮箱 |
-| password_hash | VARCHAR(255) | NOT NULL | 密码哈希（Argon2id / bcrypt≥10） |
-| role | ENUM('student','teacher','admin') | NOT NULL | 默认角色（登录后授权用） |
-| status | ENUM('pending','active','frozen') | NOT NULL DEFAULT 'pending' | 账户状态 |
-| last_login_at | TIMESTAMPTZ |  | 最近登录时间 |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
-| updated_at | TIMESTAMPTZ | DEFAULT NOW() |  |
-|  |  |  |  |
+| 字段名        | 类型                              | 约束                       | 说明                             |
+| ------------- | --------------------------------- | -------------------------- | -------------------------------- |
+| id            | UUID                              | PK                         | 统一用户 ID                      |
+| email         | VARCHAR(255)                      | UNIQUE, NOT NULL           | 登录邮箱                         |
+| password_hash | VARCHAR(255)                      | NOT NULL                   | 密码哈希（Argon2id / bcrypt≥10） |
+| role          | ENUM('student','teacher','admin') | NOT NULL                   | 默认角色（登录后授权用）         |
+| status        | ENUM('pending','active','frozen') | NOT NULL DEFAULT 'pending' | 账户状态                         |
+| last_login_at | TIMESTAMPTZ                       |                            | 最近登录时间                     |
+| created_at    | TIMESTAMPTZ                       | DEFAULT NOW()              |                                  |
+| updated_at    | TIMESTAMPTZ                       | DEFAULT NOW()              |                                  |
+|               |                                   |                            |                                  |
 
 ## 4.2 students（学生扩展表）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| user_id | UUID | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定 |
-| service_level | ENUM('level1','level2','premium') | NOT NULL | 服务级别 |
-| monthly_meetings_used | INT | DEFAULT 0 | 当月已用配额 |
-| last_quota_reset | DATE | DEFAULT CURRENT_DATE | 上次配额重置日期 |
-| enrolled_subjects | TEXT[] |  | 已选科目 |
-| grade_level | INT |  | 年级 |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
+| 字段名                | 类型                              | 约束                             | 说明              |
+| --------------------- | --------------------------------- | -------------------------------- | ----------------- |
+| id                    | UUID                              | PK                               |                   |
+| user_id               | UUID                              | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定 |
+| service_level         | ENUM('level1','level2','premium') | NOT NULL                         | 服务级别          |
+| monthly_meetings_used | INT                               | DEFAULT 0                        | 当月已用配额      |
+| last_quota_reset      | DATE                              | DEFAULT CURRENT_DATE             | 上次配额重置日期  |
+| enrolled_subjects     | TEXT[]                            |                                  | 已选科目          |
+| grade_level           | INT                               |                                  | 年级              |
+| created_at            | TIMESTAMPTZ                       | DEFAULT NOW()                    |                   |
 
 ## 4.3 teachers（教师表）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| user_id | UUID | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定 |
-| subjects | TEXT[] |  | 授课科目（未来可拆为字典表+关联表） |
-| max_daily_meetings | INT | DEFAULT 6 | 每日上限 |
-| buffer_minutes | INT | DEFAULT 15 | 会议缓冲分钟 |
-| timezone | VARCHAR(64) | NOT NULL DEFAULT 'Asia/Shanghai' | 教师所在时区 |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
+| 字段名             | 类型        | 约束                             | 说明                                |
+| ------------------ | ----------- | -------------------------------- | ----------------------------------- |
+| id                 | UUID        | PK                               |                                     |
+| user_id            | UUID        | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定                   |
+| subjects           | TEXT[]      |                                  | 授课科目（未来可拆为字典表+关联表） |
+| max_daily_meetings | INT         | DEFAULT 6                        | 每日上限                            |
+| buffer_minutes     | INT         | DEFAULT 15                       | 会议缓冲分钟                        |
+| timezone           | VARCHAR(64) | NOT NULL DEFAULT 'Asia/Shanghai' | 教师所在时区                        |
+| created_at         | TIMESTAMPTZ | DEFAULT NOW()                    |                                     |
 
 ## 4.4 admins（管理员表）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| user_id | UUID | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定 |
-| scope | JSONB |  | 管理范围（学院/院系/年级） |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
+| 字段名     | 类型        | 约束                             | 说明                       |
+| ---------- | ----------- | -------------------------------- | -------------------------- |
+| id         | UUID        | PK                               |                            |
+| user_id    | UUID        | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定          |
+| scope      | JSONB       |                                  | 管理范围（学院/院系/年级） |
+| created_at | TIMESTAMPTZ | DEFAULT NOW()                    |                            |
 
 ## 4.5 teacher_availability（教师可用性）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| teacher_id | UUID | FK → teachers(id), NOT NULL | 教师 |
-| day_of_week | INT | 0–6 | 周日=0 |
-| start_time | TIME | NOT NULL |  |
-| end_time | TIME | NOT NULL |  |
-| is_recurring | BOOLEAN | DEFAULT true | 是否每周重复 |
+| 字段名       | 类型    | 约束                        | 说明         |
+| ------------ | ------- | --------------------------- | ------------ |
+| id           | UUID    | PK                          |              |
+| teacher_id   | UUID    | FK → teachers(id), NOT NULL | 教师         |
+| day_of_week  | INT     | 0–6                         | 周日=0       |
+| start_time   | TIME    | NOT NULL                    |              |
+| end_time     | TIME    | NOT NULL                    |              |
+| is_recurring | BOOLEAN | DEFAULT true                | 是否每周重复 |
 
 ## 4.6 blocked_times（阻塞时段）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| teacher_id | UUID | FK → teachers(id) | 教师 |
-| start_time | TIMESTAMPTZ | NOT NULL |  |
-| end_time | TIMESTAMPTZ | NOT NULL |  |
-| reason | VARCHAR(255) |  | 原因 |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
+| 字段名     | 类型         | 约束              | 说明 |
+| ---------- | ------------ | ----------------- | ---- |
+| id         | UUID         | PK                |      |
+| teacher_id | UUID         | FK → teachers(id) | 教师 |
+| start_time | TIMESTAMPTZ  | NOT NULL          |      |
+| end_time   | TIMESTAMPTZ  | NOT NULL          |      |
+| reason     | VARCHAR(255) |                   | 原因 |
+| created_at | TIMESTAMPTZ  | DEFAULT NOW()     |      |
 
 ## 4.7 appointments（预约表）
 
-| 字段名 | 类型 | 约束 | 说明 |
-| --- | --- | --- | --- |
-| id | UUID | PK |  |
-| student_id | UUID | FK → students(id) | 学生 |
-| teacher_id | UUID | FK → teachers(id) | 教师 |
-| subject | VARCHAR(100) | NOT NULL | 科目 |
-| scheduled_time | TIMESTAMPTZ | NOT NULL | 开始时间（UTC） |
-| duration_minutes | INT | DEFAULT 30 | 时长（分钟） |
-| status | ENUM('pending','approved','completed','cancelled','no_show','expired') | NOT NULL | 统一状态枚举 |
-| approval_required | BOOLEAN | NOT NULL | 是否需审批 |
-| approved_at | TIMESTAMPTZ |  | 审批时间 |
-| idempotency_key | VARCHAR(128) | UNIQUE | 幂等键 |
-| created_at | TIMESTAMPTZ | DEFAULT NOW() |  |
-| time_range | TSTZRANGE | 生成列：`tstzrange(scheduled_time, scheduled_time + duration_minutes * interval '1 minute')` |  |
-| 约束 | EXCLUDE USING GIST (teacher_id WITH =, time_range WITH &&) | 防止时间重叠 |  |
+| 字段名            | 类型                                                                   | 约束                                                                                         | 说明            |
+| ----------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------- |
+| id                | UUID                                                                   | PK                                                                                           |                 |
+| student_id        | UUID                                                                   | FK → students(id)                                                                            | 学生            |
+| teacher_id        | UUID                                                                   | FK → teachers(id)                                                                            | 教师            |
+| subject           | VARCHAR(100)                                                           | NOT NULL                                                                                     | 科目            |
+| scheduled_time    | TIMESTAMPTZ                                                            | NOT NULL                                                                                     | 开始时间（UTC） |
+| duration_minutes  | INT                                                                    | DEFAULT 30                                                                                   | 时长（分钟）    |
+| status            | ENUM('pending','approved','completed','cancelled','no_show','expired') | NOT NULL                                                                                     | 统一状态枚举    |
+| approval_required | BOOLEAN                                                                | NOT NULL                                                                                     | 是否需审批      |
+| approved_at       | TIMESTAMPTZ                                                            |                                                                                              | 审批时间        |
+| idempotency_key   | VARCHAR(128)                                                           | UNIQUE                                                                                       | 幂等键          |
+| created_at        | TIMESTAMPTZ                                                            | DEFAULT NOW()                                                                                |                 |
+| time_range        | TSTZRANGE                                                              | 生成列：`tstzrange(scheduled_time, scheduled_time + duration_minutes * interval '1 minute')` |                 |
+| 约束              | EXCLUDE USING GIST (teacher_id WITH =, time_range WITH &&)             | 防止时间重叠                                                                                 |                 |
 
-## 4.8  服务级别策略表（service_policies）
+## 4.8 服务级别策略表（service_policies）
 
-| 字段名 | 类型 | 描述 |
-| --- | --- | --- |
-| policy_id | UUID | 策略 ID |
-| level | Enum | 服务级别 |
-| max_daily | Int | 每日最大预约数（当 `teacher.max_daily_meetings` 存在时**优先生效**） |
-| expire_hours | Int | 待审批过期时长（小时） |
-| reminder | Boolean | 是否开启提醒 |
+| 字段名       | 类型    | 描述                                                                 |
+| ------------ | ------- | -------------------------------------------------------------------- |
+| policy_id    | UUID    | 策略 ID                                                              |
+| level        | Enum    | 服务级别                                                             |
+| max_daily    | Int     | 每日最大预约数（当 `teacher.max_daily_meetings` 存在时**优先生效**） |
+| expire_hours | Int     | 待审批过期时长（小时）                                               |
+| reminder     | Boolean | 是否开启提醒                                                         |
 
 ## 4.9 审计日志表（audit_logs）
 
-| 字段名 | 类型 | 描述 |
-| --- | --- | --- |
-| log_id | UUID | 日志 ID |
-| actor_id | UUID | 操作者 ID |
-| action | String | 动作名称 |
-| target_id | UUID | 目标对象 ID |
-| created_at | DateTime | 操作时间 |
+| 字段名     | 类型     | 描述        |
+| ---------- | -------- | ----------- |
+| log_id     | UUID     | 日志 ID     |
+| actor_id   | UUID     | 操作者 ID   |
+| action     | String   | 动作名称    |
+| target_id  | UUID     | 目标对象 ID |
+| created_at | DateTime | 操作时间    |
 
 # 五、接口设计
 
-## 5.1  学生端接口（Student APIs）
+## 5.1 学生端接口（Student APIs）
 
 > 鉴权：Bearer JWT（role=student）。时区：所有时间字段均为 ISO8601 UTC。
-> 
 
 ### 5.1.1 查询教师可用槽位
 
 - **GET** `/api/slots?teacherId={id}&date=YYYY-MM-DD&duration=30`
 - **说明**：`date` 参数**按教师时区**解释，后端换算为 UTC 存储与计算。
 - **请求参数**：
-    - `teacherId` *(required)*：教师 ID
-    - `date` *(required)*：日期
-    - `duration` *(optional, default=30)*：会议时长（分钟）
+  - `teacherId` _(required)_：教师 ID
+  - `date` _(required)_：日期
+  - `duration` _(optional, default=30)_：会议时长（分钟）
 - **响应 200**：
 
 ```json
@@ -752,10 +747,10 @@ A->>E: 通知候补成功/保留时长
 - **响应 201**：
 
 ```json
-{ 
-"id": "a_456", 
-"status": "approved", 
-"approvalRequired": false 
+{
+  "id": "a_456",
+  "status": "approved",
+  "approvalRequired": false
 }
 ```
 
@@ -774,16 +769,15 @@ A->>E: 通知候补成功/保留时长
 - **响应 200**：
 
 ```json
-{ 
-"items": 
-[
-	{
-		"id":"a_1",
-		"scheduledTime":"...",
-		"status":"approved"
-		}
-	], 
-"nextCursor": "eyJpZCI6..." 
+{
+  "items": [
+    {
+      "id": "a_1",
+      "scheduledTime": "...",
+      "status": "approved"
+    }
+  ],
+  "nextCursor": "eyJpZCI6..."
 }
 ```
 
@@ -797,7 +791,6 @@ A->>E: 通知候补成功/保留时长
 ## 5.2 教师端接口（Teacher APIs）
 
 > 鉴权：Bearer JWT（role=teacher）。仅能操作自己的资源。
-> 
 
 ### 5.2.1 维护每周可用性
 
@@ -806,12 +799,12 @@ A->>E: 通知候补成功/保留时长
 - **POST 请求体**：
 
 ```json
-{ 
-"dayOfWeek": 1,
- "startTime": "09:00", 
- "endTime": "12:00", 
- "isRecurring": true 
- }
+{
+  "dayOfWeek": 1,
+  "startTime": "09:00",
+  "endTime": "12:00",
+  "isRecurring": true
+}
 ```
 
 - **响应 200**：`{ "ok": true }`
@@ -823,11 +816,11 @@ A->>E: 通知候补成功/保留时长
 
 ```json
 {
- "teacherId": "t_123", 
- "startTime": "2025-08-22T02:00:00Z", 
- "endTime": "2025-08-22T04:00:00Z", 
- "reason": "Dept meeting" 
- }
+  "teacherId": "t_123",
+  "startTime": "2025-08-22T02:00:00Z",
+  "endTime": "2025-08-22T04:00:00Z",
+  "reason": "Dept meeting"
+}
 ```
 
 - **响应 200**：`{ "ok": true }`
@@ -848,7 +841,6 @@ A->>E: 通知候补成功/保留时长
 ## 5.3 系统与管理接口（System & Admin APIs）
 
 > 鉴权：Bearer JWT（role=admin 或后台任务令牌）。
-> 
 
 ### 5.3.1 服务级别策略（可选）
 
@@ -857,20 +849,17 @@ A->>E: 通知候补成功/保留时长
 
 ```json
 {
-    "level1": {
-        "monthlyAutoApprove": 2
-    },
-    "level2": {
-        "monthlyAutoApprove": 0
-    },
-    "premium": {
-        "priority": true
-    },
-    "expireHours": 48,
-    "remindOffsets": [
-        24,
-        1
-    ]
+  "level1": {
+    "monthlyAutoApprove": 2
+  },
+  "level2": {
+    "monthlyAutoApprove": 0
+  },
+  "premium": {
+    "priority": true
+  },
+  "expireHours": 48,
+  "remindOffsets": [24, 1]
 }
 ```
 
@@ -892,42 +881,39 @@ A->>E: 通知候补成功/保留时长
 
 ```json
 {
-    "ok": true,
-    "time": "..."
+  "ok": true,
+  "time": "..."
 }
 ```
 
 ### 5.3.5 候补队列
 
 - **POST** `/api/waitlist`
-    
-    请求体：
-    
-    ```json
-    {
-        "teacherId": "t_1",
-        "date": "2025-08-22",
-        "slot": "2025-08-22T01:00:00Z",
-        "studentId": "s_1"
-    }
-    ```
-    
+  请求体：
+  ```json
+  {
+    "teacherId": "t_1",
+    "date": "2025-08-22",
+    "slot": "2025-08-22T01:00:00Z",
+    "studentId": "s_1"
+  }
+  ```
 - **POST** `/api/waitlist/promote` （系统内部，当槽位释放时触发）
 
 # 六、系统安全
 
 - **认证与会话**
-    - Access Token (JWT, 15m) + Refresh Token (30d, 可轮换)，存放 HttpOnly+Secure Cookie。
-    - 修改密码/重置密码时吊销全部 Refresh。
+  - Access Token (JWT, 15m) + Refresh Token (30d, 可轮换)，存放 HttpOnly+Secure Cookie。
+  - 修改密码/重置密码时吊销全部 Refresh。
 - **密码策略**
-    - 最少 8 位，含字母与数字。
+  - 最少 8 位，含字母与数字。
 - **防暴力与限流**
-    - 登录与重置接口：Redis 滑动窗口限速，失败 N 次锁定账户。
+  - 登录与重置接口：Redis 滑动窗口限速，失败 N 次锁定账户。
 - **邮件安全**
-    - 所有邮件 Token 仅保存哈希，单次使用，短期有效。
+  - 所有邮件 Token 仅保存哈希，单次使用，短期有效。
 - **审计与RBAC**
-    - 所有敏感操作写 `audit_logs`。
-    - 严格基于 `role + scope` 做 API 权限校验。
+  - 所有敏感操作写 `audit_logs`。
+  - 严格基于 `role + scope` 做 API 权限校验。
 
 ---
 
@@ -936,6 +922,7 @@ A->>E: 通知候补成功/保留时长
 ## 7.1 本地开发环境
 
 ### 快速开始
+
 ```bash
 # 克隆项目
 git clone https://github.com/bigkrys/EducationalMeetingSchedulingSystem.git
@@ -956,11 +943,13 @@ pnpm dev
 ```
 
 ### 环境要求
+
 - **Node.js**: 18.x+
 - **pnpm**: 8.x+
 - **数据库**: SQLite (开发) 或 PostgreSQL (生产)
 
 ### 详细文档
+
 - 📚 [本地开发指南](LOCAL_DEVELOPMENT.md) - 完整的本地环境搭建教程
 - 🔑 [密钥生成脚本](scripts/generate-secrets.js) - 自动生成安全密钥
 - 🚀 [部署指南](DEPLOYMENT.md) - Vercel部署详细步骤
@@ -968,6 +957,7 @@ pnpm dev
 ## 7.2 生产环境部署
 
 ### Vercel部署（推荐）
+
 ```bash
 # 安装Vercel CLI
 npm i -g vercel
@@ -977,6 +967,7 @@ vercel --prod
 ```
 
 ### 环境变量配置
+
 ```bash
 # 必需环境变量
 DATABASE_URL="postgresql://username:password@host:port/database"
@@ -989,10 +980,12 @@ NEXT_PUBLIC_APP_URL="https://your-project.vercel.app"
 ```
 
 ### 数据库推荐
+
 - **开发**: SQLite (本地文件)
 - **生产**: Supabase 或 Neon (PostgreSQL)
 
 ## 7.3 项目结构
+
 ```
 edu-scheduler/
 ├── src/                    # 源代码
@@ -1013,6 +1006,7 @@ edu-scheduler/
 # 八、贡献指南
 
 ## 8.1 开发流程
+
 1. Fork 项目
 2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
@@ -1020,12 +1014,14 @@ edu-scheduler/
 5. 创建 Pull Request
 
 ## 8.2 代码规范
+
 - 使用 TypeScript 严格模式
 - 遵循 ESLint 规则
 - 编写清晰的注释和文档
 - 添加适当的测试用例
 
 ## 8.3 问题反馈
+
 - 使用 [GitHub Issues](https://github.com/bigkrys/EducationalMeetingSchedulingSystem/issues) 报告问题
 - 提供详细的错误信息和复现步骤
 - 标注问题类型（bug/feature/enhancement）
@@ -1047,7 +1043,6 @@ edu-scheduler/
 ---
 
 # 十一、当前已实现功能如下
-
 
 ✅ 学生登录（JWT 模拟）
 
@@ -1103,8 +1098,6 @@ Premium 学生全部自动批准
 
 48h 超时（通知双方）
 
-
-
 # 十二、 关键算法实现
 
 ## 12.1 生成可用时间段算法
@@ -1119,23 +1112,24 @@ Premium 学生全部自动批准
 async function calculateAvailableSlots(teacher: any, date: string, duration: number) {
   // 1. 获取目标日期的星期几
   const dayOfWeek = getDay(targetDate) // 0 = 周日, 1 = 周一, ...
-  
+
   // 2. 查找该日期的可用时间设置
-  const dayAvailability = teacher.availability.find(avail => avail.dayOfWeek === dayOfWeek)
-  
+  const dayAvailability = teacher.availability.find((avail) => avail.dayOfWeek === dayOfWeek)
+
   // 3. 生成基础时间槽（按 duration 分钟切片）
   const allSlots = generateTimeSlots(dayAvailability.startTime, dayAvailability.endTime, duration)
-  
+
   // 4. 过滤冲突时间槽
   const availableSlots = filterConflictingSlots(allSlots, teacher, targetDate, duration)
-  
-  return availableSlots.map(slot => slot.toISOString())
+
+  return availableSlots.map((slot) => slot.toISOString())
 }
 ```
 
 **关键步骤详解**：
 
 1. **时间槽生成**：
+
    ```typescript
    // 从 startTime 到 endTime，按 duration 分钟间隔生成
    while (currentTime < slotEnd) {
@@ -1157,6 +1151,7 @@ async function calculateAvailableSlots(teacher: any, date: string, duration: num
    ```
 
 **性能优化**：
+
 - 缓存机制：5分钟 TTL 缓存热门查询结果
 - 批量查询：一次性获取所有相关数据
 - 内存过滤：在应用层进行时间冲突计算
@@ -1171,7 +1166,14 @@ async function calculateAvailableSlots(teacher: any, date: string, duration: num
 
 ```typescript
 interface TimeConflict {
-  type: 'exact_match' | 'overlap' | 'contained' | 'contains' | 'blocked_time' | 'appointment' | 'invalid_time'
+  type:
+    | 'exact_match'
+    | 'overlap'
+    | 'contained'
+    | 'contains'
+    | 'blocked_time'
+    | 'appointment'
+    | 'invalid_time'
   message: string
   existingSlot?: TeacherAvailability
   blockedTime?: BlockedTime
@@ -1183,47 +1185,51 @@ interface TimeConflict {
 **冲突检测算法**：
 
 1. **时间重叠分析**（修正后的准确算法）：
+
    ```typescript
    function analyzeTimeOverlap(start1: string, end1: string, start2: string, end2: string) {
-     const s1 = timeToMinutes(start1), e1 = timeToMinutes(end1)
-     const s2 = timeToMinutes(start2), e2 = timeToMinutes(end2)
-     
+     const s1 = timeToMinutes(start1),
+       e1 = timeToMinutes(end1)
+     const s2 = timeToMinutes(start2),
+       e2 = timeToMinutes(end2)
+
      // 没有重叠的情况：
      // 1. 第一个时间段完全在第二个时间段之前 (e1 <= s2)
      // 2. 第二个时间段完全在第一个时间段之前 (e2 <= s1)
      if (e1 <= s2 || e2 <= s1) {
        return { type: 'no_overlap' }
      }
-     
+
      // 完全匹配
      if (s1 === s2 && e1 === e2) {
        return { type: 'exact_match' }
      }
-     
+
      // 包含关系：第一个时间段包含第二个时间段
      if (s1 <= s2 && e1 >= e2) {
        return { type: 'contains' }
      }
-     
+
      // 包含关系：第二个时间段包含第一个时间段
      if (s2 <= s1 && e2 >= e1) {
        return { type: 'contained' }
      }
-     
+
      // 部分重叠：两个时间段有交集但不完全包含
      const overlapStart = Math.max(s1, s2)
      const overlapEnd = Math.min(e1, e2)
      const overlapMinutes = overlapEnd - overlapStart
-     
+
      return {
        type: 'overlap',
        overlap: `${minutesToTime(overlapStart)}-${minutesToTime(overlapEnd)}`,
-       overlapMinutes
+       overlapMinutes,
      }
    }
    ```
 
 2. **星期几逻辑**（关键特性）：
+
    ```typescript
    // 冲突检测仅在同一个星期几内进行
    if (request.specificDate) {
@@ -1233,8 +1239,8 @@ interface TimeConflict {
        where: {
          teacherId,
          dayOfWeek: targetDate.getDay(), // 只查询同一天
-         isActive: true
-       }
+         isActive: true,
+       },
      })
    } else if (request.dayOfWeek !== undefined) {
      // 检查周循环的冲突
@@ -1242,38 +1248,41 @@ interface TimeConflict {
        where: {
          teacherId,
          dayOfWeek: request.dayOfWeek, // 只查询同一个星期几
-         isActive: true
-       }
+         isActive: true,
+       },
      })
    }
    ```
 
 3. **预约冲突检测**（设置可用性时）：
+
    ```typescript
    async function checkAppointmentConflicts(teacherId: string, request: AvailabilityRequest) {
      const appointments = await prisma.appointment.findMany({
        where: {
          teacherId,
-         status: { in: ['pending', 'approved'] }
-       }
+         status: { in: ['pending', 'approved'] },
+       },
      })
-     
+
      // 只检查同一星期几的预约冲突
      for (const appointment of appointments) {
        let shouldCheck = false
-       
+
        if (request.dayOfWeek !== undefined) {
          const appointmentDay = appointment.scheduledTime.getDay()
          shouldCheck = appointmentDay === request.dayOfWeek
        }
-       
+
        if (shouldCheck) {
          // 使用 analyzeTimeOverlap 进行时间重叠分析
          const overlapAnalysis = analyzeTimeOverlap(
-           appointmentStart, appointmentEnd, 
-           request.startTime, request.endTime
+           appointmentStart,
+           appointmentEnd,
+           request.startTime,
+           request.endTime
          )
-         
+
          if (overlapAnalysis.type !== 'no_overlap') {
            // 记录冲突
          }
@@ -1283,25 +1292,28 @@ interface TimeConflict {
    ```
 
 4. **阻塞时间冲突检测**：
+
    ```typescript
    async function checkBlockedTimeConflicts(teacherId: string, request: AvailabilityRequest) {
      const blockedTimes = await prisma.blockedTime.findMany({ where: { teacherId } })
-     
+
      // 检查是否与阻塞时间冲突（按星期几分组）
      for (const blocked of blockedTimes) {
        let shouldCheck = false
-       
+
        if (request.dayOfWeek !== undefined) {
          const blockedDay = blocked.startTime.getDay()
          shouldCheck = blockedDay === request.dayOfWeek
        }
-       
+
        if (shouldCheck) {
          const overlapAnalysis = analyzeTimeOverlap(
-           blockedStart, blockedEnd, 
-           request.startTime, request.endTime
+           blockedStart,
+           blockedEnd,
+           request.startTime,
+           request.endTime
          )
-         
+
          if (overlapAnalysis.type !== 'no_overlap') {
            // 记录冲突
          }
@@ -1315,34 +1327,32 @@ interface TimeConflict {
 ```typescript
 function generateConflictSuggestions(conflicts: TimeConflict[], request: AvailabilityRequest) {
   const suggestions = []
-  
+
   for (const conflict of conflicts) {
     if (conflict.type === 'overlap' && conflict.existingSlot) {
       // 计算合并后的时间段
-      const mergedStart = minutesToTime(Math.min(
-        timeToMinutes(existing.startTime), 
-        timeToMinutes(request.startTime)
-      ))
-      const mergedEnd = minutesToTime(Math.max(
-        timeToMinutes(existing.endTime), 
-        timeToMinutes(request.endTime)
-      ))
-      
+      const mergedStart = minutesToTime(
+        Math.min(timeToMinutes(existing.startTime), timeToMinutes(request.startTime))
+      )
+      const mergedEnd = minutesToTime(
+        Math.max(timeToMinutes(existing.endTime), timeToMinutes(request.endTime))
+      )
+
       suggestions.push({
         action: 'merge',
         description: `合并时间段：将您的时间与现有时间合并`,
         result: `${mergedStart}-${mergedEnd}`,
-        recommendation: '推荐：这样可以最大化您的可用时间，避免时间碎片化'
+        recommendation: '推荐：这样可以最大化您的可用时间，避免时间碎片化',
       })
     } else if (conflict.type === 'exact_match') {
       suggestions.push({
         action: 'update',
         description: `更新现有时间段：修改重复时间段的设置`,
-        recommendation: '您可以更新现有时间段的重复设置或其他属性'
+        recommendation: '您可以更新现有时间段的重复设置或其他属性',
       })
     }
   }
-  
+
   return suggestions.sort((a, b) => (a.priority || 999) - (b.priority || 999))
 }
 ```
@@ -1356,69 +1366,72 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
 **冲突检测流程**：
 
 1. **教师可用性检查**：
+
    ```typescript
    // 检查教师在该日期是否有可用时间
    const dayOfWeek = appointmentDate.getDay()
    const dayAvailability = teacher.availability.find(
-     avail => avail.dayOfWeek === dayOfWeek && avail.isActive
+     (avail) => avail.dayOfWeek === dayOfWeek && avail.isActive
    )
-   
+
    if (!dayAvailability) {
      throw new Error('教师在该日期没有可用时间')
    }
-   
+
    // 检查预约时间是否在可用时间范围内
    const appointmentStart = appointment.scheduledTime.toTimeString().slice(0, 5)
    const appointmentEnd = addMinutes(appointment.scheduledTime, duration).toTimeString().slice(0, 5)
-   
-   if (appointmentStart < dayAvailability.startTime || 
-       appointmentEnd > dayAvailability.endTime) {
+
+   if (appointmentStart < dayAvailability.startTime || appointmentEnd > dayAvailability.endTime) {
      throw new Error('预约时间超出教师的可用时间范围')
    }
    ```
 
 2. **阻塞时间冲突检测**：
+
    ```typescript
    const blockedTimes = await prisma.blockedTime.findMany({
-     where: { teacherId: teacher.id }
+     where: { teacherId: teacher.id },
    })
-   
-   const hasBlockedTimeConflict = blockedTimes.some(blocked => {
+
+   const hasBlockedTimeConflict = blockedTimes.some((blocked) => {
      const blockStart = blocked.startTime
      const blockEnd = blocked.endTime
      const appointmentEnd = addMinutes(appointment.scheduledTime, duration)
-     
+
      // 检查时间重叠
      return appointment.scheduledTime < blockEnd && appointmentEnd > blockStart
    })
    ```
 
 3. **已有预约冲突检测**（包含缓冲时间）：
+
    ```typescript
    const existingAppointments = await prisma.appointment.findMany({
      where: {
        teacherId: teacher.id,
        scheduledTime: {
          gte: startOfDay(appointmentDate),
-         lt: endOfDay(appointmentDate)
+         lt: endOfDay(appointmentDate),
        },
-       status: { in: ['pending', 'approved'] }
-     }
+       status: { in: ['pending', 'approved'] },
+     },
    })
-   
-   const hasConflict = existingAppointments.some(existing => {
+
+   const hasConflict = existingAppointments.some((existing) => {
      const existingEnd = addMinutes(existing.scheduledTime, existing.durationMinutes)
      const appointmentEnd = addMinutes(appointment.scheduledTime, duration)
-     
+
      // 包含缓冲时间的冲突检测
      const bufferStart = addMinutes(appointment.scheduledTime, -teacher.bufferMinutes)
      const bufferEnd = addMinutes(appointmentEnd, teacher.bufferMinutes)
-     
+
      return bufferStart < existingEnd && bufferEnd > existing.scheduledTime
    })
    ```
 
 **边界情况处理**：
+
 - **缓冲时间**：教师设置的 `bufferMinutes` 确保预约间有足够间隔
 - **状态过滤**：只检查 `pending` 和 `approved` 状态的预约
 - **时间精度**：使用毫秒级精度进行时间比较

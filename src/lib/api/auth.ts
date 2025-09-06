@@ -5,7 +5,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<string |
     const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken })
+      body: JSON.stringify({ refreshToken }),
     })
 
     if (response.ok) {
@@ -25,7 +25,7 @@ export function isTokenExpiringSoon(token: string): boolean {
     const expirationTime = decoded.exp * 1000
     const currentTime = Date.now()
     const fiveMinutes = 5 * 60 * 1000
-    return (expirationTime - currentTime) < fiveMinutes
+    return expirationTime - currentTime < fiveMinutes
   } catch (error) {
     return true
   }
@@ -33,7 +33,10 @@ export function isTokenExpiringSoon(token: string): boolean {
 
 export function getStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
   if (typeof window === 'undefined') return { accessToken: null, refreshToken: null }
-  return { accessToken: localStorage.getItem('accessToken'), refreshToken: localStorage.getItem('refreshToken') }
+  return {
+    accessToken: localStorage.getItem('accessToken'),
+    refreshToken: localStorage.getItem('refreshToken'),
+  }
 }
 
 export function storeTokens(accessToken: string, refreshToken: string): void {
@@ -65,13 +68,22 @@ export function getCurrentUserRole(): string | null {
   if (typeof window === 'undefined') return null
   const accessToken = localStorage.getItem('accessToken')
   if (!accessToken) return null
-  try { const decoded = JSON.parse(atob(accessToken.split('.')[1])); return decoded.role } catch { return null }
+  try {
+    const decoded = JSON.parse(atob(accessToken.split('.')[1]))
+    return decoded.role
+  } catch {
+    return null
+  }
 }
 
 export function getCurrentUserId(): string | null {
   if (typeof window === 'undefined') return null
   const accessToken = localStorage.getItem('accessToken')
   if (!accessToken) return null
-  try { const decoded = JSON.parse(atob(accessToken.split('.')[1])); return decoded.userId } catch { return null }
+  try {
+    const decoded = JSON.parse(atob(accessToken.split('.')[1]))
+    return decoded.userId
+  } catch {
+    return null
+  }
 }
-

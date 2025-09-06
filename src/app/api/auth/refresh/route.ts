@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyRefreshToken, generateAccessToken, generateRefreshToken, revokeRefreshToken } from '@/lib/api/jwt'
+import {
+  verifyRefreshToken,
+  generateAccessToken,
+  generateRefreshToken,
+  revokeRefreshToken,
+} from '@/lib/api/jwt'
 import { prisma } from '@/lib/api/db'
 import { JWTPayload } from '@/lib/api/jwt'
 import crypto from 'crypto'
@@ -10,8 +15,8 @@ import { logger, getRequestMeta } from '@/lib/logger'
 export async function POST(request: NextRequest) {
   try {
     // 从 cookie 或 header 获取 refresh token
-    const refreshToken = request.cookies.get('refreshToken')?.value || 
-                        request.headers.get('refresh-token')
+    const refreshToken =
+      request.cookies.get('refreshToken')?.value || request.headers.get('refresh-token')
 
     if (!refreshToken) {
       return fail('Refresh token required', 401, 'AUTH_MISSING_REFRESH_TOKEN')
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex')
     const tokenRecord = await prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { user: true }
+      include: { user: true },
     })
 
     if (!tokenRecord || tokenRecord.revoked || tokenRecord.expiresAt < new Date()) {
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
     const newPayload: JWTPayload = {
       userId: payload.userId,
       email: payload.email,
-      role: payload.role
+      role: payload.role,
     }
 
     const newAccessToken = generateAccessToken(newPayload)
@@ -52,9 +57,9 @@ export async function POST(request: NextRequest) {
         data: {
           userId: payload.userId,
           tokenHash: newTokenHash,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
-        }
-      })
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        },
+      }),
     ])
 
     // 设置新的 HttpOnly cookie
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 30 * 24 * 60 * 60 // 30 days
+      maxAge: 30 * 24 * 60 * 60, // 30 days
     })
 
     // 记录审计日志（refresh token 成功）
@@ -73,15 +78,14 @@ export async function POST(request: NextRequest) {
         data: {
           actorId: payload.userId,
           action: 'refresh_token',
-          details: JSON.stringify({ ip: request.headers.get('x-forwarded-for') || 'unknown' })
-        }
+          details: JSON.stringify({ ip: request.headers.get('x-forwarded-for') || 'unknown' }),
+        },
       })
     } catch (e) {
       logger.warn('audit.refresh.write_failed', { ...getRequestMeta(request), error: String(e) })
     }
 
     return response
-
   } catch (error) {
     logger.error('token.refresh.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Token refresh failed', 500, 'INVALID')

@@ -14,22 +14,26 @@ export async function POST(request: NextRequest) {
     // 检查是否是每月1日（或者手动触发）
     const today = new Date()
     const isFirstDayOfMonth = today.getDate() === 1
-    
+
     if (!isFirstDayOfMonth) {
       // 如果不是每月1日，检查是否有手动触发参数
       const { searchParams } = new URL(request.url)
       const force = searchParams.get('force')
       if (force !== 'true') {
-        return fail('Quota reset can only be triggered on the first day of month or with force=true', 400, 'BAD_REQUEST')
+        return fail(
+          'Quota reset can only be triggered on the first day of month or with force=true',
+          400,
+          'BAD_REQUEST'
+        )
       }
     }
 
     // 获取所有需要重置配额的学生
     const studentsToReset = await prisma.student.findMany({
       where: {
-        lastQuotaReset: { lt: new Date(today.getFullYear(), today.getMonth(), 1) }
+        lastQuotaReset: { lt: new Date(today.getFullYear(), today.getMonth(), 1) },
       },
-      select: { id: true, monthlyMeetingsUsed: true, lastQuotaReset: true }
+      select: { id: true, monthlyMeetingsUsed: true, lastQuotaReset: true },
     })
 
     if (studentsToReset.length === 0) {
@@ -37,13 +41,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 批量重置配额
-    const updatePromises = studentsToReset.map(student => 
+    const updatePromises = studentsToReset.map((student) =>
       prisma.student.update({
         where: { id: student.id },
         data: {
           monthlyMeetingsUsed: 0,
-          lastQuotaReset: new Date(today.getFullYear(), today.getMonth(), 1)
-        }
+          lastQuotaReset: new Date(today.getFullYear(), today.getMonth(), 1),
+        },
       })
     )
 
@@ -56,13 +60,13 @@ export async function POST(request: NextRequest) {
         details: JSON.stringify({
           resetDate: today.toISOString(),
           studentsCount: studentsToReset.length,
-          students: studentsToReset.map(s => ({
+          students: studentsToReset.map((s) => ({
             id: s.id,
             previousQuota: s.monthlyMeetingsUsed,
-            previousReset: s.lastQuotaReset?.toISOString()
-          }))
-        })
-      }
+            previousReset: s.lastQuotaReset?.toISOString(),
+          })),
+        }),
+      },
     })
 
     return ok({
@@ -71,10 +75,9 @@ export async function POST(request: NextRequest) {
       resetDate: today.toISOString(),
       details: {
         totalStudents: studentsToReset.length,
-        studentsWithQuota: studentsToReset.filter(s => s.monthlyMeetingsUsed > 0).length
-      }
+        studentsWithQuota: studentsToReset.filter((s) => s.monthlyMeetingsUsed > 0).length,
+      },
     })
-
   } catch (error) {
     logger.error('job.reset_quota.exception', { error: String(error) })
     return fail('Failed to reset monthly quotas', 500, 'INTERNAL_ERROR')

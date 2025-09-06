@@ -13,7 +13,7 @@ export default function RouteProgress() {
     if (pathname !== prevPathname) {
       setLoading(true)
       setPrevPathname(pathname)
-      
+
       // 模拟路由加载时间
       const timer = setTimeout(() => {
         setLoading(false)
@@ -28,7 +28,6 @@ export default function RouteProgress() {
   return (
     <div className="fixed top-0 left-0 w-full h-1 bg-gray-200 z-50">
       <div className="h-full bg-blue-500 animate-pulse"></div>
-      
     </div>
   )
 }

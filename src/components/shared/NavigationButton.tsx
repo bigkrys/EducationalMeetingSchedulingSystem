@@ -11,18 +11,18 @@ interface NavigationButtonProps extends ButtonProps {
   loadingText?: string
 }
 
-export default function NavigationButton({ 
-  href, 
-  children, 
+export default function NavigationButton({
+  href,
+  children,
   loadingText = '跳转中...',
-  ...buttonProps 
+  ...buttonProps
 }: NavigationButtonProps) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleClick = () => {
     setLoading(true)
-    
+
     // 添加轻微延迟以显示loading状态
     setTimeout(() => {
       router.push(href)
@@ -32,11 +32,7 @@ export default function NavigationButton({
   }
 
   return (
-    <Button
-      {...buttonProps}
-      onClick={handleClick}
-      disabled={loading || buttonProps.disabled}
-    >
+    <Button {...buttonProps} onClick={handleClick} disabled={loading || buttonProps.disabled}>
       {loading ? (
         <>
           <Spin size="small" />

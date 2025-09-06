@@ -8,10 +8,7 @@ const GLOBAL_MESSAGE_KEY = 'GLOBAL_MESSAGE'
 let lastContent = ''
 let lastShownAt = 0
 
-function openMessage(
-  type: 'success' | 'error' | 'warning' | 'info',
-  input: any
-) {
+function openMessage(type: 'success' | 'error' | 'warning' | 'info', input: any) {
   // 兼容字符串或后端 payload
   let display = ''
   try {
@@ -19,15 +16,21 @@ function openMessage(
       // 尝试解析 JSON
       if (input.startsWith('{') || input.startsWith('[')) {
         const payload = JSON.parse(input)
-        display = getFriendlyErrorMessage({ code: payload?.code ?? payload?.error, message: payload?.message })
+        display = getFriendlyErrorMessage({
+          code: payload?.code ?? payload?.error,
+          message: payload?.message,
+        })
       } else {
         display = input
       }
     } else {
-      display = getFriendlyErrorMessage({ code: input?.code ?? input?.error, message: input?.message })
+      display = getFriendlyErrorMessage({
+        code: input?.code ?? input?.error,
+        message: input?.message,
+      })
     }
   } catch {
-    display = typeof input === 'string' ? input : (input?.message || '操作失败')
+    display = typeof input === 'string' ? input : input?.message || '操作失败'
   }
 
   // 去抖：短时间内重复信息不再次弹出
@@ -53,7 +56,6 @@ export function initializeGlobalErrorHandler() {
     maxCount: 1,
     rtl: false,
   })
-
 }
 
 // 临时禁用全局错误处理（用于特殊情况）

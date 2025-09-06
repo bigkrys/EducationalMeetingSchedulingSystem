@@ -47,7 +47,7 @@ export async function GET() {
       const t0 = Date.now()
       const okConn = await Promise.race([
         testEmailConnection(),
-        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000)),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
       ])
       checks.email = { ok: okConn, latency_ms: Date.now() - t0 }
     }

@@ -84,7 +84,12 @@ export default function AddBlockedTimeModal({
         <Form.Item className="mb-0">
           <div className="flex justify-end space-x-3">
             <Button onClick={onCancel}>取消</Button>
-            <Button type="primary" onClick={handleFinish} loading={submitting} disabled={submitting}>
+            <Button
+              type="primary"
+              onClick={handleFinish}
+              loading={submitting}
+              disabled={submitting}
+            >
               确认添加
             </Button>
           </div>

@@ -12,7 +12,11 @@ export async function POST(request: NextRequest) {
     const { teacherId, slot, subject } = body
 
     if (!teacherId || !slot || !subject) {
-      return fail('teacherId, slot, and subject are required', 400, E.WAITLIST_PROMOTE_MISSING_FIELDS)
+      return fail(
+        'teacherId, slot, and subject are required',
+        400,
+        E.WAITLIST_PROMOTE_MISSING_FIELDS
+      )
     }
 
     const slotDate = new Date(slot)
@@ -24,25 +28,28 @@ export async function POST(request: NextRequest) {
         teacherId,
         date: dateStr,
         slot: slotDate,
-
       },
       include: {
         student: { include: { user: true } },
-        teacher: { include: { user: true } }
+        teacher: { include: { user: true } },
       },
       orderBy: [
         // 优先级排序需要根据学生的服务等级来实现
-        { createdAt: 'asc' }
-      ]
+        { createdAt: 'asc' },
+      ],
     })
 
     if (!waitlistEntry) {
-      return ok({ message: 'No students in waitlist for this slot', promoted: 0, code: E.WAITLIST_EMPTY })
+      return ok({
+        message: 'No students in waitlist for this slot',
+        promoted: 0,
+        code: E.WAITLIST_EMPTY,
+      })
     }
 
     // 检查学生是否还有月度配额
     const student = await prisma.student.findUnique({
-      where: { id: waitlistEntry.studentId }
+      where: { id: waitlistEntry.studentId },
     })
 
     if (!student) {
@@ -60,17 +67,17 @@ export async function POST(request: NextRequest) {
         where: { id: student.id },
         data: {
           monthlyMeetingsUsed: 0,
-          lastQuotaReset: new Date()
-        }
+          lastQuotaReset: new Date(),
+        },
       })
       student.monthlyMeetingsUsed = 0
     }
 
     // 检查是否超过月度配额限制
     const policy = await prisma.servicePolicy.findUnique({
-      where: { level: student.serviceLevel }
+      where: { level: student.serviceLevel },
     })
-    
+
     let monthlyLimit = 10 // 默认限制
     if (policy) {
       if (student.serviceLevel === 'premium') {
@@ -86,7 +93,7 @@ export async function POST(request: NextRequest) {
       // 学生没有配额，跳过并查找下一个
       // 学生没有配额，删除候补记录
       await prisma.waitlist.delete({
-        where: { id: waitlistEntry.id }
+        where: { id: waitlistEntry.id },
       })
 
       // 递归调用，查找下一个学生
@@ -99,14 +106,18 @@ export async function POST(request: NextRequest) {
         teacherId,
         scheduledTime: {
           gte: slotDate,
-          lt: new Date(slotDate.getTime() + 30 * 60 * 1000) // 30分钟
+          lt: new Date(slotDate.getTime() + 30 * 60 * 1000), // 30分钟
         },
-        status: { in: ['pending', 'approved'] }
-      }
+        status: { in: ['pending', 'approved'] },
+      },
     })
 
     if (conflictingAppointments.length > 0) {
-      return ok({ message: 'Slot is no longer available', promoted: 0, code: E.WAITLIST_SLOT_UNAVAILABLE })
+      return ok({
+        message: 'Slot is no longer available',
+        promoted: 0,
+        code: E.WAITLIST_SLOT_UNAVAILABLE,
+      })
     }
 
     // 根据服务级别决定是否需要审批
@@ -136,20 +147,20 @@ export async function POST(request: NextRequest) {
         status,
         approvalRequired,
         approvedAt: status === 'approved' ? new Date() : null,
-        idempotencyKey: `waitlist_${waitlistEntry.id}_${Date.now()}`
-      }
+        idempotencyKey: `waitlist_${waitlistEntry.id}_${Date.now()}`,
+      },
     })
 
     // 更新候补队列状态
     // 删除已提升的候补记录
     await prisma.waitlist.delete({
-      where: { id: waitlistEntry.id }
+      where: { id: waitlistEntry.id },
     })
 
     // 更新学生月度使用次数
     await prisma.student.update({
       where: { id: student.id },
-      data: { monthlyMeetingsUsed: { increment: 1 } }
+      data: { monthlyMeetingsUsed: { increment: 1 } },
     })
 
     // 记录审计日志
@@ -166,9 +177,9 @@ export async function POST(request: NextRequest) {
           slot: slotDate.toISOString(),
           subject,
           status,
-          reason: 'Student promoted from waitlist'
-        })
-      }
+          reason: 'Student promoted from waitlist',
+        }),
+      },
     })
 
     return ok({
@@ -177,15 +188,14 @@ export async function POST(request: NextRequest) {
       appointment: {
         id: appointment.id,
         status: appointment.status,
-        approvalRequired: appointment.approvalRequired
+        approvalRequired: appointment.approvalRequired,
       },
       student: {
         id: waitlistEntry.studentId,
         name: waitlistEntry.student.user.name,
-        serviceLevel: student.serviceLevel
-      }
+        serviceLevel: student.serviceLevel,
+      },
     })
-
   } catch (error) {
     logger.error('waitlist.promote.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to promote waitlist student', 500, E.INTERNAL_ERROR)
@@ -203,19 +213,22 @@ async function promoteNextStudent(teacherId: string, slot: string, subject: stri
         teacherId,
         date: dateStr,
         slot: slotDate,
-
       },
       include: {
-        student: { include: { user: true } }
+        student: { include: { user: true } },
       },
       orderBy: [
         // 优先级排序需要根据学生的服务等级来实现
-        { createdAt: 'asc' }
-      ]
+        { createdAt: 'asc' },
+      ],
     })
 
     if (!nextEntry) {
-      return ok({ message: 'No more students in waitlist for this slot', promoted: 0, code: E.WAITLIST_EMPTY })
+      return ok({
+        message: 'No more students in waitlist for this slot',
+        promoted: 0,
+        code: E.WAITLIST_EMPTY,
+      })
     }
 
     // 递归调用提升逻辑
@@ -229,12 +242,12 @@ async function promoteNextStudent(teacherId: string, slot: string, subject: stri
 // 根据科目名称获取科目ID
 async function getSubjectIdByName(subjectName: string): Promise<string> {
   const subject = await prisma.subject.findFirst({
-    where: { name: subjectName }
+    where: { name: subjectName },
   })
-  
+
   if (!subject) {
     throw new Error(`Subject not found: ${subjectName}`)
   }
-  
+
   return subject.id
 }

@@ -8,7 +8,7 @@ class MemoryCache {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
-      ttl
+      ttl,
     })
   }
 
@@ -78,7 +78,7 @@ export function getRedisClient() {
 // 设置缓存
 export async function setCache(key: string, value: any, ttlSeconds: number = 300) {
   const expires = Date.now() + ttlSeconds * 1000
-  
+
   if (redisClient) {
     try {
       await redisClient.setEx(key, ttlSeconds, JSON.stringify(value))
@@ -101,16 +101,16 @@ export async function getCache<T>(key: string): Promise<T | null> {
       console.warn('Redis get failed, trying memory cache:', error)
     }
   }
-  
+
   const item = memoryCache.get(key)
   if (item && item.timestamp + item.ttl > Date.now()) {
     return item.data
   }
-  
+
   if (item) {
     memoryCache.delete(key)
   }
-  
+
   return null
 }
 
@@ -123,7 +123,7 @@ export async function deleteCache(key: string) {
       console.warn('Redis delete failed:', error)
     }
   }
-  
+
   memoryCache.delete(key)
 }
 
@@ -139,7 +139,7 @@ export async function deleteCachePattern(pattern: string) {
       console.warn('Redis pattern delete failed:', error)
     }
   }
-  
+
   // 内存缓存不支持模式匹配，只能逐个删除
   memoryCache.deletePattern(pattern)
 }

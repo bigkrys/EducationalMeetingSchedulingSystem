@@ -2,10 +2,16 @@
 
 import { Subject, SubjectListProps } from '@/lib/types'
 
-export default function SubjectList({ subjects, selectedSubjectIds, onSubjectToggle, onBlur, disabled = false }: SubjectListProps) {
+export default function SubjectList({
+  subjects,
+  selectedSubjectIds,
+  onSubjectToggle,
+  onBlur,
+  disabled = false,
+}: SubjectListProps) {
   return (
     <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border border-gray-200 rounded-md p-2">
-      {subjects.map(subject => (
+      {subjects.map((subject) => (
         <label key={subject.id} className="flex items-center space-x-2 cursor-pointer">
           <input
             type="checkbox"

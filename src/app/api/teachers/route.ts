@@ -15,20 +15,20 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
     const offset = parseInt(searchParams.get('offset') || '0')
 
     const where: Record<string, unknown> = {}
-    
+
     // 如果指定了科目，过滤教师
     if (subject) {
       where.teacherSubjects = {
         some: {
           subject: {
             name: {
-              contains: subject
-            }
-          }
-        }
+              contains: subject,
+            },
+          },
+        },
       }
     }
-    
+
     // 暂时移除可用性过滤，返回所有教师
     // 后续可以根据需要添加更精确的过滤逻辑
 
@@ -40,26 +40,26 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
         bufferMinutes: true,
         user: {
           select: {
-            name: true
-          }
+            name: true,
+          },
         },
         teacherSubjects: {
           select: {
             subject: {
               select: {
-                name: true
-              }
-            }
-          }
-        }
+                name: true,
+              },
+            },
+          },
+        },
       },
       take: limit,
       skip: offset,
       orderBy: {
         user: {
-          name: 'asc'
-        }
-      }
+          name: 'asc',
+        },
+      },
     })
 
     // 格式化返回数据
@@ -68,11 +68,10 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
       name: teacher.user.name,
       subjects: teacher.teacherSubjects.map((ts: any) => ts.subject.name),
       maxDailyMeetings: teacher.maxDailyMeetings,
-      bufferMinutes: teacher.bufferMinutes
+      bufferMinutes: teacher.bufferMinutes,
     }))
 
     return ok({ teachers: formattedTeachers, total: formattedTeachers.length, limit, offset })
-
   } catch (error) {
     logger.error('teachers.list.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to fetch teachers', 500, E.INTERNAL_ERROR)
@@ -83,14 +82,14 @@ async function getTeachersHandler(request: AuthenticatedRequest, context?: any) 
 async function createTeacherHandler(request: AuthenticatedRequest, context?: any) {
   try {
     const user = request.user!
-    
+
     // 检查权限
     if (user.role !== 'admin') {
       return fail('Only admins can create teachers', 403, E.FORBIDDEN)
     }
 
     const body = await request.json()
-    
+
     // 验证必需字段
     if (!body.userId || !body.subjects) {
       return fail('userId and subjects are required', 400, E.BAD_REQUEST)
@@ -98,7 +97,7 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
 
     // 检查用户是否存在且是教师角色
     const existingUser = await prisma.user.findUnique({
-      where: { id: body.userId }
+      where: { id: body.userId },
     })
 
     if (!existingUser) {
@@ -111,7 +110,7 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
 
     // 检查是否已经是教师
     const existingTeacher = await prisma.teacher.findUnique({
-      where: { userId: body.userId }
+      where: { userId: body.userId },
     })
 
     if (existingTeacher) {
@@ -123,8 +122,8 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
       data: {
         userId: body.userId,
         maxDailyMeetings: body.maxDailyMeetings || 8,
-        bufferMinutes: body.bufferMinutes || 15
-      }
+        bufferMinutes: body.bufferMinutes || 15,
+      },
     })
 
     // 创建教师-科目关联
@@ -132,8 +131,8 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
       await prisma.teacherSubject.createMany({
         data: body.subjects.map((subjectId: string) => ({
           teacherId: teacher.id,
-          subjectId
-        }))
+          subjectId,
+        })),
       })
     }
 
@@ -145,12 +144,11 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
         targetId: teacher.id,
         details: JSON.stringify(body),
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown'
-      }
+        userAgent: request.headers.get('user-agent') || 'unknown',
+      },
     })
 
     return ok({ teacher, message: 'Teacher created successfully' }, { status: 201 })
-
   } catch (error) {
     logger.error('teachers.create.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to create teacher', 500, E.INTERNAL_ERROR)

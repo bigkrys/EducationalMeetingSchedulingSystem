@@ -80,7 +80,9 @@ export function verifyAccessToken(token: string): JWTPayload | null {
     const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload & { exp?: number }
 
     // compute expiry ms from token exp if present, otherwise use short TTL
-    const expiresAt = decoded.exp ? decoded.exp * 1000 : Date.now() + (parseInt(env.ACCESS_TOKEN_TTL_MIN || '60') * 60 * 1000)
+    const expiresAt = decoded.exp
+      ? decoded.exp * 1000
+      : Date.now() + parseInt(env.ACCESS_TOKEN_TTL_MIN || '60') * 60 * 1000
     tokenVerifyCache.set(token, { payload: decoded as JWTPayload, expiresAt })
     // occasional cleanup: keep cache bounded (naive)
     const CACHE_HIGH_WATER = 5000
@@ -98,7 +100,6 @@ export function verifyAccessToken(token: string): JWTPayload | null {
 
     return decoded as JWTPayload
   } catch (error) {
-    
     return null
   }
 }
@@ -119,5 +120,8 @@ export async function revokeRefreshToken(tokenHash: string): Promise<void> {
 
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   const { prisma } = await import('./db')
-  await prisma.refreshToken.updateMany({ where: { userId, revoked: false }, data: { revoked: true } })
+  await prisma.refreshToken.updateMany({
+    where: { userId, revoked: false },
+    data: { revoked: true },
+  })
 }

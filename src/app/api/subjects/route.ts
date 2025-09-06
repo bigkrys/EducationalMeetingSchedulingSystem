@@ -9,9 +9,12 @@ import { ApiErrorCode as E } from '@/lib/api/errors'
 // 科目验证 schema
 const subjectSchema = z.object({
   name: z.string().min(1),
-  code: z.string().min(1).regex(/^[A-Z_]+$/, 'Code must be uppercase letters and underscores only'),
+  code: z
+    .string()
+    .min(1)
+    .regex(/^[A-Z_]+$/, 'Code must be uppercase letters and underscores only'),
   description: z.string().optional(),
-  isActive: z.boolean().default(true)
+  isActive: z.boolean().default(true),
 })
 
 // 获取所有科目
@@ -19,7 +22,7 @@ const getHandler = async function GET() {
   try {
     const subjects = await prisma.subject.findMany({
       where: { isActive: true },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     })
 
     return ok({ subjects })
@@ -40,11 +43,8 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
     // 检查科目名称和代码是否已存在
     const existingSubject = await prisma.subject.findFirst({
       where: {
-        OR: [
-          { name: validatedData.name },
-          { code: validatedData.code }
-        ]
-      }
+        OR: [{ name: validatedData.name }, { code: validatedData.code }],
+      },
     })
 
     if (existingSubject) {
@@ -52,7 +52,7 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
     }
 
     const subject = await prisma.subject.create({
-      data: validatedData
+      data: validatedData,
     })
 
     // 记录审计日志
@@ -62,8 +62,8 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
         actorId: user.userId,
         action: 'create_subject',
         targetId: subject.id,
-        details: JSON.stringify(validatedData)
-      }
+        details: JSON.stringify(validatedData),
+      },
     })
 
     return ok({ subject }, { status: 201 })

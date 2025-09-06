@@ -5,12 +5,12 @@ import '@ant-design/v5-patch-for-react-19'
 
 import { useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  isAuthenticated, 
-  getStoredTokens, 
-  refreshAccessToken, 
+import {
+  isAuthenticated,
+  getStoredTokens,
+  refreshAccessToken,
   clearStoredTokens,
-  isTokenExpiringSoon 
+  isTokenExpiringSoon,
 } from '@/lib/api/auth'
 import { initializeGlobalErrorHandler } from '@/lib/api/global-error-handler'
 
@@ -28,25 +28,28 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
   // 处理用户活动
   const handleUserActivity = useCallback(() => {
     lastActivityRef.current = Date.now()
-    
+
     // 清除之前的活动超时
     if (activityTimeoutRef.current) {
       clearTimeout(activityTimeoutRef.current)
     }
-    
+
     // 设置新的活动超时（15分钟无操作后跳转登录）
-    activityTimeoutRef.current = setTimeout(() => {
-      if (isAuthenticated()) {
-        clearStoredTokens()
-        router.push('/')
-      }
-    }, 15 * 60 * 1000) // 15分钟
+    activityTimeoutRef.current = setTimeout(
+      () => {
+        if (isAuthenticated()) {
+          clearStoredTokens()
+          router.push('/')
+        }
+      },
+      15 * 60 * 1000
+    ) // 15分钟
   }, [router])
 
   // 刷新token
   const refreshTokenIfNeeded = useCallback(async () => {
     const { refreshToken } = getStoredTokens()
-    
+
     if (!refreshToken) {
       clearStoredTokens()
       router.push('/')
@@ -55,17 +58,17 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
     try {
       const newAccessToken = await refreshAccessToken(refreshToken)
-      
+
       if (newAccessToken) {
         // 更新存储的token
         localStorage.setItem('accessToken', newAccessToken)
-        
+
         // 直接根据新 token 安排下一次刷新（提前5分钟）
         try {
           const decoded = JSON.parse(atob(newAccessToken.split('.')[1]))
           const expirationTime = decoded.exp * 1000
           const currentTime = Date.now()
-          const refreshTime = expirationTime - currentTime - (5 * 60 * 1000)
+          const refreshTime = expirationTime - currentTime - 5 * 60 * 1000
           if (refreshTime > 0) {
             refreshTimeoutRef.current = setTimeout(() => {
               // 再次刷新
@@ -90,7 +93,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
   // 自动刷新token
   const setupTokenRefresh = useCallback(() => {
     const { accessToken, refreshToken } = getStoredTokens()
-    
+
     if (!accessToken || !refreshToken) {
       return
     }
@@ -104,8 +107,8 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
         const decoded = JSON.parse(atob(accessToken.split('.')[1]))
         const expirationTime = decoded.exp * 1000
         const currentTime = Date.now()
-        const refreshTime = expirationTime - currentTime - (5 * 60 * 1000) // 提前5分钟
-        
+        const refreshTime = expirationTime - currentTime - 5 * 60 * 1000 // 提前5分钟
+
         if (refreshTime > 0) {
           refreshTimeoutRef.current = setTimeout(() => {
             refreshTokenIfNeeded()
@@ -140,7 +143,6 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     // 初始化全局错误处理器
     try {
       initializeGlobalErrorHandler()
-
     } catch (error) {
       console.error('全局错误处理器初始化失败:', error)
     }
@@ -149,7 +151,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     let timeoutId: NodeJS.Timeout | null = null
     const throttledHandleUserActivity = () => {
       if (timeoutId) return
-      
+
       timeoutId = setTimeout(() => {
         handleUserActivity()
         timeoutId = null
@@ -158,7 +160,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
     // 监听用户活动
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
-    events.forEach(event => {
+    events.forEach((event) => {
       document.addEventListener(event, throttledHandleUserActivity, { passive: true })
     })
 
@@ -167,22 +169,22 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
     // 清理函数
     return () => {
-      events.forEach(event => {
+      events.forEach((event) => {
         document.removeEventListener(event, throttledHandleUserActivity)
       })
-      
+
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
-      
+
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current)
       }
-      
+
       if (activityTimeoutRef.current) {
         clearTimeout(activityTimeoutRef.current)
       }
-      
+
       // 恢复原始的console.warn
       if (originalWarnRef.current) {
         console.warn = originalWarnRef.current

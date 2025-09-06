@@ -14,11 +14,11 @@
     "test": "echo \"No tests specified\" && exit 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-  "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:simple": "ts-node prisma/seed-simple.ts",
-  "vercel-build": "pnpm install && npx prisma generate && next build",
+    "vercel-build": "pnpm install && npx prisma generate && next build",
     "prepare": "husky install"
   },
   "dependencies": {
