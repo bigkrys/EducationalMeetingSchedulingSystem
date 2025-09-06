@@ -9,10 +9,10 @@ import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
-  const rawBody = await request.text().catch(() => '')
-  // 统一授权检查（根据环境在内部调度器/私有调用中更严格）
-  const authCheck = await authorizeJobRequest(request, rawBody)
-  if (authCheck) return authCheck
+    const rawBody = await request.text().catch(() => '')
+    // 统一授权检查（根据环境在内部调度器/私有调用中更严格）
+    const authCheck = await authorizeJobRequest(request, rawBody)
+    if (authCheck) return authCheck
 
     // 计算过期阈值：优先级 -> ENV JOB_EXPIRE_HOURS > servicePolicy.level='default' or min(policy.expireHours) > DEFAULT_EXPIRE_HOURS
     let expireHours = DEFAULT_EXPIRE_HOURS
@@ -29,13 +29,19 @@ export async function POST(request: NextRequest) {
     // 2) 尝试从 servicePolicy 中读取策略值（优先查找 level='default'，如无则取所有策略的最小 expireHours）
     try {
       const defaultPolicy = await prisma.servicePolicy.findUnique({ where: { level: 'default' } })
-      if (defaultPolicy && typeof defaultPolicy.expireHours === 'number' && defaultPolicy.expireHours > 0) {
+      if (
+        defaultPolicy &&
+        typeof defaultPolicy.expireHours === 'number' &&
+        defaultPolicy.expireHours > 0
+      ) {
         expireHours = defaultPolicy.expireHours
       } else {
         const allPolicies = await prisma.servicePolicy.findMany({ select: { expireHours: true } })
         if (allPolicies && allPolicies.length > 0) {
           // 取最小值以保证更严格的过期行为（可以按需调整为最大值/平均值）
-          const minExpire = Math.min(...allPolicies.map(p => p.expireHours || DEFAULT_EXPIRE_HOURS))
+          const minExpire = Math.min(
+            ...allPolicies.map((p) => p.expireHours || DEFAULT_EXPIRE_HOURS)
+          )
           if (minExpire > 0) expireHours = minExpire
         }
       }
@@ -59,17 +65,17 @@ export async function POST(request: NextRequest) {
         take: batchSize,
         include: {
           student: { include: { user: true } },
-          teacher: { include: { user: true } }
-        }
+          teacher: { include: { user: true } },
+        },
       })
 
       if (!batch || batch.length === 0) break
 
       // 更新状态
-      const ids = batch.map(b => b.id)
+      const ids = batch.map((b) => b.id)
       await prisma.appointment.updateMany({
         where: { id: { in: ids } },
-        data: { status: 'expired' }
+        data: { status: 'expired' },
       })
 
       totalExpired += batch.length
@@ -90,7 +96,9 @@ export async function POST(request: NextRequest) {
                 studentName: item.student.user.name,
                 teacherName: item.teacher.user.name,
                 subject: subject.name,
-                scheduledTime: item.scheduledTime.toLocaleString('zh-CN', { timeZone: (item as any)?.teacher?.timezone || 'UTC' })
+                scheduledTime: item.scheduledTime.toLocaleString('zh-CN', {
+                  timeZone: (item as any)?.teacher?.timezone || 'UTC',
+                }),
               }
             )
           }
@@ -107,12 +115,15 @@ export async function POST(request: NextRequest) {
                 teacherName: item.teacher.user.name,
                 scheduledTime: item.scheduledTime.toISOString(),
                 expiredAt: new Date().toISOString(),
-                reason: '48 hours timeout without teacher approval'
-              })
-            }
+                reason: '48 hours timeout without teacher approval',
+              }),
+            },
           })
         } catch (error) {
-          logger.error('job.expire.process_failed', { appointmentId: item.id, error: String(error) })
+          logger.error('job.expire.process_failed', {
+            appointmentId: item.id,
+            error: String(error),
+          })
         }
 
         // 继续下一个
@@ -120,7 +131,9 @@ export async function POST(request: NextRequest) {
       }
 
       // 启动并发任务
-      const workers = Array.from({ length: Math.min(concurrency, batch.length) }).map(() => sendNext())
+      const workers = Array.from({ length: Math.min(concurrency, batch.length) }).map(() =>
+        sendNext()
+      )
       await Promise.all(workers)
 
       // 清除相关缓存（按教师/日期模式）
@@ -143,10 +156,9 @@ export async function POST(request: NextRequest) {
       updated: totalExpired,
       expiredAt: new Date().toISOString(),
       details: {
-        totalExpired
-      }
+        totalExpired,
+      },
     })
-
   } catch (error) {
     logger.error('job.expire.exception', { error: String(error) })
     return fail('Failed to expire pending appointments', 500, 'INTERNAL_ERROR')

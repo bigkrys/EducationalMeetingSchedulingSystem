@@ -6,24 +6,36 @@ export interface AuthenticatedRequest extends NextRequest {
   user?: JWTPayload
 }
 
-export function withAuth(handler: (req: AuthenticatedRequest, context?: any) => Promise<NextResponse>, requiredRoles?: string[]) {
+export function withAuth(
+  handler: (req: AuthenticatedRequest, context?: any) => Promise<NextResponse>,
+  requiredRoles?: string[]
+) {
   return async (req: NextRequest, context?: any) => {
     try {
       const authHeader = req.headers.get('authorization')
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return NextResponse.json({ error: 'INVALID', message: 'Missing or invalid authorization header' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'INVALID', message: 'Missing or invalid authorization header' },
+          { status: 401 }
+        )
       }
 
       const token = authHeader.substring(7)
       const payload = verifyAccessToken(token)
-      
+
       if (!payload) {
-        return NextResponse.json({ error: 'INVALID', message: 'Invalid or expired token' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'INVALID', message: 'Invalid or expired token' },
+          { status: 401 }
+        )
       }
 
       // 检查角色权限
       if (requiredRoles && !requiredRoles.includes(payload.role)) {
-        return NextResponse.json({ error: 'FORBIDDEN', message: 'Insufficient permissions' }, { status: 403 })
+        return NextResponse.json(
+          { error: 'FORBIDDEN', message: 'Insufficient permissions' },
+          { status: 403 }
+        )
       }
 
       // 将用户信息添加到请求对象
@@ -33,7 +45,10 @@ export function withAuth(handler: (req: AuthenticatedRequest, context?: any) => 
       return handler(authenticatedReq, context)
     } catch (error) {
       console.error('Auth middleware error:', error)
-      return NextResponse.json({ error: 'INVALID', message: 'Authentication failed' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'INVALID', message: 'Authentication failed' },
+        { status: 401 }
+      )
     }
   }
 }
@@ -66,7 +81,10 @@ export function withRateLimit(opts?: { windowMs?: number; max?: number; keyPrefi
           return handler(req, context)
         }
 
-        const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown'
+        const ip =
+          (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
+          req.headers.get('x-real-ip') ||
+          'unknown'
         const key = `${prefix}:${ip}`
         const now = Date.now()
         const entry = store.get(key)
@@ -76,14 +94,20 @@ export function withRateLimit(opts?: { windowMs?: number; max?: number; keyPrefi
           entry.count += 1
           store.set(key, entry)
           if (entry.count > max) {
-            return NextResponse.json({ error: 'TOO_MANY_REQUESTS', message: 'Rate limit exceeded' }, { status: 429 })
+            return NextResponse.json(
+              { error: 'TOO_MANY_REQUESTS', message: 'Rate limit exceeded' },
+              { status: 429 }
+            )
           }
         }
 
         return handler(req, context)
       } catch (error) {
         console.error('Rate limit middleware error:', error)
-        return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Rate limiter failed' }, { status: 500 })
+        return NextResponse.json(
+          { error: 'INTERNAL_ERROR', message: 'Rate limiter failed' },
+          { status: 500 }
+        )
       }
     }
   }
@@ -104,10 +128,16 @@ export function withValidation<T extends ZodSchema>(schema: T) {
       } catch (error: any) {
         // Zod error -> 400
         if (error && error.name === 'ZodError') {
-          return NextResponse.json({ error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors }, { status: 400 })
+          return NextResponse.json(
+            { error: 'BAD_REQUEST', message: 'Invalid input data', details: error.errors },
+            { status: 400 }
+          )
         }
         console.error('Validation middleware error:', error)
-        return NextResponse.json({ error: 'BAD_REQUEST', message: 'Invalid input data' }, { status: 400 })
+        return NextResponse.json(
+          { error: 'BAD_REQUEST', message: 'Invalid input data' },
+          { status: 400 }
+        )
       }
     }
   }

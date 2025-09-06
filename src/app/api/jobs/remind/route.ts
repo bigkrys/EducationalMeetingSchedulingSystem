@@ -8,12 +8,12 @@ import { addHours, subHours } from 'date-fns'
 
 export async function POST(request: NextRequest) {
   try {
-  // 读取原始 body 用于 HMAC 校验（如果启用），并在解析 JSON 前执行授权检查
-  const rawBody = await request.text().catch(() => '')
-  const authCheck = await authorizeJobRequest(request, rawBody)
-  if (authCheck) return authCheck
+    // 读取原始 body 用于 HMAC 校验（如果启用），并在解析 JSON 前执行授权检查
+    const rawBody = await request.text().catch(() => '')
+    const authCheck = await authorizeJobRequest(request, rawBody)
+    if (authCheck) return authCheck
 
-  const body = rawBody ? JSON.parse(rawBody) : {}
+    const body = rawBody ? JSON.parse(rawBody) : {}
     const { offsetHours } = body
 
     if (!offsetHours || ![1, 24].includes(offsetHours)) {
@@ -30,19 +30,19 @@ export async function POST(request: NextRequest) {
       where: {
         scheduledTime: {
           gte: reminderStart,
-          lt: reminderEnd
+          lt: reminderEnd,
         },
         status: 'approved',
         // 避免重复发送提醒
         id: {
-          notIn: await getAlreadyRemindedAppointments(offsetHours)
-        }
+          notIn: await getAlreadyRemindedAppointments(offsetHours),
+        },
       },
       include: {
         student: { include: { user: true } },
         teacher: { include: { user: true } },
-        subject: true
-      }
+        subject: true,
+      },
     })
 
     if (appointments.length === 0) {
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       try {
         // 发送提醒（这里模拟发送，实际可以集成邮件、短信等）
         await sendReminder(appointment, offsetHours)
-        
+
         // 记录提醒发送
         await prisma.auditLog.create({
           data: {
@@ -69,9 +69,9 @@ export async function POST(request: NextRequest) {
               scheduledTime: appointment.scheduledTime.toISOString(),
               subject: appointment.subject.name,
               offsetHours,
-              reminderType: offsetHours === 24 ? 'day_before' : 'hour_before'
-            })
-          }
+              reminderType: offsetHours === 24 ? 'day_before' : 'hour_before',
+            }),
+          },
         })
 
         return { success: true, appointmentId: appointment.id }
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
     })
 
     const results = await Promise.all(reminderPromises)
-    const successful = results.filter(r => r.success).length
-    const failed = results.filter(r => !r.success).length
+    const successful = results.filter((r) => r.success).length
+    const failed = results.filter((r) => !r.success).length
 
     return ok({
       message: `Reminders sent successfully`,
@@ -93,11 +93,12 @@ export async function POST(request: NextRequest) {
       total: appointments.length,
       offsetHours,
       results: {
-        successful: results.filter(r => r.success).map(r => r.appointmentId),
-        failed: results.filter(r => !r.success).map(r => ({ id: r.appointmentId, error: r.error }))
-      }
+        successful: results.filter((r) => r.success).map((r) => r.appointmentId),
+        failed: results
+          .filter((r) => !r.success)
+          .map((r) => ({ id: r.appointmentId, error: r.error })),
+      },
     })
-
   } catch (error) {
     logger.error('jobs.remind.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to send reminders', 500, E.INTERNAL_ERROR)
@@ -107,29 +108,28 @@ export async function POST(request: NextRequest) {
 // 获取已经发送过提醒的预约ID列表
 async function getAlreadyRemindedAppointments(offsetHours: number): Promise<string[]> {
   const oneDayAgo = subHours(new Date(), 24)
-  
+
   const logs = await prisma.auditLog.findMany({
     where: {
       action: 'REMINDER_SENT',
       createdAt: { gte: oneDayAgo },
       details: {
-        contains: `"offsetHours":${offsetHours}`
-      }
+        contains: `"offsetHours":${offsetHours}`,
+      },
     },
-    select: { targetId: true }
+    select: { targetId: true },
   })
 
-  return logs.map(log => log.targetId).filter((id): id is string => id !== null)
+  return logs.map((log) => log.targetId).filter((id): id is string => id !== null)
 }
 
 // 发送提醒的函数（模拟实现）
 async function sendReminder(appointment: any, offsetHours: number): Promise<void> {
   const reminderType = offsetHours === 24 ? '24小时前' : '1小时前'
-  
+
   // 这里可以集成实际的提醒系统
   // 例如：发送邮件、短信、推送通知等
- 
 
   // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise((resolve) => setTimeout(resolve, 100))
 }

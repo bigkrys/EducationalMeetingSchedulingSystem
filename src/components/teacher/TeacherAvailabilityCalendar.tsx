@@ -2,14 +2,18 @@
 
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Space, Modal, Form, Tag, Empty } from 'antd'
-import { showApiError, showSuccessMessage, showErrorMessage, showWarningMessage } from '@/lib/api/global-error-handler'
+import {
+  showApiError,
+  showSuccessMessage,
+  showErrorMessage,
+  showWarningMessage,
+} from '@/lib/api/global-error-handler'
 import { PlusOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { api } from '@/lib/api/http-client'
 import { createUtcDateTime } from '@/lib/utils/timezone-client'
 import AddAvailabilityModal from './AddAvailabilityModal'
 import AddBlockedTimeModal from './AddBlockedTimeModal'
-
 
 export interface TeacherAvailabilityData {
   id: string
@@ -37,7 +41,7 @@ const DAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周�
 const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = ({
   teacherId,
   teacherName,
-  onRefresh
+  onRefresh,
 }) => {
   const [availability, setAvailability] = useState<TeacherAvailabilityData[]>([])
   const [blockedTimes, setBlockedTimes] = useState<BlockedTimeData[]>([])
@@ -63,8 +67,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       const response = await fetch(`/api/teachers/${teacherId}/availability`, {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
@@ -91,7 +95,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
               dayOfWeek: item.dayOfWeek,
               startTime: item.startTime,
               endTime: item.endTime,
-              isActive: item.isRecurring === true || item.isActive === true
+              isActive: item.isRecurring === true || item.isActive === true,
             }
           })
           setAvailability(availabilityData)
@@ -120,8 +124,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       const response = await fetch(`/api/blocked-times?teacherId=${teacherId}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
@@ -141,7 +145,9 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         }
 
         // 过滤当前教师的阻塞时间
-        const teacherBlockedTimes = blockedTimesArray.filter((item: any) => item.teacherId === teacherId)
+        const teacherBlockedTimes = blockedTimesArray.filter(
+          (item: any) => item.teacherId === teacherId
+        )
         setBlockedTimes(teacherBlockedTimes)
       } else {
         const errorData = await response.json()
@@ -190,11 +196,14 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             dayOfWeek: values.dayOfWeek,
             startTime: slot.startTime,
             endTime: slot.endTime,
-            isRecurring: values.isRecurring
+            isRecurring: values.isRecurring,
           }
 
           // 使用新的HTTP客户端，它会自动处理错误
-          const response = await api.post(`/api/teachers/${teacherId}/availability`, availabilityData)
+          const response = await api.post(
+            `/api/teachers/${teacherId}/availability`,
+            availabilityData
+          )
           if (!response.ok) {
             // 安全解析响应体（可能不是 JSON）
             let errorData: any = null
@@ -206,7 +215,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
             const code = errorData?.code ?? errorData?.error ?? 'UNKNOWN_ERROR'
             const message = errorData?.message ?? '添加可用性失败'
-
 
             // 后端可能把冲突信息放在 details.conflicts 或 top-level conflicts
             const conflictsArr = errorData?.details?.conflicts ?? errorData?.conflicts ?? null
@@ -220,8 +228,15 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
           const result = await response.json()
           // 如果后端返回与 blockedTime 的 warnings，提示用户（但仍视为成功）
-          if (result && result.blockedTimeWarnings && Array.isArray(result.blockedTimeWarnings) && result.blockedTimeWarnings.length > 0) {
-            showWarningMessage('已创建可用时间，但检测到与阻塞时间的冲突，相关时段将不会对学生显示为可预约。')
+          if (
+            result &&
+            result.blockedTimeWarnings &&
+            Array.isArray(result.blockedTimeWarnings) &&
+            result.blockedTimeWarnings.length > 0
+          ) {
+            showWarningMessage(
+              '已创建可用时间，但检测到与阻塞时间的冲突，相关时段将不会对学生显示为可预约。'
+            )
           }
 
           return result
@@ -245,7 +260,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
   // 删除可用性
   const handleDeleteAvailability = async (id: string) => {
-
     if (deletingId) return
     setDeletingId(id)
     try {
@@ -260,8 +274,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       const response = await fetch(`/api/teachers/${teacherId}/availability/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
       setLoading(false)
       if (response.ok) {
@@ -316,7 +330,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         teacherId: teacherId,
         startTime: toISO(startTime),
         endTime: toISO(endTime),
-        reason: values.reason
+        reason: values.reason,
       }
 
       setLoading(true)
@@ -325,15 +339,20 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(blockedTimeData)
+        body: JSON.stringify(blockedTimeData),
       })
       setLoading(false)
       if (response.ok) {
         const result = await response.json()
         // 如果后端返回 availabilityConflicts，提示用户但仍认为创建成功
-        if (result && result.availabilityConflicts && Array.isArray(result.availabilityConflicts) && result.availabilityConflicts.length > 0) {
+        if (
+          result &&
+          result.availabilityConflicts &&
+          Array.isArray(result.availabilityConflicts) &&
+          result.availabilityConflicts.length > 0
+        ) {
           Modal.info({
             title: '已添加阻塞时间（存在与可用时间的冲突）',
             content: (
@@ -347,7 +366,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                 <p>这些可用时间段在学生查询/创建预约时会被过滤。</p>
               </div>
             ),
-            onOk() { }
+            onOk() {},
           })
         } else {
           showSuccessMessage('阻塞时间已添加')
@@ -380,8 +399,8 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
       const response = await fetch(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
@@ -398,14 +417,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
   // 按星期分组可用性
   const groupedAvailability = Array.isArray(availability)
-    ? availability.reduce((groups, item) => {
-      const day = item.dayOfWeek
-      if (!groups[day]) {
-        groups[day] = []
-      }
-      groups[day].push(item)
-      return groups
-    }, {} as Record<number, TeacherAvailabilityData[]>)
+    ? availability.reduce(
+        (groups, item) => {
+          const day = item.dayOfWeek
+          if (!groups[day]) {
+            groups[day] = []
+          }
+          groups[day].push(item)
+          return groups
+        },
+        {} as Record<number, TeacherAvailabilityData[]>
+      )
     : {}
 
   if (loading) {
@@ -421,9 +443,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     <div className="space-y-6">
       {/* 操作按钮 */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium text-gray-900">
-          {teacherName} 的可用性设置
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900">{teacherName} 的可用性设置</h3>
         <Space>
           <Button
             type="primary"
@@ -463,37 +483,45 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             {Object.entries(groupedAvailability).map(([day, items]) => (
               <Card key={day} size="small" title={DAYS[parseInt(day)]}>
                 <div className="space-y-2">
-                  {Array.isArray(items) && items.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex justify-between items-center p-2 bg-gray-50 rounded"
-                    >
-                      <div className="text-sm">
-                        <span className="font-medium">
-                          {item.startTime} - {item.endTime}
-                        </span>
-                        {
-                          (() => {
+                  {Array.isArray(items) &&
+                    items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between items-center p-2 bg-gray-50 rounded"
+                      >
+                        <div className="text-sm">
+                          <span className="font-medium">
+                            {item.startTime} - {item.endTime}
+                          </span>
+                          {(() => {
                             try {
-                              const sUtc = new Date(createUtcDateTime(item.startTime)).toISOString().slice(11, 16)
-                              const eUtc = new Date(createUtcDateTime(item.endTime)).toISOString().slice(11, 16)
-                              return <Tag color="geekblue" style={{ marginLeft: 8 }}>UTC: {sUtc} - {eUtc}</Tag>
-                            } catch { return null }
-                          })()
-                        }
-
+                              const sUtc = new Date(createUtcDateTime(item.startTime))
+                                .toISOString()
+                                .slice(11, 16)
+                              const eUtc = new Date(createUtcDateTime(item.endTime))
+                                .toISOString()
+                                .slice(11, 16)
+                              return (
+                                <Tag color="geekblue" style={{ marginLeft: 8 }}>
+                                  UTC: {sUtc} - {eUtc}
+                                </Tag>
+                              )
+                            } catch {
+                              return null
+                            }
+                          })()}
+                        </div>
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleDeleteAvailability(item.id)}
+                          loading={deletingId === item.id}
+                          disabled={!!deletingId}
+                        />
                       </div>
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDeleteAvailability(item.id)}
-                        loading={deletingId === item.id}
-                        disabled={!!deletingId}
-                      />
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </Card>
             ))}
@@ -512,7 +540,9 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {conflicts.map((c: any, idx: number) => (
               <div key={idx} style={{ marginBottom: 12 }}>
-                <Tag color="red" style={{ marginBottom: 6 }}>{c.type || 'conflict'}</Tag>
+                <Tag color="red" style={{ marginBottom: 6 }}>
+                  {c.type || 'conflict'}
+                </Tag>
                 <div style={{ color: '#444' }}>{c.message || '存在时间冲突'}</div>
                 {c.existingSlot && (
                   <div style={{ color: '#666', fontSize: 12 }}>
@@ -533,7 +563,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
           <Empty description="暂无阻塞时间设置" />
         ) : (
           <div className="space-y-3">
-            {blockedTimes.map(blockedTime => (
+            {blockedTimes.map((blockedTime) => (
               <div
                 key={blockedTime.id}
                 className="flex justify-between items-center p-3  border border-gray-300 rounded"
@@ -544,9 +574,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
                     {format(parseISO(blockedTime.endTime), 'HH:mm')}
                   </div>
                   {blockedTime.reason && (
-                    <div className="text-sm  mt-1">
-                      原因：{blockedTime.reason}
-                    </div>
+                    <div className="text-sm  mt-1">原因：{blockedTime.reason}</div>
                   )}
                 </div>
                 <Button

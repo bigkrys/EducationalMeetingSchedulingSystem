@@ -11,7 +11,10 @@ import crypto from 'crypto'
  *
  * 返回值：若通过返回 null；若不通过返回一个 NextResponse（401）以便路由直接 return
  */
-export async function authorizeJobRequest(request: NextRequest, rawBody?: string): Promise<NextResponse | null> {
+export async function authorizeJobRequest(
+  request: NextRequest,
+  rawBody?: string
+): Promise<NextResponse | null> {
   const headerSecret = request.headers.get('x-job-secret') || ''
   const auth = request.headers.get('authorization') || ''
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
@@ -20,7 +23,10 @@ export async function authorizeJobRequest(request: NextRequest, rawBody?: string
   if (!triggerSecret) {
     // 如果未配置 secret：开发时允许，生产环境拒绝
     if (process.env.NODE_ENV !== 'production') return null
-    return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Missing job trigger secret in server env' }, { status: 401 })
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Missing job trigger secret in server env' },
+      { status: 401 }
+    )
   }
 
   if (headerSecret === triggerSecret || bearer === triggerSecret) {
@@ -33,15 +39,25 @@ export async function authorizeJobRequest(request: NextRequest, rawBody?: string
     // 如果配置要求 HMAC 或请求提供了签名头，则验证签名
     if (requireHmac || (tsHeader && sigHeader)) {
       if (!tsHeader || !sigHeader) {
-        return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Missing HMAC headers' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'UNAUTHORIZED', message: 'Missing HMAC headers' },
+          { status: 401 }
+        )
       }
 
       const windowSec = parseInt(process.env.JOB_HMAC_WINDOW_SECONDS || '300', 10)
       const ts = parseInt(tsHeader, 10)
-      if (Number.isNaN(ts)) return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid timestamp' }, { status: 401 })
+      if (Number.isNaN(ts))
+        return NextResponse.json(
+          { error: 'UNAUTHORIZED', message: 'Invalid timestamp' },
+          { status: 401 }
+        )
       const now = Math.floor(Date.now() / 1000)
       if (Math.abs(now - ts) > windowSec) {
-        return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Timestamp outside allowed window' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'UNAUTHORIZED', message: 'Timestamp outside allowed window' },
+          { status: 401 }
+        )
       }
 
       // 构造要签名的字符串：ts + method + path + body（body 可能为空）
@@ -58,10 +74,16 @@ export async function authorizeJobRequest(request: NextRequest, rawBody?: string
         const sigBuf = Buffer.from(sigHeader, 'base64')
         const hBuf = Buffer.from(h, 'base64')
         if (sigBuf.length !== hBuf.length || !crypto.timingSafeEqual(sigBuf, hBuf)) {
-          return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid signature' }, { status: 401 })
+          return NextResponse.json(
+            { error: 'UNAUTHORIZED', message: 'Invalid signature' },
+            { status: 401 }
+          )
         }
       } catch (e) {
-        return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid signature format' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'UNAUTHORIZED', message: 'Invalid signature format' },
+          { status: 401 }
+        )
       }
     }
 
@@ -69,7 +91,10 @@ export async function authorizeJobRequest(request: NextRequest, rawBody?: string
     if (process.env.NODE_ENV !== 'production') return null
 
     // 生产环境：需要额外的网络/调度器约束
-    const allowedIps = (process.env.JOB_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean)
+    const allowedIps = (process.env.JOB_ALLOWED_IPS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
     const xfwd = request.headers.get('x-forwarded-for') || ''
     const remoteIp = xfwd.split(',')[0].trim() || ''
     if (allowedIps.length > 0 && remoteIp && allowedIps.includes(remoteIp)) {
@@ -83,8 +108,14 @@ export async function authorizeJobRequest(request: NextRequest, rawBody?: string
       if (val === headerVal) return null
     }
 
-    return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Production additional checks failed' }, { status: 401 })
+    return NextResponse.json(
+      { error: 'UNAUTHORIZED', message: 'Production additional checks failed' },
+      { status: 401 }
+    )
   }
 
-  return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' }, { status: 401 })
+  return NextResponse.json(
+    { error: 'UNAUTHORIZED', message: 'Invalid or missing job trigger secret' },
+    { status: 401 }
+  )
 }

@@ -13,7 +13,7 @@ const getHandler = async function GET(request: NextRequest) {
       host: process.env.SMTP_HOST || 'smtp.163.com',
       port: process.env.SMTP_PORT || '587',
       user: process.env.SMTP_USER || 'NOT_SET',
-      pass: process.env.SMTP_PASS ? 'SET' : 'NOT_SET'
+      pass: process.env.SMTP_PASS ? 'SET' : 'NOT_SET',
     }
 
     const connectionOk = await testEmailConnection()
@@ -24,30 +24,37 @@ const getHandler = async function GET(request: NextRequest) {
           '1. 确认163邮箱已开启IMAP/SMTP服务',
           '2. 检查授权码是否正确',
           '3. 尝试使用端口465替代587',
-          '4. 检查网络连接'
-        ]
+          '4. 检查网络连接',
+        ],
       })
     }
 
     return ok({ message: '邮件服务器连接正常', connection: 'OK', config })
   } catch (error) {
-    logger.error('email.test_connection.exception', { ...getRequestMeta(request), error: String(error) })
-    return fail('邮件服务器测试失败', 500, E.INTERNAL_ERROR, { details: error instanceof Error ? error.message : 'Unknown error' })
+    logger.error('email.test_connection.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
+    return fail('邮件服务器测试失败', 500, E.INTERNAL_ERROR, {
+      details: error instanceof Error ? error.message : 'Unknown error',
+    })
   }
 }
 
 const postHandler = async function POST(request: NextRequest) {
   try {
-  // withValidation middleware stores the parsed JSON on `validatedBody` to avoid
-  // consuming the body twice (req.text()/req.json()). Prefer that when present.
-  const body = (request as any).validatedBody ?? await request.json().catch(() => ({}))
-  const { to, subject, html, message } = body || {}
+    // withValidation middleware stores the parsed JSON on `validatedBody` to avoid
+    // consuming the body twice (req.text()/req.json()). Prefer that when present.
+    const body = (request as any).validatedBody ?? (await request.json().catch(() => ({})))
+    const { to, subject, html, message } = body || {}
 
     if (!to || !subject) {
       return fail('缺少必要参数：to, subject', 400, E.BAD_REQUEST)
     }
 
-    const emailHtml = html || `
+    const emailHtml =
+      html ||
+      `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #1976d2;">测试邮件</h2>
         <p>这是一封测试邮件，用于验证邮件通知系统是否正常工作。</p>
@@ -63,16 +70,21 @@ const postHandler = async function POST(request: NextRequest) {
 
     const sent = await sendEmail(to, subject, emailHtml)
     if (sent) {
-        try {
-          await prisma.auditLog.create({
-            data: {
-              action: 'test_email_sent',
-              targetId: to,
-              details: JSON.stringify({ subject }),
-              ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
-            }
-          })
-        } catch (e) { logger.warn('audit.test_email.write_failed', { ...getRequestMeta(request), error: String(e) }) }
+      try {
+        await prisma.auditLog.create({
+          data: {
+            action: 'test_email_sent',
+            targetId: to,
+            details: JSON.stringify({ subject }),
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+          },
+        })
+      } catch (e) {
+        logger.warn('audit.test_email.write_failed', {
+          ...getRequestMeta(request),
+          error: String(e),
+        })
+      }
       return ok({ message: '测试邮件发送成功', to, subject })
     }
 
@@ -84,4 +96,6 @@ const postHandler = async function POST(request: NextRequest) {
 }
 
 export const GET = withRateLimit()(getHandler)
-export const POST = withRateLimit({ windowMs: 60 * 1000, max: 6 })(withValidation(testEmailSchema)(postHandler))
+export const POST = withRateLimit({ windowMs: 60 * 1000, max: 6 })(
+  withValidation(testEmailSchema)(postHandler)
+)

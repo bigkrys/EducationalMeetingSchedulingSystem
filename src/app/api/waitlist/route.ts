@@ -26,11 +26,9 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
       where,
       include: {
         student: { include: { user: true } },
-        teacher: { include: { user: true } }
+        teacher: { include: { user: true } },
       },
-      orderBy: [
-        { createdAt: 'asc' }
-      ]
+      orderBy: [{ createdAt: 'asc' }],
     })
 
     return ok({
@@ -42,13 +40,16 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
         studentName: item.student.user.name,
         date: item.date,
         slot: item.slot.toISOString(),
-        priority: item.student?.serviceLevel === 'premium' ? 100 : 
-                 item.student?.serviceLevel === 'level1' ? 50 : 10, // 动态计算优先级
+        priority:
+          item.student?.serviceLevel === 'premium'
+            ? 100
+            : item.student?.serviceLevel === 'level1'
+              ? 50
+              : 10, // 动态计算优先级
         // status字段在Waitlist模型中不存在
-        createdAt: item.createdAt.toISOString()
-      }))
+        createdAt: item.createdAt.toISOString(),
+      })),
     })
-
   } catch (error) {
     logger.error('waitlist.get.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to fetch waitlist', 500, E.INTERNAL_ERROR)
@@ -72,8 +73,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
         studentId,
         date,
         slot: new Date(slot),
-
-      }
+      },
     })
 
     if (existingEntry) {
@@ -83,10 +83,10 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
     // 获取学生信息，包括服务级别和userId
     const student = await prisma.student.findUnique({
       where: { id: studentId },
-      select: { 
+      select: {
         serviceLevel: true,
-        userId: true
-      }
+        userId: true,
+      },
     })
 
     // 创建候补队列条目（优先级将通过查询时的排序来实现）
@@ -95,8 +95,8 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
         teacherId,
         studentId,
         date,
-        slot: new Date(slot)
-      }
+        slot: new Date(slot),
+      },
     })
 
     // 记录审计日志
@@ -112,14 +112,13 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
             slot,
             subject,
             // priority字段已移除
-            reason: 'Student added to waitlist for unavailable slot'
-          })
-        }
+            reason: 'Student added to waitlist for unavailable slot',
+          }),
+        },
       })
     }
 
     return ok({ message: 'Added to waitlist successfully', id: waitlistEntry.id }, { status: 201 })
-
   } catch (error) {
     logger.error('waitlist.add.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to add to waitlist', 500, E.INTERNAL_ERROR)
@@ -139,7 +138,7 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
     // 验证权限（只能移除自己的条目）
     const waitlistEntry = await prisma.waitlist.findUnique({
       where: { id },
-      include: { student: { include: { user: true } } }
+      include: { student: { include: { user: true } } },
     })
 
     if (!waitlistEntry) {
@@ -152,7 +151,7 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
 
     // 删除候补队列条目
     await prisma.waitlist.delete({
-      where: { id }
+      where: { id },
     })
 
     // 记录审计日志
@@ -162,13 +161,12 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
         action: 'WAITLIST_REMOVED',
         targetId: id,
         details: JSON.stringify({
-          reason: 'Student removed from waitlist'
-        })
-      }
+          reason: 'Student removed from waitlist',
+        }),
+      },
     })
 
     return ok({ message: 'Removed from waitlist successfully' })
-
   } catch (error) {
     logger.error('waitlist.remove.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to remove from waitlist', 500, E.INTERNAL_ERROR)
@@ -177,6 +175,12 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
 
 import { withRateLimit } from '@/lib/api/middleware'
 
-export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(withRoles(['student', 'teacher'])(getWaitlistHandler))
-export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(withValidation(waitlistAddSchema)(addToWaitlistHandler)))
-export const DELETE = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(withValidation(waitlistRemoveSchema)(removeFromWaitlistHandler)))
+export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(
+  withRoles(['student', 'teacher'])(getWaitlistHandler)
+)
+export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(
+  withRole('student')(withValidation(waitlistAddSchema)(addToWaitlistHandler))
+)
+export const DELETE = withRateLimit({ windowMs: 60 * 1000, max: 30 })(
+  withRole('student')(withValidation(waitlistRemoveSchema)(removeFromWaitlistHandler))
+)

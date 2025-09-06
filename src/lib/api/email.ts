@@ -6,20 +6,19 @@ import { logger } from '@/lib/logger'
 const emailConfig = {
   host: env.SMTP_HOST || 'smtp.163.com',
   port: parseInt(env.SMTP_PORT || '465'),
-  secure: (env.SMTP_PORT || '465') === '465', 
+  secure: (env.SMTP_PORT || '465') === '465',
   auth: {
     user: env.SMTP_USER,
-    pass: env.SMTP_PASS
+    pass: env.SMTP_PASS,
   },
   // 163邮箱特殊配置
   tls: {
-    rejectUnauthorized: false // 允许自签名证书
+    rejectUnauthorized: false, // 允许自签名证书
   },
   connectionTimeout: 60000, // 连接超时60秒
-  greetingTimeout: 30000,   // 问候超时30秒
-  socketTimeout: 60000      // socket超时60秒
+  greetingTimeout: 30000, // 问候超时30秒
+  socketTimeout: 60000, // socket超时60秒
 }
-
 
 // 创建邮件传输器
 const transporter = nodemailer.createTransport(emailConfig)
@@ -63,7 +62,7 @@ const emailTemplates = {
         <hr style="margin: 20px 0; border: none; border-top: 1px solid #e8e8e8;">
         <p style="color: #8c8c8c; font-size: 12px;">此邮件由教育会议调度系统自动发送，请勿回复。</p>
       </div>
-    `
+    `,
   },
   appointmentCancelled: {
     subject: '预约取消通知',
@@ -102,8 +101,8 @@ const emailTemplates = {
         <hr style="margin: 20px 0; border: none; border-top: 1px solid #e8e8e8;">
         <p style="color: #8c8c8c; font-size: 12px;">此邮件由教育会议调度系统自动发送，请勿回复。</p>
       </div>
-    `
-  }
+    `,
+  },
 }
 
 // 发送邮件
@@ -113,16 +112,16 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       from: `"教育会议调度系统" <${emailConfig.auth.user}>`,
       to,
       subject,
-      html
+      html,
     }
 
-  const info = await transporter.sendMail(mailOptions)
-  // 更详细的日志：包含收件人与主题，便于排查某个收件人未收到邮件的原因
-  logger.info('email.sent', { to, subject, messageId: info.messageId })
-  return true
+    const info = await transporter.sendMail(mailOptions)
+    // 更详细的日志：包含收件人与主题，便于排查某个收件人未收到邮件的原因
+    logger.info('email.sent', { to, subject, messageId: info.messageId })
+    return true
   } catch (error) {
-  logger.error('email.failed', { to, subject, error: String(error) })
-  return false
+    logger.error('email.failed', { to, subject, error: String(error) })
+    return false
   }
 }
 

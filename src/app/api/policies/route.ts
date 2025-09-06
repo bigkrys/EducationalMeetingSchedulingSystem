@@ -9,21 +9,20 @@ import { ApiErrorCode as E } from '@/lib/api/errors'
 async function getPoliciesHandler(request: NextRequest, context?: any) {
   try {
     const policies = await prisma.servicePolicy.findMany({
-      orderBy: { level: 'asc' }
+      orderBy: { level: 'asc' },
     })
 
     return ok({
-      policies: policies.map(policy => ({
+      policies: policies.map((policy) => ({
         level: policy.level,
         monthlyAutoApprove: policy.monthlyAutoApprove,
         priority: policy.priority,
         expireHours: policy.expireHours,
         reminderOffsets: policy.reminderOffsets,
         createdAt: policy.createdAt.toISOString(),
-        updatedAt: policy.updatedAt.toISOString()
-      }))
+        updatedAt: policy.updatedAt.toISOString(),
+      })),
     })
-
   } catch (error) {
     logger.error('policies.get.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to fetch policies', 500, E.INTERNAL_ERROR)
@@ -48,7 +47,11 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
       }
 
       if (typeof policy.monthlyAutoApprove !== 'number' || policy.monthlyAutoApprove < 0) {
-        return fail('monthlyAutoApprove must be a non-negative number', 400, E.POLICY_INVALID_MONTHLY_AUTO_APPROVE)
+        return fail(
+          'monthlyAutoApprove must be a non-negative number',
+          400,
+          E.POLICY_INVALID_MONTHLY_AUTO_APPROVE
+        )
       }
 
       if (typeof policy.expireHours !== 'number' || policy.expireHours < 1) {
@@ -64,15 +67,15 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
           monthlyAutoApprove: policy.monthlyAutoApprove,
           priority: policy.priority || false,
           expireHours: policy.expireHours,
-          reminderOffsets: policy.reminderOffsets || '24,1'
+          reminderOffsets: policy.reminderOffsets || '24,1',
         },
         create: {
           level: policy.level,
           monthlyAutoApprove: policy.monthlyAutoApprove,
           priority: policy.priority || false,
           expireHours: policy.expireHours,
-          reminderOffsets: policy.reminderOffsets || '24,1'
-        }
+          reminderOffsets: policy.reminderOffsets || '24,1',
+        },
       })
     })
 
@@ -83,31 +86,30 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
       data: {
         action: 'POLICIES_UPDATED',
         details: JSON.stringify({
-          updatedPolicies: policies.map(p => ({
+          updatedPolicies: policies.map((p) => ({
             level: p.level,
             monthlyAutoApprove: p.monthlyAutoApprove,
             priority: p.priority,
             expireHours: p.expireHours,
-            reminderOffsets: p.reminderOffsets
+            reminderOffsets: p.reminderOffsets,
           })),
-          updatedAt: new Date().toISOString()
-        })
-      }
+          updatedAt: new Date().toISOString(),
+        }),
+      },
     })
 
     return ok({
       message: 'Policies updated successfully',
       updated: updatedPolicies.length,
-      policies: updatedPolicies.map(policy => ({
+      policies: updatedPolicies.map((policy) => ({
         level: policy.level,
         monthlyAutoApprove: policy.monthlyAutoApprove,
         priority: policy.priority,
         expireHours: policy.expireHours,
         reminderOffsets: policy.reminderOffsets,
-        updatedAt: policy.updatedAt.toISOString()
-      }))
+        updatedAt: policy.updatedAt.toISOString(),
+      })),
     })
-
   } catch (error) {
     logger.error('policies.update.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to update policies', 500, E.INTERNAL_ERROR)

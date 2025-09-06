@@ -24,7 +24,7 @@ const getHandler = async function GET(request: NextRequest) {
     }
 
     // 检查缓存
-  const cacheKey = `slots:${teacherId}:${date}:${duration}`
+    const cacheKey = `slots:${teacherId}:${date}:${duration}`
     const cachedSlots = memoryCache.get(cacheKey)
     if (cachedSlots) {
       return ok(cachedSlots)
@@ -35,30 +35,29 @@ const getHandler = async function GET(request: NextRequest) {
       where: { id: teacherId },
       include: {
         availability: {
-          where: { isActive: true }
+          where: { isActive: true },
         },
-        blockedTimes: true
-      }
+        blockedTimes: true,
+      },
     })
 
     if (!teacher) {
       return fail('Teacher not found', 404, 'TEACHER_NOT_FOUND')
     }
 
-  // 计算可用槽位（逻辑已移动到 lib/scheduling）
-  const slots = await calculateAvailableSlots(teacher, date, duration)
+    // 计算可用槽位（逻辑已移动到 lib/scheduling）
+    const slots = await calculateAvailableSlots(teacher, date, duration)
 
     // 缓存结果（5分钟）
     const result = {
       teacherId,
       date,
       duration,
-      slots
+      slots,
     }
     memoryCache.set(cacheKey, result, 5 * 60 * 1000)
 
     return ok(result)
-
   } catch (error) {
     logger.error('slots.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to fetch slots', 500, 'INTERNAL_ERROR')
@@ -66,4 +65,3 @@ const getHandler = async function GET(request: NextRequest) {
 }
 
 export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(getHandler)
-

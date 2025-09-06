@@ -14,26 +14,26 @@ async function getAdminDashboardHandler(request: NextRequest, context?: any) {
       totalTeachers,
       totalAppointments,
       pendingApprovals,
-      expiredAppointments
+      expiredAppointments,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.student.count(),
       prisma.teacher.count(),
       prisma.appointment.count(),
       prisma.appointment.count({ where: { status: 'pending' } }),
-      prisma.appointment.count({ where: { status: 'expired' } })
+      prisma.appointment.count({ where: { status: 'expired' } }),
     ])
 
     // 检查系统健康状态
     type HealthStatus = 'healthy' | 'warning' | 'error'
     const systemHealth: {
-      database: HealthStatus,
-      cache: HealthStatus,
+      database: HealthStatus
+      cache: HealthStatus
       queue: HealthStatus
     } = {
       database: 'healthy',
       cache: 'healthy',
-      queue: 'healthy'
+      queue: 'healthy',
     }
 
     // 检查数据库连接
@@ -67,15 +67,17 @@ async function getAdminDashboardHandler(request: NextRequest, context?: any) {
         totalTeachers,
         totalAppointments,
         pendingApprovals,
-        expiredAppointments
+        expiredAppointments,
       },
-      systemHealth
+      systemHealth,
     }
 
     return ok(dashboardData)
-
   } catch (error) {
-    logger.error('admin.dashboard.get.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('admin.dashboard.get.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to fetch dashboard data', 500, E.INTERNAL_ERROR)
   }
 }

@@ -16,14 +16,9 @@ export default function AdminAuditLogs() {
       <Card>
         <div className="text-center">
           <Title level={2}>审计日志</Title>
-          <Text type="secondary">
-            审计日志功能正在开发中，敬请期待...
-          </Text>
+          <Text type="secondary">审计日志功能正在开发中，敬请期待...</Text>
           <div className="mt-4">
-            <Button 
-              type="primary" 
-              onClick={() => router.push('/admin')}
-            >
+            <Button type="primary" onClick={() => router.push('/admin')}>
               返回管理员控制台
             </Button>
           </div>

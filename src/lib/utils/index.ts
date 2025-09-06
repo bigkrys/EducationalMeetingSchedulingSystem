@@ -7,17 +7,20 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // 日期时间工具函数
-export function formatDate(date: Date | string, format: 'short' | 'long' | 'iso' = 'short'): string {
+export function formatDate(
+  date: Date | string,
+  format: 'short' | 'long' | 'iso' = 'short'
+): string {
   const d = new Date(date)
-  
+
   switch (format) {
     case 'short':
       return d.toLocaleDateString('zh-CN')
     case 'long':
-      return d.toLocaleDateString('zh-CN', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      return d.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
       })
     case 'iso':
       return d.toISOString()
@@ -28,20 +31,20 @@ export function formatDate(date: Date | string, format: 'short' | 'long' | 'iso'
 
 export function formatTime(date: Date | string): string {
   const d = new Date(date)
-  return d.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return d.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
 export function formatDateTime(date: Date | string): string {
   const d = new Date(date)
-  return d.toLocaleString('zh-CN', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
@@ -91,7 +94,7 @@ export function sortBy<T>(array: T[], key: keyof T, order: 'asc' | 'desc' = 'asc
   return [...array].sort((a, b) => {
     const aVal = a[key]
     const bVal = b[key]
-    
+
     if (aVal < bVal) return order === 'asc' ? -1 : 1
     if (aVal > bVal) return order === 'asc' ? 1 : -1
     return 0
@@ -148,7 +151,7 @@ export function random(min: number, max: number): number {
 // 对象工具函数
 export function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   const result = {} as Pick<T, K>
-  keys.forEach(key => {
+  keys.forEach((key) => {
     if (key in obj) {
       result[key] = obj[key]
     }
@@ -158,7 +161,7 @@ export function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pi
 
 export function omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
   const result = { ...obj }
-  keys.forEach(key => {
+  keys.forEach((key) => {
     delete result[key]
   })
   return result
@@ -212,7 +215,7 @@ export function throttle<T extends (...args: any[]) => any>(
     if (!inThrottle) {
       func(...args)
       inThrottle = true
-      setTimeout(() => inThrottle = false, limit)
+      setTimeout(() => (inThrottle = false), limit)
     }
   }
 }
@@ -220,7 +223,7 @@ export function throttle<T extends (...args: any[]) => any>(
 // 错误处理工具函数
 export function handleError(error: any, context?: string): void {
   console.error(`Error${context ? ` in ${context}` : ''}:`, error)
-  
+
   // 这里可以添加错误上报逻辑
   // 比如发送到错误监控服务
 }
@@ -231,9 +234,9 @@ export function generateId(): string {
 }
 
 export function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
     return v.toString(16)
   })
 }

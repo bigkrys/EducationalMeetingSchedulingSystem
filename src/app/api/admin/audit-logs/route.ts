@@ -18,15 +18,15 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
 
     // 构建查询条件
     const where: any = {}
-    
+
     if (actor) {
       where.actor = { name: { contains: actor, mode: 'insensitive' } }
     }
-    
+
     if (action) {
       where.action = action
     }
-    
+
     if (from || to) {
       where.createdAt = {}
       if (from) where.createdAt.gte = new Date(from)
@@ -43,17 +43,17 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
         actor: {
           select: {
             name: true,
-            email: true
-          }
-        }
+            email: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip: offset,
-      take: limit
+      take: limit,
     })
 
     // 格式化日志数据
-    const formattedLogs = logs.map(log => ({
+    const formattedLogs = logs.map((log) => ({
       id: log.id,
       actor: log.actor?.name || 'System',
       action: log.action,
@@ -61,7 +61,7 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
       details: log.details || '',
       ipAddress: log.ipAddress || 'N/A',
       userAgent: log.userAgent || 'N/A',
-      timestamp: log.createdAt.toISOString()
+      timestamp: log.createdAt.toISOString(),
     }))
 
     return ok({
@@ -69,11 +69,13 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
     })
-
   } catch (error) {
-    logger.error('admin.audit_logs.get.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('admin.audit_logs.get.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to fetch audit logs', 500, E.INTERNAL_ERROR)
   }
 }

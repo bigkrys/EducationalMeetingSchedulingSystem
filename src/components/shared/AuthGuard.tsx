@@ -11,11 +11,7 @@ interface AuthGuardProps {
   redirectTo?: string
 }
 
-export default function AuthGuard({ 
-  children, 
-  requiredRole, 
-  redirectTo = '/' 
-}: AuthGuardProps) {
+export default function AuthGuard({ children, requiredRole, redirectTo = '/' }: AuthGuardProps) {
   const router = useRouter()
   const [checking, setChecking] = useState(true)
   const [authorized, setAuthorized] = useState(false)
@@ -52,21 +48,11 @@ export default function AuthGuard({
   }, [router, requiredRole, redirectTo])
 
   if (checking) {
-    return (
-      <PageLoader 
-        message="正在验证权限" 
-        description="请稍候，正在检查您的访问权限..."
-      />
-    )
+    return <PageLoader message="正在验证权限" description="请稍候，正在检查您的访问权限..." />
   }
 
   if (!authorized) {
-    return (
-      <PageLoader 
-        message="重定向中" 
-        description="正在跳转到适当的页面..."
-      />
-    )
+    return <PageLoader message="重定向中" description="正在跳转到适当的页面..." />
   }
 
   return <>{children}</>

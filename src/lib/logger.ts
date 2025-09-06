@@ -5,7 +5,9 @@ function base(meta?: Record<string, any>) {
   return { ts, service: 'edu-scheduler', ...meta }
 }
 
-export function getRequestMeta(req?: Request | { headers?: Headers | any; method?: string; url?: string }) {
+export function getRequestMeta(
+  req?: Request | { headers?: Headers | any; method?: string; url?: string }
+) {
   try {
     const headers: Headers | undefined = (req as any)?.headers
     const url = (req as any)?.url
@@ -50,4 +52,3 @@ export const logger = {
   warn: (msg: string, meta?: Record<string, any>) => log('warn', msg, meta),
   error: (msg: string, meta?: Record<string, any>) => log('error', msg, meta),
 }
-

@@ -31,12 +31,7 @@ export default function Home() {
 
   // 如果正在检查认证状态，显示加载器
   if (checking) {
-    return (
-      <PageLoader 
-        message="正在检查登录状态" 
-        description="请稍候，正在验证您的身份..."
-      />
-    )
+    return <PageLoader message="正在检查登录状态" description="请稍候，正在验证您的身份..." />
   }
 
   return (
@@ -44,12 +39,8 @@ export default function Home() {
       <div className="w-full max-w-md">
         {/* 标题 */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            教育会议调度系统
-          </h1>
-          <p className="text-gray-600">
-            欢迎使用智能预约管理平台
-          </p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">教育会议调度系统</h1>
+          <p className="text-gray-600">欢迎使用智能预约管理平台</p>
         </div>
 
         {/* 登录注册表单 */}

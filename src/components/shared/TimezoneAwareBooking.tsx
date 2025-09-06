@@ -21,45 +21,45 @@ interface TimezoneAwareBookingProps {
  * 时区感知的预约时间选择组件
  * 演示如何正确显示和处理时区转换
  */
-export default function TimezoneAwareBooking({ 
-  teacherId, 
-  selectedDate, 
-  onSlotSelect 
+export default function TimezoneAwareBooking({
+  teacherId,
+  selectedDate,
+  onSlotSelect,
 }: TimezoneAwareBookingProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [selectingSlot, setSelectingSlot] = useState(false)
-  
+
   const timezoneInfo = getTimezoneInfo()
 
   const fetchTimeSlots = useCallback(async () => {
     try {
       setLoading(true)
-      
+
       const token = localStorage.getItem('accessToken')
       const response = await fetch(
         `/api/slots?teacherId=${teacherId}&date=${selectedDate}&duration=30`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         }
       )
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // API返回的是UTC时间字符串数组
         const slots: TimeSlot[] = data.slots.map((utcTimeString: string, index: number) => {
           const startTime = new Date(utcTimeString)
           const endTime = new Date(startTime.getTime() + 30 * 60 * 1000)
-          
+
           return {
             id: `slot_${index}`,
             startTime: startTime.toISOString(), // 保持UTC格式
             endTime: endTime.toISOString(),
-            status: 'available'
+            status: 'available',
           }
         })
-        
+
         setTimeSlots(slots)
       }
     } catch (error) {
@@ -116,10 +116,10 @@ export default function TimezoneAwareBooking({
               type={slot.status === 'available' ? 'default' : 'text'}
               disabled={slot.status !== 'available' || selectingSlot}
               onClick={() => handleSlotClick(slot)}
-              style={{ 
-                width: '100%', 
+              style={{
+                width: '100%',
                 textAlign: 'left',
-                border: slot.status === 'available' ? '1px solid #d9d9d9' : 'none'
+                border: slot.status === 'available' ? '1px solid #d9d9d9' : 'none',
               }}
             >
               <TimeSlotDisplay
@@ -137,7 +137,7 @@ export default function TimezoneAwareBooking({
         )}
         locale={{ emptyText: '该日期暂无可预约时间' }}
       />
-      
+
       {timeSlots.length > 0 && (
         <div style={{ marginTop: 16, fontSize: '12px', color: '#666' }}>
           <div>• 显示时间：本地时间 ({timezoneInfo.timezone})</div>
@@ -175,15 +175,17 @@ export function AppointmentHistory({ appointments }: { appointments: any[] }) {
             <div style={{ width: '100%' }}>
               <div style={{ marginBottom: 8 }}>
                 <strong>{appointment.teacher?.user?.name || '未知教师'}</strong>
-                <Tag style={{ marginLeft: 8 }}>{appointment.subject?.name || appointment.subject}</Tag>
+                <Tag style={{ marginLeft: 8 }}>
+                  {appointment.subject?.name || appointment.subject}
+                </Tag>
               </div>
-              
+
               <AppointmentTimeDisplay
                 scheduledTime={appointment.scheduledTime}
                 durationMinutes={appointment.durationMinutes}
                 status={appointment.status}
               />
-              
+
               {appointment.studentNotes && (
                 <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
                   备注: {appointment.studentNotes}

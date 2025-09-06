@@ -16,7 +16,7 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
 
   // 查找该日期的可用时间（基于教师本地的星期几）
   const dayAvailability = teacher.availability.find((avail: any) => avail.dayOfWeek === dayOfWeek)
-  
+
   if (!dayAvailability) {
     return [] // 该日期没有可用时间
   }
@@ -24,10 +24,16 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
   // 解析开始和结束时间
   const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number)
   const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number)
-  
+
   // 按教师时区构造具体的开始/结束瞬时（UTC）——以教师本地时间为准再转换为 UTC
-  const slotStart = zonedTimeToUtc(`${date}T${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00`, tz)
-  const slotEnd = zonedTimeToUtc(`${date}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`, tz)
+  const slotStart = zonedTimeToUtc(
+    `${date}T${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00`,
+    tz
+  )
+  const slotEnd = zonedTimeToUtc(
+    `${date}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`,
+    tz
+  )
 
   // 校验 duration，确保为正整数；否则回退到 30 分钟
   let slotDuration = Number(duration)
@@ -42,7 +48,9 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
   // 期望可预约开始于 9:45）。步长取 duration 与 buffer 的最小值，至少为1。
   const allSlots: Date[] = []
   const totalMinutes = Math.floor((slotEnd.getTime() - slotStart.getTime()) / 60000)
-  const bufferMinutes = Number.isFinite(Number(teacher.bufferMinutes)) ? Number(teacher.bufferMinutes) : DEFAULT_BUFFER_MINUTES
+  const bufferMinutes = Number.isFinite(Number(teacher.bufferMinutes))
+    ? Number(teacher.bufferMinutes)
+    : DEFAULT_BUFFER_MINUTES
   // 使用 slotDuration 与 bufferMinutes 的最大公约数作为步长，这样可以支持由 buffer 导致的偏移
   // 例如 slotDuration=30, buffer=15 -> gcd=15，会生成 9:00,9:15,9:30,9:45 等起始时间
   const gcd = (a: number, b: number) => {
@@ -63,7 +71,7 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
   }
 
   // 过滤掉超出结束时间的槽位
-  const validSlots = allSlots.filter(slot => {
+  const validSlots = allSlots.filter((slot) => {
     const slotEndTime = addMinutes(slot, slotDuration)
     return slotEndTime <= slotEnd
   })
@@ -87,39 +95,39 @@ export async function calculateAvailableSlots(teacher: any, date: string, durati
       teacherId: teacher.id,
       scheduledTime: {
         gte: dayRangeStart,
-        lt: dayRangeEnd
+        lt: dayRangeEnd,
       },
-      status: { in: ['pending', 'approved'] }
-    }
+      status: { in: ['pending', 'approved'] },
+    },
   })
 
   // 过滤掉被阻塞或被占用的时间槽
-  const availableSlots = validSlots.filter(slot => {
-  const slotEndTime = addMinutes(slot, slotDuration)
-    
+  const availableSlots = validSlots.filter((slot) => {
+    const slotEndTime = addMinutes(slot, slotDuration)
+
     // 检查是否与阻塞时间冲突
     const isBlocked = blockedTimes.some((block: any) => {
       const blockStart = new Date(block.startTime)
       const blockEnd = new Date(block.endTime)
       return slot < blockEnd && slotEndTime > blockStart
     })
-    
+
     if (isBlocked) return false
-    
+
     // 检查是否与已有预约冲突（包含缓冲时间）
-  const bufferStart = addMinutes(slot, -teacher.bufferMinutes)
-  const bufferEnd = addMinutes(slotEndTime, teacher.bufferMinutes)
-    
+    const bufferStart = addMinutes(slot, -teacher.bufferMinutes)
+    const bufferEnd = addMinutes(slotEndTime, teacher.bufferMinutes)
+
     const hasConflict = existingAppointments.some((apt: any) => {
-  const aptEnd = addMinutes(apt.scheduledTime, apt.durationMinutes)
+      const aptEnd = addMinutes(apt.scheduledTime, apt.durationMinutes)
       return bufferStart < aptEnd && bufferEnd > apt.scheduledTime
     })
-    
+
     if (hasConflict) return false
-    
+
     return true
   })
 
   // 转换为ISO字符串并返回
-  return availableSlots.map(slot => slot.toISOString())
+  return availableSlots.map((slot) => slot.toISOString())
 }

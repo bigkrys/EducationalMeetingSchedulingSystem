@@ -25,12 +25,10 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
   visible,
   onCancel,
   onSubmit,
-  form
-  ,submitting = false
+  form,
+  submitting = false,
 }) => {
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([
-    { id: '1', startTime: '', endTime: '' }
-  ])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([{ id: '1', startTime: '', endTime: '' }])
 
   const handleAddTimeSlot = () => {
     const newId = (timeSlots.length + 1).toString()
@@ -39,23 +37,29 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
 
   const handleRemoveTimeSlot = (id: string) => {
     if (timeSlots.length > 1) {
-      setTimeSlots(timeSlots.filter(slot => slot.id !== id))
+      setTimeSlots(timeSlots.filter((slot) => slot.id !== id))
     }
   }
 
   const handleTimeSlotChange = (id: string, field: 'startTime' | 'endTime', value: any) => {
     if (value && typeof value.format === 'function') {
-      setTimeSlots(timeSlots.map(slot =>
-        slot.id === id ? { ...slot, [field]: value.format('HH:mm') } : slot
-      ))
+      setTimeSlots(
+        timeSlots.map((slot) =>
+          slot.id === id ? { ...slot, [field]: value.format('HH:mm') } : slot
+        )
+      )
     }
   }
 
   const handleSubmit = () => {
     form.validateFields().then((values: any) => {
       // 验证时间段数据
-      const validTimeSlots = timeSlots.filter(slot =>
-        slot.startTime && slot.endTime && slot.startTime.trim() !== '' && slot.endTime.trim() !== ''
+      const validTimeSlots = timeSlots.filter(
+        (slot) =>
+          slot.startTime &&
+          slot.endTime &&
+          slot.startTime.trim() !== '' &&
+          slot.endTime.trim() !== ''
       )
 
       if (validTimeSlots.length === 0) {
@@ -76,10 +80,10 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
 
       const availabilityData = {
         ...values,
-        timeSlots: validTimeSlots.map(slot => ({
+        timeSlots: validTimeSlots.map((slot) => ({
           startTime: slot.startTime,
-          endTime: slot.endTime
-        }))
+          endTime: slot.endTime,
+        })),
       }
 
       console.log('提交的可用性数据:', availabilityData)
@@ -109,19 +113,13 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
   }
 
   return (
-    <Modal
-      title="添加可用时间"
-      open={visible}
-      onCancel={handleCancel}
-      footer={null}
-      width={600}
-    >
+    <Modal title="添加可用时间" open={visible} onCancel={handleCancel} footer={null} width={600}>
       <Form
         form={form}
         layout="vertical"
         initialValues={{
           dayOfWeek: 1,
-          isRecurring: true
+          isRecurring: true,
         }}
       >
         <Form.Item
@@ -140,21 +138,13 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
           </Select>
         </Form.Item>
 
-        <Form.Item
-          name="isRecurring"
-          label="重复设置"
-        >
-          <Switch
-            checkedChildren="每周重复"
-            unCheckedChildren="仅此一次"
-            defaultChecked={true}
-          />
+        <Form.Item name="isRecurring" label="重复设置">
+          <Switch checkedChildren="每周重复" unCheckedChildren="仅此一次" defaultChecked={true} />
         </Form.Item>
 
-        <Form.Item label="时间段设置"
-        >
-          <Alert 
-            message="时间段设置说明" 
+        <Form.Item label="时间段设置">
+          <Alert
+            message="时间段设置说明"
             description={
               <div className="text-sm">
                 <p>• 时间段重叠检测仅在同一个星期几内进行</p>
@@ -163,7 +153,7 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
                 <p>• 建议设置合理的时间段，避免过短或过长</p>
               </div>
             }
-            type="info" 
+            type="info"
             showIcon
           />
           <div className="space-y-3">
@@ -173,7 +163,6 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
                   <span className="text-sm font-medium text-gray-700 min-w-[60px]">
                     时间段 {index + 1}
                   </span>
-
 
                   <TimePicker
                     format="HH:mm"
@@ -217,10 +206,13 @@ const AddAvailabilityModal: React.FC<AddAvailabilityModalProps> = ({
 
         <Form.Item className="mb-0">
           <div className="flex justify-end space-x-3">
-            <Button onClick={handleCancel}>
-              取消
-            </Button>
-            <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
+            <Button onClick={handleCancel}>取消</Button>
+            <Button
+              type="primary"
+              onClick={handleSubmit}
+              loading={submitting}
+              disabled={submitting}
+            >
               确认添加
             </Button>
           </div>

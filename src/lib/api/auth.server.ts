@@ -28,13 +28,13 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export async function authenticateUser(email: string, password: string) {
-  const uniq = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+  const uniq = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const labels = {
     total: `auth:total:${email}:${uniq}`,
     dbFind: `auth:db-find:${email}:${uniq}`,
     verify: `auth:verify-password:${email}:${uniq}`,
     gen: `auth:generate-tokens:${email}:${uniq}`,
-    store: `auth:store-refresh:${email}:${uniq}`
+    store: `auth:store-refresh:${email}:${uniq}`,
   }
 
   console.time(labels.total)
@@ -47,8 +47,8 @@ export async function authenticateUser(email: string, password: string) {
         email: true,
         passwordHash: true,
         role: true,
-        name: true
-      }
+        name: true,
+      },
     })
     console.timeEnd(labels.dbFind)
 
@@ -68,7 +68,7 @@ export async function authenticateUser(email: string, password: string) {
     const payload: JWTPayload = {
       userId: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
     }
 
     console.time(labels.gen)
@@ -86,18 +86,20 @@ export async function authenticateUser(email: string, password: string) {
           update: {
             userId: user.id,
             revoked: false,
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           },
           create: {
             userId: user.id,
             tokenHash,
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          }
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
         })
       } catch (e: any) {
         console.error('Failed to store refresh token (background):', e)
       } finally {
-        try { console.timeEnd(labels.store) } catch (_) {}
+        try {
+          console.timeEnd(labels.store)
+        } catch (_) {}
       }
     })()
 
@@ -108,13 +110,15 @@ export async function authenticateUser(email: string, password: string) {
         id: user.id,
         email: user.email,
         role: user.role,
-        name: user.name
+        name: user.name,
       },
       accessToken,
-      refreshToken
+      refreshToken,
     }
   } catch (error) {
-    try { console.timeEnd(labels.total) } catch (_) {}
+    try {
+      console.timeEnd(labels.total)
+    } catch (_) {}
     throw error
   }
 }

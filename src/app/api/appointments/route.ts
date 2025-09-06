@@ -5,7 +5,10 @@ import { withRole, withRoles } from '@/lib/api/middleware'
 import { deleteCachePattern } from '@/lib/api/cache'
 import { z } from 'zod'
 import { addMinutes, isBefore, isAfter } from 'date-fns'
-import { sendNewAppointmentRequestNotification, sendAppointmentApprovedNotification } from '@/lib/api/email'
+import {
+  sendNewAppointmentRequestNotification,
+  sendAppointmentApprovedNotification,
+} from '@/lib/api/email'
 import { withRateLimit } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
@@ -22,7 +25,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
       from: searchParams.get('from'),
       to: searchParams.get('to'),
       cursor: searchParams.get('cursor'),
-      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 20
+      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 20,
     }
 
     // 验证必需参数
@@ -40,7 +43,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
 
     // 验证UUID格式（如果提供了的话）
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    
+
     if (queryData.studentId && !uuidRegex.test(queryData.studentId)) {
       return fail('Invalid studentId format', 400, 'BAD_REQUEST')
     }
@@ -51,35 +54,35 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
 
     // 构建查询条件
     const where: Record<string, any> = {}
-    
+
     if (queryData.role === 'student' && queryData.studentId) {
       // 如果是学生角色，需要根据User ID查找对应的Student ID
       const student = await prisma.student.findUnique({
-        where: { userId: queryData.studentId }
+        where: { userId: queryData.studentId },
       })
-      
+
       if (!student) {
         return fail('Student not found for this user', 400, 'BAD_REQUEST')
       }
-      
+
       where.studentId = student.id
     } else if (queryData.role === 'teacher' && queryData.teacherId) {
       // 如果是教师角色，需要根据User ID查找对应的Teacher ID
       const teacher = await prisma.teacher.findUnique({
-        where: { userId: queryData.teacherId }
+        where: { userId: queryData.teacherId },
       })
-      
+
       if (!teacher) {
         return fail('Teacher not found for this user', 400, 'BAD_REQUEST')
       }
-      
+
       where.teacherId = teacher.id
     }
-    
+
     if (queryData.status) {
       where.status = queryData.status
     }
-    
+
     if (queryData.from || queryData.to) {
       where.scheduledTime = {}
       if (queryData.from) {
@@ -93,16 +96,16 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
     // 构建分页
     const take = queryData.limit
     const skip = 0
-    
+
     if (queryData.cursor) {
       // 简单的游标分页实现
       const cursorAppointment = await prisma.appointment.findUnique({
-        where: { id: queryData.cursor }
+        where: { id: queryData.cursor },
       })
-      
+
       if (cursorAppointment) {
         where.scheduledTime = {
-          gt: cursorAppointment.scheduledTime
+          gt: cursorAppointment.scheduledTime,
         }
       }
     }
@@ -113,11 +116,11 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
       include: {
         student: { include: { user: true } },
         teacher: { include: { user: true } },
-        subject: true
+        subject: true,
       },
       orderBy: { scheduledTime: 'asc' },
       take: take + 1, // 多取一个来判断是否有下一页
-      skip
+      skip,
     })
     // 判断是否有下一页
     const hasNext = appointments.length > take
@@ -141,16 +144,15 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
         student: {
           id: apt.student.id,
           name: apt.student.user.name,
-          serviceLevel: apt.student.serviceLevel
+          serviceLevel: apt.student.serviceLevel,
         },
         teacher: {
           id: apt.teacher.id,
-          name: apt.teacher.user.name
-        }
+          name: apt.teacher.user.name,
+        },
       })),
-      nextCursor
+      nextCursor,
     })
-
   } catch (error) {
     logger.error('appointments.list.exception', { error: String(error) })
     return fail('Failed to fetch appointments', 500, 'INTERNAL_ERROR')
@@ -160,43 +162,50 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
 // 创建预约
 async function createAppointmentHandler(request: NextRequest, context?: any) {
   try {
-  let emailDebug: any = undefined
+    let emailDebug: any = undefined
     const body = await request.json()
     const validatedData = createAppointmentSchema.parse(body)
 
     // 检查幂等性
     const existingAppointment = await prisma.appointment.findUnique({
-      where: { idempotencyKey: validatedData.idempotencyKey }
+      where: { idempotencyKey: validatedData.idempotencyKey },
     })
 
     if (existingAppointment) {
       // 已存在相同 idempotencyKey 的预约：返回现有预约信息以支持幂等重试
       const apt = await prisma.appointment.findUnique({
         where: { id: existingAppointment.id },
-        include: { student: { include: { user: true } }, teacher: { include: { user: true } }, subject: true }
+        include: {
+          student: { include: { user: true } },
+          teacher: { include: { user: true } },
+          subject: true,
+        },
       })
       if (apt) {
-        return ok({
-          id: apt.id,
-          scheduledTime: apt.scheduledTime.toISOString(),
-          status: apt.status,
-          subject: apt.subject?.name,
-          durationMinutes: apt.durationMinutes,
-          approvalRequired: apt.approvalRequired,
-          approvedAt: apt.approvedAt?.toISOString(),
-          createdAt: apt.createdAt.toISOString(),
-          studentId: apt.student?.id,
-          studentName: apt.student?.user?.name,
-          teacherId: apt.teacher?.id,
-          teacherName: apt.teacher?.user?.name
-        }, { status: 200 })
+        return ok(
+          {
+            id: apt.id,
+            scheduledTime: apt.scheduledTime.toISOString(),
+            status: apt.status,
+            subject: apt.subject?.name,
+            durationMinutes: apt.durationMinutes,
+            approvalRequired: apt.approvalRequired,
+            approvedAt: apt.approvedAt?.toISOString(),
+            createdAt: apt.createdAt.toISOString(),
+            studentId: apt.student?.id,
+            studentName: apt.student?.user?.name,
+            teacherId: apt.teacher?.id,
+            teacherName: apt.teacher?.user?.name,
+          },
+          { status: 200 }
+        )
       }
     }
 
     // 检查学生是否存在且为激活状态
     const student = await prisma.student.findUnique({
       where: { id: validatedData.studentId },
-      include: { user: true }
+      include: { user: true },
     })
 
     if (!student || student.user.status !== 'active') {
@@ -206,7 +215,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     // 检查教师是否存在
     const teacher = await prisma.teacher.findUnique({
       where: { id: validatedData.teacherId },
-      include: { user: true }
+      include: { user: true },
     })
 
     if (!teacher || teacher.user.status !== 'active') {
@@ -218,9 +227,9 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       where: {
         teacherId: validatedData.teacherId,
         subject: {
-          name: validatedData.subject
-        }
-      }
+          name: validatedData.subject,
+        },
+      },
     })
 
     if (!teacherSubject) {
@@ -232,9 +241,9 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       where: {
         studentId: validatedData.studentId,
         subject: {
-          name: validatedData.subject
-        }
-      }
+          name: validatedData.subject,
+        },
+      },
     })
 
     if (!studentSubject) {
@@ -244,7 +253,13 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     // 首先查找或创建科目（需要在事务前准备好 subject.id）
     let subject = await prisma.subject.findFirst({ where: { name: validatedData.subject } })
     if (!subject) {
-      subject = await prisma.subject.create({ data: { name: validatedData.subject, code: validatedData.subject.toUpperCase().replace(/\s+/g, '_'), description: `科目：${validatedData.subject}` } })
+      subject = await prisma.subject.create({
+        data: {
+          name: validatedData.subject,
+          code: validatedData.subject.toUpperCase().replace(/\s+/g, '_'),
+          description: `科目：${validatedData.subject}`,
+        },
+      })
     }
 
     // 检查槽位并创建预约（使用事务与行锁序列化同一教师的并发请求）
@@ -257,7 +272,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     let appointment: any = undefined
     try {
       appointment = await prisma.$transaction(async (tx) => {
-  // 重新读取可能被并发修改的数据（学生记录、教师行等）
+        // 重新读取可能被并发修改的数据（学生记录、教师行等）
         const txTeacher = await tx.teacher.findUnique({ where: { id: validatedData.teacherId } })
         if (!txTeacher) {
           throw new Error('TEACHER_NOT_FOUND_TX')
@@ -276,13 +291,13 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
           where: {
             teacherId: validatedData.teacherId,
             scheduledTime: { lt: bufferEnd },
-            status: { in: ['pending', 'approved'] }
-          }
+            status: { in: ['pending', 'approved'] },
+          },
         })
 
         const hasConflict = conflictingAppointments.some((appt: any) => {
           const appointmentEnd = addMinutes(appt.scheduledTime, appt.durationMinutes)
-          return (bufferStart < appointmentEnd && bufferEnd > appt.scheduledTime)
+          return bufferStart < appointmentEnd && bufferEnd > appt.scheduledTime
         })
 
         if (hasConflict) {
@@ -302,8 +317,8 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
           where: {
             teacherId: validatedData.teacherId,
             scheduledTime: { gte: dayStart, lte: dayEnd },
-            status: { in: ['pending', 'approved'] }
-          }
+            status: { in: ['pending', 'approved'] },
+          },
         })
 
         if (dailyAppointments >= txTeacher.maxDailyMeetings) {
@@ -321,14 +336,16 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
         if (txStudent.lastQuotaReset < monthStart) {
           await tx.student.update({
             where: { id: txStudent.id },
-            data: { monthlyMeetingsUsed: 0, lastQuotaReset: now }
+            data: { monthlyMeetingsUsed: 0, lastQuotaReset: now },
           })
           txStudent.monthlyMeetingsUsed = 0
           txStudent.lastQuotaReset = now
         }
 
         // 检查是否超过月度配额限制
-        const policy = await tx.servicePolicy.findUnique({ where: { level: txStudent.serviceLevel } })
+        const policy = await tx.servicePolicy.findUnique({
+          where: { level: txStudent.serviceLevel },
+        })
         if (txStudent.serviceLevel !== 'level2') {
           let monthlyLimit = 10
           if (policy) monthlyLimit = policy.monthlyAutoApprove
@@ -365,12 +382,15 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
             status,
             approvalRequired,
             approvedAt: status === 'approved' ? new Date() : null,
-            idempotencyKey: validatedData.idempotencyKey
-          }
+            idempotencyKey: validatedData.idempotencyKey,
+          },
         })
 
         // 更新学生月度使用次数（事务内）
-        await tx.student.update({ where: { id: txStudent.id }, data: { monthlyMeetingsUsed: { increment: 1 } } })
+        await tx.student.update({
+          where: { id: txStudent.id },
+          data: { monthlyMeetingsUsed: { increment: 1 } },
+        })
 
         return created
       })
@@ -393,52 +413,57 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
       throw err
     }
 
-    const existingStudentSubject = await prisma.studentSubject.findUnique({ where: { studentId_subjectId: { studentId: validatedData.studentId, subjectId: subject.id } } })
+    const existingStudentSubject = await prisma.studentSubject.findUnique({
+      where: { studentId_subjectId: { studentId: validatedData.studentId, subjectId: subject.id } },
+    })
     if (!existingStudentSubject) {
-      await prisma.studentSubject.create({ data: { studentId: validatedData.studentId, subjectId: subject.id } })
+      await prisma.studentSubject.create({
+        data: { studentId: validatedData.studentId, subjectId: subject.id },
+      })
     }
 
     // 确保教师有该科目
-    const existingTeacherSubject = await prisma.teacherSubject.findUnique({ where: { teacherId_subjectId: { teacherId: validatedData.teacherId, subjectId: subject.id } } })
+    const existingTeacherSubject = await prisma.teacherSubject.findUnique({
+      where: { teacherId_subjectId: { teacherId: validatedData.teacherId, subjectId: subject.id } },
+    })
     if (!existingTeacherSubject) {
-      await prisma.teacherSubject.create({ data: { teacherId: validatedData.teacherId, subjectId: subject.id } })
+      await prisma.teacherSubject.create({
+        data: { teacherId: validatedData.teacherId, subjectId: subject.id },
+      })
     }
 
     // 清除相关缓存
     const dateStr = scheduledTime.toISOString().split('T')[0]
     await deleteCachePattern(`slots:${validatedData.teacherId}:${dateStr}:*`)
 
-  // 发送邮件通知
+    // 发送邮件通知
     try {
       // 获取科目名称
       const subjectRecord = await prisma.subject.findUnique({
-        where: { id: subject.id }
+        where: { id: subject.id },
       })
 
       if (subjectRecord) {
         // 受控发送邮件：在 serverless 环境中 setTimeout 可能不会被执行，
         // 我们根据环境变量决定是同步等待发送还是 fire-and-forget。
-    const _sendAppointmentNotifications = async () => {
+        const _sendAppointmentNotifications = async () => {
           try {
-      const aptStatus = appointment?.status
-      if (aptStatus === 'pending') {
-              const res = await sendNewAppointmentRequestNotification(
-                teacher.user.email,
-                {
-                  studentName: student.user.name,
-                  subject: subject.name,
-                  scheduledTime: scheduledTime.toLocaleString('zh-CN', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: (teacher as any)?.timezone || 'UTC'
-                  }),
-                  durationMinutes: validatedData.durationMinutes,
-                  studentEmail: student.user.email
-                }
-              )
+            const aptStatus = appointment?.status
+            if (aptStatus === 'pending') {
+              const res = await sendNewAppointmentRequestNotification(teacher.user.email, {
+                studentName: student.user.name,
+                subject: subject.name,
+                scheduledTime: scheduledTime.toLocaleString('zh-CN', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: (teacher as any)?.timezone || 'UTC',
+                }),
+                durationMinutes: validatedData.durationMinutes,
+                studentEmail: student.user.email,
+              })
               return { teacherSent: res?.teacherSent }
             } else if (aptStatus === 'approved') {
               const res = await sendAppointmentApprovedNotification(
@@ -454,18 +479,18 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    timeZone: (teacher as any)?.timezone || 'UTC'
+                    timeZone: (teacher as any)?.timezone || 'UTC',
                   }),
-                  durationMinutes: validatedData.durationMinutes
+                  durationMinutes: validatedData.durationMinutes,
                 }
               )
               return { studentSent: res?.studentSent, teacherSent: res?.teacherSent }
-              }
+            }
           } catch (error) {
             logger.error('appointment.notify.create.failed', { error: String(error) })
             return { error: String(error) }
           }
-          return { }
+          return {}
         }
 
         let emailDebug: any = undefined
@@ -481,7 +506,9 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
           }
         } else {
           // fire-and-forget：启动发送但不阻塞响应（比 setTimeout 更可靠）
-          _sendAppointmentNotifications().catch(err => logger.error('appointment.notify.create.async_failed', { error: String(err) }))
+          _sendAppointmentNotifications().catch((err) =>
+            logger.error('appointment.notify.create.async_failed', { error: String(err) })
+          )
         }
       }
     } catch (error) {
@@ -491,29 +518,32 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     const responseBody: any = {
       id: appointment.id,
       status: appointment.status,
-      approvalRequired: appointment.approvalRequired
+      approvalRequired: appointment.approvalRequired,
     }
     if (emailDebug) responseBody.emailDebug = emailDebug
 
     return ok(responseBody, { status: 201 })
-
   } catch (error) {
     if (error instanceof z.ZodError) {
       return fail('Invalid input data', 400, 'BAD_REQUEST', error.errors)
     }
 
-    logger.error('appointments.create.exception', { ...getRequestMeta(request), error: String(error) })
-    
+    logger.error('appointments.create.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
+
     // 返回更详细的错误信息
     let errorMessage = 'Failed to create appointment'
     if (error instanceof Error) {
       errorMessage = error.message
     }
-    
+
     return fail(errorMessage, 500, 'INTERNAL_ERROR')
   }
 }
 
-
 export const GET = withRoles(['student', 'teacher'])(getAppointmentsHandler)
-export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(withRole('student')(createAppointmentHandler))
+export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(
+  withRole('student')(createAppointmentHandler)
+)

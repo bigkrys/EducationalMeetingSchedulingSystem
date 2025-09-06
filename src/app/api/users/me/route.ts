@@ -36,10 +36,10 @@ async function handler(request: AuthenticatedRequest) {
             // studentSubjects -> subject.name
             studentSubjects: {
               select: {
-                subject: { select: { name: true } }
-              }
-            }
-          }
+                subject: { select: { name: true } },
+              },
+            },
+          },
         },
         teacher: {
           select: {
@@ -47,11 +47,11 @@ async function handler(request: AuthenticatedRequest) {
             maxDailyMeetings: true,
             bufferMinutes: true,
             teacherSubjects: {
-              select: { subject: { select: { name: true } } }
-            }
-          }
-        }
-      }
+              select: { subject: { select: { name: true } } },
+            },
+          },
+        },
+      },
     })
 
     if (!user) {
@@ -70,7 +70,7 @@ async function handler(request: AuthenticatedRequest) {
         id: user.student.id,
         serviceLevel: user.student.serviceLevel,
         monthlyMeetingsUsed: user.student.monthlyMeetingsUsed,
-        enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name)
+        enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name),
       }
     }
     if (user.teacher) {
@@ -78,14 +78,14 @@ async function handler(request: AuthenticatedRequest) {
         id: user.teacher.id,
         maxDailyMeetings: user.teacher.maxDailyMeetings,
         bufferMinutes: user.teacher.bufferMinutes,
-        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name)
+        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name),
       }
     }
 
     // put into short-lived cache
     try {
       userMeCache.set(userId, { expiresAt: Date.now() + USER_ME_TTL_MS, data: userData })
-    } catch (_) { }
+    } catch (_) {}
 
     return ok(userData)
   } catch (error: any) {

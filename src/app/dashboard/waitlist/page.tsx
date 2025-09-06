@@ -1,17 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert } from 'antd'
-import { 
-  CalendarOutlined, 
-  ClockCircleOutlined, 
-  UserOutlined, 
+import {
+  ClockCircleOutlined,
+  UserOutlined,
   BookOutlined,
   ClockCircleOutlined as WaitlistIcon,
   CloseCircleOutlined,
   ArrowLeftOutlined,
-  ReloadOutlined
+  ReloadOutlined,
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
@@ -41,22 +40,15 @@ export default function Waitlist() {
   const [addModalVisible, setAddModalVisible] = useState(false)
   const [removeModalVisible, setRemoveModalVisible] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(null)
-  const [selectedTeacher, setSelectedTeacher] = useState<string>('')
-  const [selectedDate, setSelectedDate] = useState<string>('')
-  const [selectedSlot, setSelectedSlot] = useState<string>('')
   const [adding, setAdding] = useState(false)
-  
+
   const router = useRouter()
 
-  useEffect(() => {
-    fetchWaitlist()
-  }, [])
-
-  const fetchWaitlist = async () => {
+  const fetchWaitlist = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
+
       const userId = getCurrentUserId()
       if (!userId) {
         showErrorMessage('请先登录')
@@ -64,18 +56,20 @@ export default function Waitlist() {
         return
       }
 
-      const response = await httpClient.get(
-        `/api/waitlist?studentId=${userId}`
-      )
+      const response = await httpClient.get(`/api/waitlist?studentId=${userId}`)
       const data = await response.json()
-      
+
       setWaitlist(data.items || [])
     } catch (error: any) {
       setError(error.message || '获取候补列表失败')
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchWaitlist()
+  }, [fetchWaitlist])
 
   const handleAddToWaitlist = async (values: any) => {
     setAdding(true)
@@ -85,7 +79,7 @@ export default function Waitlist() {
         date: values.date,
         slot: values.slot,
         studentId: getCurrentUserId(),
-        subject: values.subject
+        subject: values.subject,
       })
 
       showSuccessMessage('已加入候补队列')
@@ -120,37 +114,53 @@ export default function Waitlist() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'waiting': return 'blue'
-      case 'promoted': return 'green'
-      case 'expired': return 'red'
-      default: return 'default'
+      case 'waiting':
+        return 'blue'
+      case 'promoted':
+        return 'green'
+      case 'expired':
+        return 'red'
+      default:
+        return 'default'
     }
   }
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'waiting': return '等待中'
-      case 'promoted': return '已提升'
-      case 'expired': return '已过期'
-      default: return status
+      case 'waiting':
+        return '等待中'
+      case 'promoted':
+        return '已提升'
+      case 'expired':
+        return '已过期'
+      default:
+        return status
     }
   }
 
   const getPriorityText = (priority: string) => {
     switch (priority) {
-      case 'premium': return '高优先级'
-      case 'level1': return '中优先级'
-      case 'level2': return '低优先级'
-      default: return '未知优先级'
+      case 'premium':
+        return '高优先级'
+      case 'level1':
+        return '中优先级'
+      case 'level2':
+        return '低优先级'
+      default:
+        return '未知优先级'
     }
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'premium': return 'red'
-      case 'level1': return 'orange'
-      case 'level2': return 'blue'
-      default: return 'default'
+      case 'premium':
+        return 'red'
+      case 'level1':
+        return 'orange'
+      case 'level2':
+        return 'blue'
+      default:
+        return 'default'
     }
   }
 
@@ -159,9 +169,7 @@ export default function Waitlist() {
       title: '科目',
       dataIndex: 'subject',
       key: 'subject',
-      render: (subject: string) => (
-        <span className="font-medium">{subject}</span>
-      )
+      render: (subject: string) => <span className="font-medium">{subject}</span>,
     },
     {
       title: '教师',
@@ -172,7 +180,7 @@ export default function Waitlist() {
           <UserOutlined className="text-blue-600" />
           <span>{name}</span>
         </div>
-      )
+      ),
     },
     {
       title: '时间',
@@ -189,37 +197,29 @@ export default function Waitlist() {
             <span>{format(parseISO(slot), 'HH:mm')}</span>
           </div>
         </div>
-      )
+      ),
     },
     {
       title: '优先级',
       dataIndex: 'priority',
       key: 'priority',
       render: (priority: string) => (
-        <Tag color={getPriorityColor(priority)}>
-          {getPriorityText(priority)}
-        </Tag>
-      )
+        <Tag color={getPriorityColor(priority)}>{getPriorityText(priority)}</Tag>
+      ),
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>
-          {getStatusText(status)}
-        </Tag>
-      )
+      render: (status: string) => <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>,
     },
     {
       title: '加入时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (createdAt: string) => (
-        <span className="text-sm text-gray-600">
-          {format(parseISO(createdAt), 'MM-dd HH:mm')}
-        </span>
-      )
+        <span className="text-sm text-gray-600">{format(parseISO(createdAt), 'MM-dd HH:mm')}</span>
+      ),
     },
     {
       title: '操作',
@@ -238,13 +238,12 @@ export default function Waitlist() {
             </Button>
           )}
         </Space>
-      )
-    }
+      ),
+    },
   ]
 
-  const filteredItems = filterStatus === 'all' 
-    ? waitlist 
-    : waitlist.filter(item => item.status === filterStatus)
+  const filteredItems =
+    filterStatus === 'all' ? waitlist : waitlist.filter((item) => item.status === filterStatus)
 
   if (loading) {
     return (
@@ -260,8 +259,8 @@ export default function Waitlist() {
         {/* 页面头部 */}
         <div className="mb-6">
           <div className="flex items-center space-x-4 mb-4">
-            <Button 
-              icon={<ArrowLeftOutlined />} 
+            <Button
+              icon={<ArrowLeftOutlined />}
               onClick={() => router.back()}
               className="flex items-center"
             >
@@ -276,9 +275,7 @@ export default function Waitlist() {
           {/* 说明信息 */}
           <Card className="bg-blue-50 border-blue-200">
             <div className="text-blue-800">
-              <h3 className="font-medium mb-2 flex items-center">
-                候补队列说明
-              </h3>
+              <h3 className="font-medium mb-2 flex items-center">候补队列说明</h3>
               <ul className="text-sm space-y-1">
                 <li>• 当热门时间段被占满时，您可以加入候补队列</li>
                 <li>• 系统会根据服务级别和加入时间自动排序优先级</li>
@@ -294,26 +291,24 @@ export default function Waitlist() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">
-                {waitlist.filter(item => item.status === 'waiting').length}
+                {waitlist.filter((item) => item.status === 'waiting').length}
               </div>
               <div className="text-sm text-gray-600">等待中</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
-                {waitlist.filter(item => item.status === 'promoted').length}
+                {waitlist.filter((item) => item.status === 'promoted').length}
               </div>
               <div className="text-sm text-gray-600">已提升</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">
-                {waitlist.filter(item => item.status === 'expired').length}
+                {waitlist.filter((item) => item.status === 'expired').length}
               </div>
               <div className="text-sm text-gray-600">已过期</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600">
-                {waitlist.length}
-              </div>
+              <div className="text-2xl font-bold text-gray-600">{waitlist.length}</div>
               <div className="text-sm text-gray-600">总计</div>
             </div>
           </div>
@@ -336,20 +331,16 @@ export default function Waitlist() {
                 <Option value="expired">已过期</Option>
               </Select>
             </div>
-            
+
             <Space>
-              <Button 
+              <Button
                 type="primary"
-                icon={<WaitlistIcon />} 
+                icon={<WaitlistIcon />}
                 onClick={() => setAddModalVisible(true)}
               >
                 加入候补
               </Button>
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={fetchWaitlist}
-                loading={loading}
-              >
+              <Button icon={<ReloadOutlined />} onClick={fetchWaitlist} loading={loading}>
                 刷新
               </Button>
             </Space>
@@ -357,21 +348,12 @@ export default function Waitlist() {
 
           {/* 错误信息 */}
           {error && (
-            <Alert
-              message="错误"
-              description={error}
-              type="error"
-              showIcon
-              className="mb-4"
-            />
+            <Alert message="错误" description={error} type="error" showIcon className="mb-4" />
           )}
 
           {/* 候补列表 */}
           {filteredItems.length === 0 ? (
-            <Empty
-              description="暂无候补记录"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
+            <Empty description="暂无候补记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
             <Table
               columns={columns}
@@ -381,8 +363,7 @@ export default function Waitlist() {
                 pageSize: 10,
                 showSizeChanger: true,
                 showQuickJumper: true,
-                showTotal: (total, range) => 
-                  `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
               }}
             />
           )}
@@ -403,14 +384,10 @@ export default function Waitlist() {
               type="info"
               showIcon
             />
-            
+
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">
-                此功能正在开发中，敬请期待...
-              </p>
-              <Button onClick={() => setAddModalVisible(false)}>
-                关闭
-              </Button>
+              <p className="text-gray-600 mb-4">此功能正在开发中，敬请期待...</p>
+              <Button onClick={() => setAddModalVisible(false)}>关闭</Button>
             </div>
           </div>
         </Modal>
@@ -424,14 +401,9 @@ export default function Waitlist() {
             <Button key="cancel" onClick={() => setRemoveModalVisible(false)}>
               取消
             </Button>,
-            <Button 
-              key="confirm" 
-              type="primary" 
-              danger 
-              onClick={confirmRemove}
-            >
+            <Button key="confirm" type="primary" danger onClick={confirmRemove}>
               确认移除
-            </Button>
+            </Button>,
           ]}
         >
           {selectedEntry && (

@@ -13,33 +13,33 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
     const pathParts = url.pathname.split('/')
     const teacherId = pathParts[pathParts.length - 3] // /api/teachers/[id]/availability/[availabilityId]
     const availabilityId = pathParts[pathParts.length - 1]
-    
+
     const user = request.user!
 
     // 检查权限 - 教师只能操作自己的资源
     if (user.role === 'teacher') {
       // 查找当前用户对应的教师记录
       const currentTeacher = await prisma.teacher.findUnique({
-        where: { userId: user.userId }
+        where: { userId: user.userId },
       })
-      
+
       if (!currentTeacher) {
         return fail('Teacher record not found', 403, E.FORBIDDEN)
       }
-      
+
       // 确保教师只能操作自己的资源
       if (currentTeacher.id !== teacherId) {
         return fail('Teachers can only delete their own availability', 403, E.FORBIDDEN)
       }
-      
+
       // 验证可用性记录确实属于该教师
       const availability = await prisma.teacherAvailability.findFirst({
         where: {
           id: availabilityId,
-          teacherId: teacherId
-        }
+          teacherId: teacherId,
+        },
       })
-      
+
       if (!availability) {
         return fail('Availability record not found', 404, E.NOT_FOUND)
       }
@@ -47,7 +47,7 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
 
     // 删除可用性记录
     await prisma.teacherAvailability.delete({
-      where: { id: availabilityId }
+      where: { id: availabilityId },
     })
 
     // 记录审计日志
@@ -58,14 +58,16 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
         targetId: availabilityId,
         details: JSON.stringify({ teacherId, availabilityId }),
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown'
-      }
+        userAgent: request.headers.get('user-agent') || 'unknown',
+      },
     })
 
     return ok()
-
   } catch (error) {
-    logger.error('availability.delete.exception', { ...getRequestMeta(request), error: String(error) })
+    logger.error('availability.delete.exception', {
+      ...getRequestMeta(request),
+      error: String(error),
+    })
     return fail('Failed to delete availability', 500, E.INTERNAL_ERROR)
   }
 }

@@ -17,35 +17,35 @@ async function main() {
     { name: '历史', code: 'HISTORY', description: '历史学基础' },
     { name: '地理', code: 'GEOGRAPHY', description: '地理学基础' },
     { name: '政治', code: 'POLITICS', description: '政治学基础' },
-    { name: '计算机科学', code: 'COMPUTER_SCIENCE', description: '计算机科学基础' }
+    { name: '计算机科学', code: 'COMPUTER_SCIENCE', description: '计算机科学基础' },
   ]
 
   for (const subject of subjects) {
     await prisma.subject.upsert({
       where: { code: subject.code },
       update: subject,
-      create: subject
+      create: subject,
     })
   }
   console.log('✅ Subjects created')
 
   // 创建简单的测试用户
   console.log('👥 Creating test users...')
-  
+
   // 创建学生用户 - 使用明文密码（仅用于测试）
   const studentUser = await prisma.user.upsert({
     where: { email: 'student@test.com' },
     update: {
       passwordHash: 'Password123', // 强制更新密码
-      status: 'active'
+      status: 'active',
     },
     create: {
       email: 'student@test.com',
       passwordHash: 'Password123', // 明文密码，仅用于测试
       role: 'student',
       status: 'active',
-      name: '测试学生'
-    }
+      name: '测试学生',
+    },
   })
 
   // 创建教师用户 - 使用明文密码（仅用于测试）
@@ -53,15 +53,15 @@ async function main() {
     where: { email: 'teacher@test.com' },
     update: {
       passwordHash: 'Password123', // 强制更新密码
-      status: 'active'
+      status: 'active',
     },
     create: {
       email: 'teacher@test.com',
       passwordHash: 'Password123', // 明文密码，仅用于测试
       role: 'teacher',
       status: 'active',
-      name: '测试教师'
-    }
+      name: '测试教师',
+    },
   })
 
   console.log('✅ Test users created')
@@ -75,8 +75,7 @@ async function main() {
       userId: teacherUser.id,
       maxDailyMeetings: 6,
       bufferMinutes: 15,
-
-    }
+    },
   })
 
   // 创建学生记录
@@ -89,8 +88,8 @@ async function main() {
       serviceLevel: 'level1',
       monthlyMeetingsUsed: 0,
       lastQuotaReset: new Date(),
-      gradeLevel: 10
-    }
+      gradeLevel: 10,
+    },
   })
 
   console.log('✅ User profiles created')
@@ -101,15 +100,15 @@ async function main() {
     where: { email: 'admin@edu.com' },
     update: {
       passwordHash: 'admin123', // 强制更新密码
-      status: 'active'
+      status: 'active',
     },
     create: {
       email: 'admin@edu.com',
       passwordHash: 'admin123', // 明文密码，仅用于测试
       role: 'admin',
       status: 'active',
-      name: '系统管理员'
-    }
+      name: '系统管理员',
+    },
   })
 
   // Admin用户已创建，无需额外的admin表
@@ -125,28 +124,28 @@ async function main() {
       where: {
         teacherId_subjectId: {
           teacherId: teacher.id,
-          subjectId: mathSubject.id
-        }
+          subjectId: mathSubject.id,
+        },
       },
       update: {},
       create: {
         teacherId: teacher.id,
-        subjectId: mathSubject.id
-      }
+        subjectId: mathSubject.id,
+      },
     })
 
     await prisma.teacherSubject.upsert({
       where: {
         teacherId_subjectId: {
           teacherId: teacher.id,
-          subjectId: physicsSubject.id
-        }
+          subjectId: physicsSubject.id,
+        },
       },
       update: {},
       create: {
         teacherId: teacher.id,
-        subjectId: physicsSubject.id
-      }
+        subjectId: physicsSubject.id,
+      },
     })
   }
 
@@ -157,28 +156,28 @@ async function main() {
       where: {
         studentId_subjectId: {
           studentId: student.id,
-          subjectId: mathSubject.id
-        }
+          subjectId: mathSubject.id,
+        },
       },
       update: {},
       create: {
         studentId: student.id,
-        subjectId: mathSubject.id
-      }
+        subjectId: mathSubject.id,
+      },
     })
 
     await prisma.studentSubject.upsert({
       where: {
         studentId_subjectId: {
           studentId: student.id,
-          subjectId: physicsSubject.id
-        }
+          subjectId: physicsSubject.id,
+        },
       },
       update: {},
       create: {
         studentId: student.id,
-        subjectId: physicsSubject.id
-      }
+        subjectId: physicsSubject.id,
+      },
     })
   }
 
@@ -196,8 +195,7 @@ async function main() {
       data: {
         teacherId: teacher.id,
         ...avail,
-
-      }
+      },
     })
   }
 
