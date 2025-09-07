@@ -3,7 +3,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'student' | 'teacher' | 'admin'
+  role: 'student' | 'teacher' | 'admin' | 'superadmin'
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -11,7 +11,7 @@ export interface User {
   teacher?: Teacher
 }
 
-export type UserRole = 'student' | 'teacher' | 'admin'
+export type UserRole = 'student' | 'teacher' | 'admin' | 'superadmin'
 
 export interface Student {
   id: string

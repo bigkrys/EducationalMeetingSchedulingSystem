@@ -11,7 +11,8 @@
     "format": "prettier -w .",
     "format:check": "prettier -c .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"No tests specified\" && exit 0",
+    "test": "pnpm test:promote",
+    "test:promote": "node -r ts-node/register",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -20,6 +21,15 @@
     "db:seed:simple": "ts-node prisma/seed-simple.ts",
     "vercel-build": "pnpm exec prisma generate && next build",
     "prepare": "husky install || true"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,scss,less,html}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.24.0",

@@ -156,6 +156,7 @@ export default function MyAppointments() {
       title: '教师',
       dataIndex: 'teacherName',
       key: 'teacherName',
+      responsive: ['sm' as any],
       render: (teacherName: string) => (
         <div className="flex items-center space-x-2">
           <UserOutlined className="text-blue-600" />
@@ -167,16 +168,14 @@ export default function MyAppointments() {
       title: '时间',
       dataIndex: 'scheduledTime',
       key: 'scheduledTime',
+      responsive: ['sm' as any],
       render: (scheduledTime: string) => (
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <CalendarOutlined className="text-green-600" />
-            <span>{format(parseISO(scheduledTime), 'yyyy年MM月dd日')}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <ClockCircleOutlined className="text-blue-600" />
-            <span>{format(parseISO(scheduledTime), 'HH:mm')}</span>
-          </div>
+        <div
+          className="flex items-center space-x-2"
+          title={format(parseISO(scheduledTime), 'yyyy年MM月dd日 HH:mm')}
+        >
+          <CalendarOutlined className="text-green-600" />
+          <span className="text-sm">{format(parseISO(scheduledTime), 'MM-dd HH:mm')}</span>
         </div>
       ),
     },
@@ -184,6 +183,7 @@ export default function MyAppointments() {
       title: '时长',
       dataIndex: 'durationMinutes',
       key: 'durationMinutes',
+      responsive: ['md' as any],
       render: (duration: number) => <span>{duration} 分钟</span>,
     },
     {
@@ -196,6 +196,7 @@ export default function MyAppointments() {
       title: '备注',
       dataIndex: 'notes',
       key: 'notes',
+      responsive: ['lg' as any],
       render: (notes: string) =>
         notes ? (
           <span className="text-gray-600 text-sm">{notes}</span>
@@ -242,16 +243,9 @@ export default function MyAppointments() {
           {/* 页面头部 */}
           <div className="mb-6">
             <div className="flex items-center space-x-4 mb-4">
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={() => router.back()}
-                className="flex items-center"
-              >
-                返回
-              </Button>
               <div className="flex items-center space-x-2">
                 <BookOutlined className="text-blue-600 text-xl" />
-                <h1 className="text-2xl font-bold text-gray-900">我的预约</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">我的预约</h1>
               </div>
             </div>
           </div>
@@ -329,6 +323,7 @@ export default function MyAppointments() {
                 columns={columns}
                 dataSource={filteredAppointments}
                 rowKey="id"
+                scroll={{ x: true }}
                 pagination={{
                   pageSize: 10,
                   showSizeChanger: true,

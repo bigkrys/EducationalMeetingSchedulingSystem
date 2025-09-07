@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole, withValidation } from '@/lib/api/middleware'
+import { withRoles, withValidation } from '@/lib/api/middleware'
 import { createUserSchema, updateUserSchema } from '@/lib/api/schemas'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
@@ -14,12 +14,22 @@ async function getUsersHandler(request: NextRequest, context?: any) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
+    const reqUser = (request as any).user as { role?: string } | undefined
 
     // 构建查询条件
     const where: any = {}
 
     if (role) {
+      // 普通管理员不可请求查看管理员/超级管理员
+      if (reqUser?.role === 'admin' && (role === 'admin' || role === 'superadmin')) {
+        return fail('Only superadmin can view admin users', 403, E.FORBIDDEN)
+      }
       where.role = role
+    }
+
+    // 未指定role时，普通管理员自动排除管理员/超级管理员
+    if (reqUser?.role === 'admin' && !role) {
+      where.role = { notIn: ['admin', 'superadmin'] }
     }
 
     if (search) {
@@ -59,9 +69,18 @@ async function createUserHandler(request: NextRequest, context?: any) {
   try {
     const body = await request.json()
     const { email, name, role, password } = body
+    const reqUser = (request as any).user as { role?: string } | undefined
 
     if (!email || !name || !role || !password) {
       return fail('Missing required fields', 400, E.BAD_REQUEST)
+    }
+
+    // 只有超级管理员可以创建管理员；禁止创建超级管理员
+    if (role === 'admin' && reqUser?.role !== 'superadmin') {
+      return fail('Only superadmin can create admin users', 403, E.FORBIDDEN)
+    }
+    if (role === 'superadmin') {
+      return fail('Cannot create superadmin via API', 403, E.FORBIDDEN)
     }
 
     // 检查邮箱是否已存在
@@ -124,12 +143,29 @@ async function updateUserHandler(request: NextRequest, context?: any) {
   try {
     const body = await request.json()
     const { userId, updates } = body
+    const reqUser = (request as any).user as { role?: string } | undefined
 
     if (!userId || !updates) {
       return fail('Missing userId or updates', 400, E.BAD_REQUEST)
     }
 
     // 更新用户基本信息
+    // 先查出被更新用户，进行权限判定
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    })
+    if (!current) {
+      return fail('User not found', 404, E.NOT_FOUND)
+    }
+
+    if (
+      (current.role === 'admin' || current.role === 'superadmin') &&
+      reqUser?.role !== 'superadmin'
+    ) {
+      return fail('Only superadmin can modify admin/superadmin users', 403, E.FORBIDDEN)
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -175,6 +211,10 @@ async function updateUserHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRole('admin')(getUsersHandler)
-export const POST = withRole('admin')(withValidation(createUserSchema)(createUserHandler))
-export const PUT = withRole('admin')(withValidation(updateUserSchema)(updateUserHandler))
+export const GET = withRoles(['admin', 'superadmin'])(getUsersHandler)
+export const POST = withRoles(['admin', 'superadmin'])(
+  withValidation(createUserSchema)(createUserHandler)
+)
+export const PUT = withRoles(['admin', 'superadmin'])(
+  withValidation(updateUserSchema)(updateUserHandler)
+)

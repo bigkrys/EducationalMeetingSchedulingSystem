@@ -1,0 +1,132 @@
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Layout, Menu } from 'antd'
+import {
+  HomeOutlined,
+  CalendarOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  BarChartOutlined,
+  TeamOutlined,
+  ClockCircleOutlined,
+} from '@ant-design/icons'
+import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { usePathname } from 'next/navigation'
+
+const { Sider } = Layout
+
+export default function DashboardSideNav({
+  collapsed,
+  onCollapse,
+}: {
+  collapsed: boolean
+  onCollapse: (c: boolean) => void
+}) {
+  const [mounted, setMounted] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    setMounted(true)
+    if (isAuthenticated()) setRole(getCurrentUserRole())
+    const onResize = () => {
+      const width = typeof window !== 'undefined' ? window.innerWidth : 1200
+      setIsMobile(width < 992)
+    }
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  if (!mounted) return null
+
+  // Base items for all (student/teacher)
+  const commonItems: any[] = [
+    { key: '/dashboard', icon: <HomeOutlined />, label: <Link href="/dashboard">控制台</Link> },
+  ]
+
+  const studentItems: any[] = [
+    {
+      key: '/dashboard/book-appointment',
+      icon: <CalendarOutlined />,
+      label: <Link href="/dashboard/book-appointment">预约会议</Link>,
+    },
+    {
+      key: '/dashboard/my-appointments',
+      icon: <FileTextOutlined />,
+      label: <Link href="/dashboard/my-appointments">我的预约</Link>,
+    },
+    {
+      key: '/dashboard/waitlist',
+      icon: <ClockCircleOutlined />,
+      label: <Link href="/dashboard/waitlist">候补队列</Link>,
+    },
+  ]
+
+  const teacherItems: any[] = [
+    {
+      key: '/dashboard/waitlist',
+      icon: <ClockCircleOutlined />,
+      label: <Link href="/dashboard/waitlist">候补队列</Link>,
+    },
+    {
+      key: '/dashboard/availability',
+      icon: <SettingOutlined />,
+      label: <Link href="/dashboard/availability">设置可用性</Link>,
+    },
+    {
+      key: '/dashboard/appointments',
+      icon: <TeamOutlined />,
+      label: <Link href="/dashboard/appointments">预约管理</Link>,
+    },
+    {
+      key: '/dashboard/analytics',
+      icon: <BarChartOutlined />,
+      label: <Link href="/dashboard/analytics">统计分析</Link>,
+    },
+  ]
+
+  const items = [
+    ...commonItems,
+    ...(role === 'student' ? studentItems : []),
+    ...(role === 'teacher' ? teacherItems : []),
+  ]
+
+  const selectedKey = items
+    .map((i: any) => i.key as string)
+    .filter((k: string) => pathname.startsWith(k))
+    .sort((a: string, b: string) => b.length - a.length)[0]
+
+  return (
+    <Sider
+      width={220}
+      collapsible
+      collapsed={collapsed}
+      onCollapse={onCollapse}
+      collapsedWidth={0}
+      breakpoint="lg"
+      style={{
+        position: 'fixed',
+        insetInlineStart: 0,
+        top: 0,
+        height: '100vh',
+        zIndex: 1000,
+        overflow: 'auto',
+      }}
+      theme="light"
+    >
+      <div style={{ padding: 16, fontWeight: 600, fontSize: 16 }}>个人控制台</div>
+      <Menu
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        items={items}
+        onClick={() => {
+          if (isMobile) onCollapse(true)
+        }}
+      />
+    </Sider>
+  )
+}

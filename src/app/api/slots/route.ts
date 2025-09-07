@@ -48,12 +48,39 @@ const getHandler = async function GET(request: NextRequest) {
     // 计算可用槽位（逻辑已移动到 lib/scheduling）
     const slots = await calculateAvailableSlots(teacher, date, duration)
 
+    // 统计当日已预约槽位与候补数量
+    const dayStart = new Date(`${date}T00:00:00.000Z`)
+    const dayEnd = new Date(`${date}T23:59:59.999Z`)
+    const booked = await prisma.appointment.findMany({
+      where: {
+        teacherId,
+        scheduledTime: { gte: dayStart, lte: dayEnd },
+        status: { in: ['pending', 'approved'] },
+      },
+      select: { scheduledTime: true },
+    })
+
+    const waitlistItems = await prisma.waitlist.findMany({
+      where: { teacherId, date },
+      select: { slot: true },
+    })
+    const waitlistCount = new Map<string, number>()
+    for (const it of waitlistItems) {
+      const k = it.slot.toISOString()
+      waitlistCount.set(k, (waitlistCount.get(k) || 0) + 1)
+    }
+
     // 缓存结果（5分钟）
     const result = {
       teacherId,
       date,
       duration,
       slots,
+      bookedSlots: booked.map((b) => b.scheduledTime.toISOString()),
+      waitlistCount: Array.from(waitlistCount.entries()).map(([slotIso, count]) => ({
+        slot: slotIso,
+        count,
+      })),
     }
     memoryCache.set(cacheKey, result, 5 * 60 * 1000)
 

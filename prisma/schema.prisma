@@ -161,15 +161,23 @@ model BlockedTime {
 }
 
 model Waitlist {
-  id        String   @id @default(uuid())
-  teacherId String
-  date      String
-  slot      DateTime
-  studentId String
-  createdAt DateTime @default(now())
-  
-  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  teacherId      String
+  date           String
+  slot           DateTime
+  studentId      String
+  // Added fields for MVP robustness
+  status         String   @default("active") // active | promoted | cancelled | expired
+  priority       Int      @default(0)
+  idempotencyKey String?
+  notifiedAt     DateTime?
+  promotedAt     DateTime?
+  expiresAt      DateTime?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  teacher        Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([teacherId, slot, studentId])
   @@map("waitlists")

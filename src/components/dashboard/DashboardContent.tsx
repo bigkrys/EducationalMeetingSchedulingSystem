@@ -19,7 +19,7 @@ interface User {
   id: string
   email: string
   name: string
-  role: 'student' | 'teacher' | 'admin'
+  role: 'student' | 'teacher' | 'admin' | 'superadmin'
   serviceLevel?: 'level1' | 'level2' | 'premium'
   monthlyMeetingsUsed?: number
   enrolledSubjects?: string[]
@@ -113,7 +113,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
 
   if (error) {
     return (
-      <div style={{ padding: '24px' }}>
+      <div>
         <Alert
           message="错误"
           description={error}
@@ -151,7 +151,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
   }
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div>
       {/* 用户信息卡片 */}
       <Card
         title={
@@ -162,7 +162,12 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
         }
         className="mb-8"
       >
-        <Row gutter={[16, 16]}>
+        <Row
+          gutter={[
+            { xs: 8, md: 16 },
+            { xs: 8, md: 16 },
+          ]}
+        >
           <Col xs={24} md={12} lg={8}>
             <Statistic title="姓名" value={user.name} />
           </Col>
@@ -172,7 +177,15 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
           <Col xs={24} md={12} lg={8}>
             <Statistic
               title="角色"
-              value={user.role === 'student' ? '学生' : user.role === 'teacher' ? '教师' : '管理员'}
+              value={
+                user.role === 'student'
+                  ? '学生'
+                  : user.role === 'teacher'
+                    ? '教师'
+                    : user.role === 'admin'
+                      ? '管理员'
+                      : '超级管理员'
+              }
             />
           </Col>
 
@@ -219,61 +232,65 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
       </Card>
 
       {/* 功能菜单 */}
-      <div style={{ marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>功能菜单</h2>
-        <Row gutter={[16, 16]}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 'clamp(16px, 3.6vw, 20px)', fontWeight: 600, marginBottom: 12 }}>
+          功能菜单
+        </h2>
+        <Row
+          gutter={[
+            { xs: 8, md: 16 },
+            { xs: 8, md: 16 },
+          ]}
+        >
           {user.role === 'student' && (
             <>
-              <Col xs={12} md={12} lg={12}>
+              <Col xs={24} md={12} lg={12}>
                 <Link href="/dashboard/book-appointment">
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <CalendarOutlined
-                        style={{ fontSize: '48px', color: '#1890ff', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#1890ff', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         预约会议
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>查看教师可用时间并预约会议</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>查看教师可用时间并预约会议</p>
                     </div>
                   </Card>
                 </Link>
               </Col>
 
-              <Col xs={12} md={12} lg={12}>
+              <Col xs={24} md={12} lg={12}>
                 <Link href="/dashboard/my-appointments">
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <FileTextOutlined
-                        style={{ fontSize: '48px', color: '#52c41a', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#52c41a', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         我的预约
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>查看和管理您的所有预约</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>查看和管理您的所有预约</p>
                     </div>
                   </Card>
                 </Link>
               </Col>
 
-              {/* <Col xs={24} md={12} lg={8}>
+              <Col xs={24} md={12} lg={8}>
                 <Link href="/dashboard/waitlist">
-                  <Card 
-                    hoverable
-                    className="h-full"
-                  >
+                  <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
-                      <ClockCircleOutlined style={{ fontSize: '48px', color: '#fa8c16', marginBottom: '12px' }} />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <ClockCircleOutlined
+                        style={{ fontSize: '36px', color: '#fa8c16', marginBottom: '8px' }}
+                      />
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         候补队列
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>
-                        加入热门时段的候补队列
-                      </p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>加入热门时段的候补队列</p>
                     </div>
                   </Card>
                 </Link>
-              </Col> */}
+              </Col>
             </>
           )}
 
@@ -284,12 +301,12 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <SettingOutlined
-                        style={{ fontSize: '48px', color: '#722ed1', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#722ed1', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         设置可用性
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>设置您的每周可用时间</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>设置您的每周可用时间</p>
                     </div>
                   </Card>
                 </Link>
@@ -300,12 +317,28 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <BarChartOutlined
-                        style={{ fontSize: '48px', color: '#13c2c2', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#13c2c2', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         预约管理
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>查看和审批学生预约</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>查看和审批学生预约</p>
+                    </div>
+                  </Card>
+                </Link>
+              </Col>
+
+              <Col xs={24} md={12} lg={8}>
+                <Link href="/dashboard/analytics">
+                  <Card hoverable className="h-full">
+                    <div style={{ textAlign: 'center' }}>
+                      <BarChartOutlined
+                        style={{ fontSize: '36px', color: '#1890ff', marginBottom: '8px' }}
+                      />
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
+                        统计分析
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#666' }}>查看我的预约统计与趋势</p>
                     </div>
                   </Card>
                 </Link>
@@ -313,35 +346,35 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
             </>
           )}
 
-          {user.role === 'admin' && (
+          {(user.role === 'admin' || user.role === 'superadmin') && (
             <>
               <Col xs={24} md={12} lg={8}>
                 <Link href="/admin/policies">
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <SettingOutlined
-                        style={{ fontSize: '48px', color: '#f5222d', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#f5222d', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         服务策略
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>管理系统服务级别策略</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>管理系统服务级别策略</p>
                     </div>
                   </Card>
                 </Link>
               </Col>
 
               <Col xs={24} md={12} lg={8}>
-                <Link href="/admin">
+                <Link href="/admin/tasks">
                   <Card hoverable className="h-full">
                     <div style={{ textAlign: 'center' }}>
                       <BarChartOutlined
-                        style={{ fontSize: '48px', color: '#2f54eb', marginBottom: '12px' }}
+                        style={{ fontSize: '36px', color: '#2f54eb', marginBottom: '8px' }}
                       />
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>
                         系统任务
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#666' }}>执行系统维护任务</p>
+                      <p style={{ fontSize: '13px', color: '#666' }}>执行系统维护任务</p>
                     </div>
                   </Card>
                 </Link>
