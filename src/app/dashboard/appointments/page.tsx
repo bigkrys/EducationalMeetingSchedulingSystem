@@ -7,10 +7,8 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   UserOutlined,
-  BookOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ArrowLeftOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
@@ -190,6 +188,7 @@ export default function AppointmentsManagement() {
     {
       title: isTeacher ? '学生' : '学生/教师',
       key: 'participants',
+      responsive: ['sm' as any],
       render: (_: any, record: Appointment) => (
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
@@ -209,16 +208,14 @@ export default function AppointmentsManagement() {
       title: '时间',
       dataIndex: 'scheduledTime',
       key: 'scheduledTime',
+      responsive: ['sm' as any],
       render: (scheduledTime: string) => (
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <CalendarOutlined className="text-green-600" />
-            <span className="text-sm">{format(parseISO(scheduledTime), 'yyyy年MM月dd日')}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <ClockCircleOutlined className="text-blue-600" />
-            <span className="text-sm">{format(parseISO(scheduledTime), 'HH:mm')}</span>
-          </div>
+        <div
+          className="flex items-center space-x-2"
+          title={format(parseISO(scheduledTime), 'yyyy年MM月dd日 HH:mm')}
+        >
+          <CalendarOutlined className="text-green-600" />
+          <span className="text-sm">{format(parseISO(scheduledTime), 'MM-dd HH:mm')}</span>
         </div>
       ),
     },
@@ -226,6 +223,7 @@ export default function AppointmentsManagement() {
       title: '时长',
       dataIndex: 'durationMinutes',
       key: 'durationMinutes',
+      responsive: ['md' as any],
       render: (duration: number) => <span>{duration} 分钟</span>,
     },
     {
@@ -238,6 +236,7 @@ export default function AppointmentsManagement() {
       title: '备注',
       dataIndex: 'notes',
       key: 'notes',
+      responsive: ['lg' as any],
       render: (notes: string) =>
         notes ? (
           <span className="text-gray-600 text-sm max-w-xs truncate block" title={notes}>
@@ -299,21 +298,48 @@ export default function AppointmentsManagement() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* 页面头部 */}
-          <div className="mb-6">
-            <div className="flex items-center space-x-4 mb-4">
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={() => router.back()}
-                className="flex items-center"
-              >
-                返回
-              </Button>
-              <div className="flex items-center space-x-2">
-                <BookOutlined className="text-blue-600 text-xl" />
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {isTeacher ? '我的预约管理' : '预约管理'}
-                </h1>
+          <div className="mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {isTeacher ? '我的预约管理' : '预约管理'}
+                  </h1>
+                </div>
               </div>
+
+              <Space wrap size="small">
+                <Select
+                  size="small"
+                  value={filterStatus}
+                  onChange={setFilterStatus}
+                  style={{ width: 140 }}
+                >
+                  <Option value="all">全部状态</Option>
+                  <Option value="pending">待确认</Option>
+                  <Option value="approved">已确认</Option>
+                  <Option value="completed">已完成</Option>
+                  <Option value="cancelled">已取消</Option>
+                  <Option value="no_show">未出席</Option>
+                  <Option value="expired">已过期</Option>
+                </Select>
+                <Input
+                  size="small"
+                  placeholder="搜索科目、学生或教师"
+                  prefix={<SearchOutlined />}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  style={{ width: 200 }}
+                />
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchAppointments}
+                  loading={loading}
+                >
+                  刷新
+                </Button>
+              </Space>
             </div>
           </div>
 
@@ -408,6 +434,8 @@ export default function AppointmentsManagement() {
                 columns={columns}
                 dataSource={filteredAppointments}
                 rowKey="id"
+                scroll={{ x: true }}
+                size="small"
                 pagination={{
                   pageSize: 10,
                   showSizeChanger: true,

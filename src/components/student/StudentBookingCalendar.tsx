@@ -43,6 +43,8 @@ export default function StudentBookingCalendar({
   const [selectedTeacher, setSelectedTeacher] = useState<string>('')
   const [selectedSubject, setSelectedSubject] = useState<string>('')
   const [timeSlots, setTimeSlots] = useState<CalendarSlot[]>([])
+  const [bookedSlots, setBookedSlots] = useState<string[]>([])
+  const [waitlistCountMap, setWaitlistCountMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true) // 添加初始加载状态
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
@@ -52,6 +54,22 @@ export default function StudentBookingCalendar({
   const [filteredTeachers, setFilteredTeachers] = useState<any[]>([])
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([])
   const [form] = Form.useForm()
+  // 候补详情弹窗
+  const [waitlistVisible, setWaitlistVisible] = useState(false)
+  const [waitlistLoading, setWaitlistLoading] = useState(false)
+  const [waitlistSlotIso, setWaitlistSlotIso] = useState<string>('')
+  const [waitlistItems, setWaitlistItems] = useState<
+    Array<{
+      id: string
+      slot: string
+      priority: number
+      createdAt: string
+      studentId?: string
+      studentName?: string
+    }>
+  >([])
+  const [myWaitPosition, setMyWaitPosition] = useState<number | null>(null)
+  const [myWaitEntryId, setMyWaitEntryId] = useState<string>('')
 
   // 获取教师列表
   const fetchTeachers = async () => {
@@ -239,10 +257,23 @@ export default function StudentBookingCalendar({
         })
 
         setTimeSlots(slots)
+        // 记录已预约与候补计数（用于展示热门时段）
+        const booked: string[] = Array.isArray(data.bookedSlots) ? data.bookedSlots : []
+        const wlArr: Array<{ slot: string; count: number }> = Array.isArray(data.waitlistCount)
+          ? data.waitlistCount
+          : []
+        const wlMap: Record<string, number> = {}
+        wlArr.forEach((r) => {
+          wlMap[r.slot] = r.count
+        })
+        setBookedSlots(booked)
+        setWaitlistCountMap(wlMap)
       } else {
         const errorData = await response.json()
         showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
         setTimeSlots([])
+        setBookedSlots([])
+        setWaitlistCountMap({})
       }
     } catch (error) {
       showErrorMessage('获取可用时间失败')
@@ -251,6 +282,95 @@ export default function StudentBookingCalendar({
       setLoading(false)
     }
   }, [selectedDate, selectedTeacher, selectedSubject])
+
+  const openWaitlistModal = async (slotIso: string) => {
+    if (!selectedTeacher) return
+    setWaitlistVisible(true)
+    setWaitlistLoading(true)
+    setWaitlistSlotIso(slotIso)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(
+        `/api/waitlist/slot?teacherId=${encodeURIComponent(selectedTeacher)}&slot=${encodeURIComponent(
+          slotIso
+        )}&studentId=${encodeURIComponent(studentId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showApiError({ code: json?.code ?? json?.error, message: json?.message || '获取候补失败' })
+        return
+      }
+      const items = Array.isArray(json.waitlist) ? json.waitlist : []
+      setWaitlistItems(items)
+      setMyWaitPosition(typeof json.myPosition === 'number' ? json.myPosition : null)
+      // 找到我的候补条目 id（若接口返回）
+      const mine = items.find((it: any) => it.studentId && it.studentId === studentId)
+      setMyWaitEntryId(mine?.id || '')
+    } catch (e) {
+      showErrorMessage('获取候补失败')
+    } finally {
+      setWaitlistLoading(false)
+    }
+  }
+
+  const joinWaitlistForCurrentSlot = async () => {
+    if (!selectedTeacher || !waitlistSlotIso) return
+    if (!selectedSubject) {
+      showWarningMessage('请先选择科目')
+      return
+    }
+    try {
+      const token = localStorage.getItem('accessToken')
+      const dateStr = new Date(waitlistSlotIso).toISOString().slice(0, 10)
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          teacherId: selectedTeacher,
+          date: dateStr,
+          slot: waitlistSlotIso,
+          studentId,
+          subject: selectedSubject,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showApiError({ code: json?.code ?? json?.error, message: json?.message || '加入候补失败' })
+        return
+      }
+      const pos = typeof json.position === 'number' ? json.position : undefined
+      showSuccessMessage(pos ? `已加入候补（当前第 ${pos} 位）` : '已加入候补')
+      // 刷新候补列表与等待人数
+      await openWaitlistModal(waitlistSlotIso)
+      await fetchTimeSlots()
+    } catch (e) {
+      showErrorMessage('加入候补失败')
+    }
+  }
+
+  const removeMyWaitlistEntry = async () => {
+    if (!myWaitEntryId) return
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch('/api/waitlist', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: myWaitEntryId, studentId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showApiError({ code: json?.code ?? json?.error, message: json?.message || '移除候补失败' })
+        return
+      }
+      showSuccessMessage('已移除候补')
+      // 刷新候补列表与等待人数
+      await openWaitlistModal(waitlistSlotIso)
+      await fetchTimeSlots()
+    } catch (e) {
+      showErrorMessage('移除候补失败')
+    }
+  }
 
   useEffect(() => {
     if (selectedDate && selectedTeacher && selectedSubject) {
@@ -531,6 +651,40 @@ export default function StudentBookingCalendar({
         </Card>
       )}
 
+      {/* 热门已满时段（候补） */}
+      {!initialLoading && bookedSlots.length > 0 && (
+        <Card title="已满时段（可候补）" extra={<a href="/dashboard/waitlist">去候补</a>}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {bookedSlots
+              .slice()
+              .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
+              .slice(0, 8)
+              .map((iso) => {
+                const local = new Date(iso)
+                const label = local.toLocaleTimeString('zh-CN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })
+                const cnt = waitlistCountMap[iso] || 0
+                return (
+                  <button
+                    key={iso}
+                    onClick={() => openWaitlistModal(iso)}
+                    className="border border-gray-200 rounded px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between text-sm text-left"
+                  >
+                    <span className="text-gray-700">{label}</span>
+                    <span className="text-gray-500">候补{cnt}</span>
+                  </button>
+                )
+              })}
+          </div>
+          <div className="text-xs text-gray-400 mt-2">
+            显示前 8 个已满时段；更多请前往“候补队列”。
+          </div>
+        </Card>
+      )}
+
       {/* 可用时间列表 */}
       {!initialLoading && selectedDate && selectedTeacher && selectedSubject && (
         <Card
@@ -581,12 +735,9 @@ export default function StudentBookingCalendar({
                             hour12: false,
                           })}
                         </div>
-                        <span className={`text-xs font-medium mt-1 `}>
-                          {slot.status === 'available' ? '可预约' : '不可预约'}
-                        </span>
-                        <div className="text-[10px] text-gray-400 mt-1">
+                        {/* <div className="text-[10px] text-gray-400 mt-1">
                           UTC {new Date(slot.startTime).toISOString().slice(11, 16)}
-                        </div>
+                        </div> */}
                       </div>
                     </div>
                   </Button>
@@ -686,6 +837,72 @@ export default function StudentBookingCalendar({
             </div>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 候补详情弹窗 */}
+      <Modal
+        title={`候补队列详情${waitlistSlotIso ? ' · ' + new Date(waitlistSlotIso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}`}
+        open={waitlistVisible}
+        onCancel={() => setWaitlistVisible(false)}
+        footer={null}
+        width={520}
+      >
+        <div className="space-y-3">
+          {waitlistLoading ? (
+            <div className="text-center text-sm text-gray-500">正在加载候补队列…</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  共 <span className="font-medium">{waitlistItems.length}</span> 人排队
+                  {myWaitPosition ? (
+                    <span className="ml-2 text-blue-600">我的位置：第 {myWaitPosition} 位</span>
+                  ) : (
+                    <span className="ml-2 text-gray-400">（你尚未加入该时段）</span>
+                  )}
+                </div>
+                <div className="space-x-2">
+                  {myWaitPosition ? (
+                    <Button size="small" danger onClick={removeMyWaitlistEntry}>
+                      退出此时段候补
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={joinWaitlistForCurrentSlot}
+                      disabled={!selectedSubject}
+                    >
+                      加入此时段候补
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="border rounded">
+                <div className="max-h-72 overflow-auto divide-y">
+                  {waitlistItems.length === 0 ? (
+                    <div className="p-4 text-center text-gray-400 text-sm">该时段暂无候补</div>
+                  ) : (
+                    waitlistItems.map((it: any, idx: number) => (
+                      <div
+                        key={it.id}
+                        className={`p-3 flex items-center justify-between ${it.studentId === studentId ? 'bg-blue-50' : ''}`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <span className="w-8 text-right text-gray-500">{idx + 1}</span>
+                          <span className="text-gray-800">
+                            {it.studentName || (it.studentId === studentId ? '我' : '同学')}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400">优先级 {it.priority}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
     </div>
   )

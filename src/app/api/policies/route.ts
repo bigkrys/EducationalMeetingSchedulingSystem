@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/api/db'
-import { withRole } from '@/lib/api/middleware'
+import { withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
@@ -116,5 +116,5 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRole('admin')(getPoliciesHandler)
-export const PUT = withRole('admin')(updatePoliciesHandler)
+export const GET = withRoles(['admin', 'superadmin'])(getPoliciesHandler)
+export const PUT = withRoles(['admin', 'superadmin'])(updatePoliciesHandler)

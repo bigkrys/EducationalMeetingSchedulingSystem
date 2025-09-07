@@ -388,6 +388,48 @@ export async function sendNewAppointmentRequestNotification(
   }
 }
 
+// 发送“预约申请已提交（待审批）”通知给学生
+export async function sendAppointmentRequestSubmittedNotification(
+  studentEmail: string,
+  data: {
+    studentName: string
+    teacherName: string
+    subject: string
+    scheduledTime: string
+    durationMinutes: number
+  }
+): Promise<{ studentSent: boolean }> {
+  try {
+    const studentSent = await sendEmail(
+      studentEmail,
+      '预约申请已提交，等待老师审批',
+      `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #1976d2;">预约申请已提交</h2>
+          <p>亲爱的 ${data.studentName}，</p>
+          <p>系统已为你创建预约申请，正在等待老师审批。</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>教师：</strong>${data.teacherName}</p>
+            <p><strong>科目：</strong>${data.subject}</p>
+            <p><strong>时间：</strong>${data.scheduledTime}</p>
+            <p><strong>时长：</strong>${data.durationMinutes}分钟</p>
+          </div>
+          <p>老师批准后你将收到确认邮件。若老师在48小时内未处理，系统将自动过期该预约。</p>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #e8e8e8;">
+          <p style="color: #8c8c8c; font-size: 12px;">此邮件由教育会议调度系统自动发送，请勿回复。</p>
+        </div>
+      `
+    )
+    if (!studentSent) {
+      logger.error('email.request_submitted.student_failed', { studentEmail, data })
+    }
+    return { studentSent }
+  } catch (error) {
+    logger.error('email.request_submitted.exception', { error: String(error) })
+    return { studentSent: false }
+  }
+}
+
 // 测试邮件连接
 export async function testEmailConnection(): Promise<boolean> {
   try {
