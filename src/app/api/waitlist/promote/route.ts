@@ -17,7 +17,14 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text()
     const authCheck = await authorizeJobRequest(request, rawBody)
     if (authCheck) return authCheck
-    const body = rawBody ? JSON.parse(rawBody) : {}
+    let body: any = {}
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody)
+      } catch (e) {
+        return fail('Invalid JSON in request body', 400, E.BAD_REQUEST)
+      }
+    }
     const { teacherId, slot, subject } = body
 
     if (!teacherId || !slot || !subject) {

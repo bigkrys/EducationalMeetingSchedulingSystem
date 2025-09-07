@@ -17,13 +17,12 @@ import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 更新预约状态
-async function updateAppointmentHandler(request: NextRequest, context: { params?: any }) {
+async function updateAppointmentHandler(
+  request: NextRequest,
+  context: { params?: { id?: string } }
+) {
   try {
-    const routeParamsMaybePromise = context?.params
-    const routeParams = routeParamsMaybePromise?.then
-      ? await routeParamsMaybePromise
-      : routeParamsMaybePromise
-    const appointmentId = routeParams?.id
+    const appointmentId = (context as any)?.params?.id
     const body = await request.json()
     const validatedData = updateAppointmentSchema.parse(body)
 

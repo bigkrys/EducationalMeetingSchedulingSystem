@@ -23,10 +23,12 @@ import Link from 'next/link'
 const { Title, Text } = Typography
 
 export default function WaitlistPage() {
-  const token = useMemo(
-    () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null),
-    []
-  )
+  const [token, setToken] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setToken(localStorage.getItem('accessToken'))
+    }
+  }, [])
   const [me, setMe] = useState<any>(null)
   const [teachers, setTeachers] = useState<any[]>([])
   const [myWaitlist, setMyWaitlist] = useState<any[]>([])

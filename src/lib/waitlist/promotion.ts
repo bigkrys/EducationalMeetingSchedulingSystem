@@ -1,4 +1,5 @@
-export type Tx = any
+import type { Prisma } from '@prisma/client'
+export type Tx = Prisma.TransactionClient
 
 function isOccupiedStatus(status: string) {
   return status === 'pending' || status === 'approved'
@@ -17,13 +18,15 @@ export async function getSubjectIdByNameTx(tx: Tx, subjectName: string): Promise
   return subject.id
 }
 
+const MAX_PROMOTE_ATTEMPTS = parseInt(process.env.WAITLIST_PROMOTE_MAX_ATTEMPTS || '5', 10)
+
 export async function promoteForSlotTx(
   tx: Tx,
   teacherId: string,
   slotDate: Date,
   subjectName: string
 ): Promise<{ promoted: 0 | 1; appointmentId?: string; status?: 'pending' | 'approved' }> {
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < MAX_PROMOTE_ATTEMPTS; attempt++) {
     const rows = (await tx.$queryRawUnsafe(
       `SELECT "id", "studentId", "createdAt" FROM "waitlists"
        WHERE "teacherId" = $1 AND "slot" = $2

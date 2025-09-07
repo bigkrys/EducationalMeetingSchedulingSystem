@@ -296,7 +296,13 @@ export default function StudentBookingCalendar({
         )}&studentId=${encodeURIComponent(studentId)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '获取候补失败' })
         return
@@ -334,7 +340,13 @@ export default function StudentBookingCalendar({
           subject: selectedSubject,
         }),
       })
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '加入候补失败' })
         return
@@ -358,7 +370,13 @@ export default function StudentBookingCalendar({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id: myWaitEntryId, studentId }),
       })
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '移除候补失败' })
         return

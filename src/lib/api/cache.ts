@@ -33,15 +33,21 @@ class MemoryCache {
     this.cache.clear()
   }
 
+  // 将简单 glob 模式转换成正则：仅支持 * -> .*
+  private toRegexFromPattern(pattern: string): RegExp | null {
+    if (!pattern || typeof pattern !== 'string') return null
+    // 限制最大长度，避免 ReDoS 风险
+    if (pattern.length > 200) return null
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp('^' + escaped.replace(/\*/g, '.*') + '$')
+  }
+
   // 删除匹配模式的缓存键（支持简单通配符 * ）
   deletePattern(pattern: string) {
-    // 将简单 glob 模式转换成正则：仅支持 * -> .*
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp('^' + escaped.replace(/\*/g, '.*') + '$')
+    const regex = this.toRegexFromPattern(pattern)
+    if (!regex) return
     for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
-        this.cache.delete(key)
-      }
+      if (regex.test(key)) this.cache.delete(key)
     }
   }
 
