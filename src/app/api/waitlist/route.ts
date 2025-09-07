@@ -5,6 +5,7 @@ import { waitlistAddSchema, waitlistRemoveSchema } from '@/lib/api/schemas'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
 
 // 获取候补队列
 async function getWaitlistHandler(request: NextRequest, context?: any) {
@@ -22,14 +23,16 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
     if (studentId) where.studentId = studentId
     if (teacherId) where.teacherId = teacherId
 
-    const waitlistItems = await prisma.waitlist.findMany({
-      where,
-      include: {
-        student: { select: { user: true, serviceLevel: true } },
-        teacher: { include: { user: true } },
-      },
-      orderBy: [{ createdAt: 'asc' }],
-    })
+    const waitlistItems = await span('db waitlist.findMany', () =>
+      prisma.waitlist.findMany({
+        where,
+        include: {
+          student: { select: { user: true, serviceLevel: true } },
+          teacher: { include: { user: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }],
+      })
+    )
 
     return ok({
       items: waitlistItems.map((item: any) => ({
@@ -68,69 +71,79 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
     }
 
     // 检查学生是否已经在候补队列中
-    const existingEntry = await prisma.waitlist.findFirst({
-      where: {
-        teacherId,
-        studentId,
-        date,
-        slot: new Date(slot),
-      },
-    })
+    const existingEntry = await span('db waitlist.findFirst', () =>
+      prisma.waitlist.findFirst({
+        where: {
+          teacherId,
+          studentId,
+          date,
+          slot: new Date(slot),
+        },
+      })
+    )
 
     if (existingEntry) {
       return fail('Student already in waitlist for this slot', 409, E.WAITLIST_DUPLICATE_ENTRY)
     }
 
     // 获取学生信息（服务级别、userId 等）
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      select: {
-        serviceLevel: true,
-        userId: true,
-      },
-    })
+    const student = await span('db student.findUnique', () =>
+      prisma.student.findUnique({
+        where: { id: studentId },
+        select: {
+          serviceLevel: true,
+          userId: true,
+        },
+      })
+    )
 
     // 计算实际 date（UTC 基准）
     const slotDate = new Date(slot)
     const dateStr = slotDate.toISOString().slice(0, 10)
 
     // 创建候补队列条目
-    const waitlistEntry = await prisma.waitlist.create({
-      data: {
-        teacherId,
-        studentId,
-        date: dateStr,
-        slot: slotDate,
-      },
-    })
+    const waitlistEntry = await span('db waitlist.create', () =>
+      prisma.waitlist.create({
+        data: {
+          teacherId,
+          studentId,
+          date: dateStr,
+          slot: slotDate,
+        },
+      })
+    )
 
     // 记录审计日志
     if (student?.userId) {
-      await prisma.auditLog.create({
-        data: {
-          actorId: student.userId,
-          action: 'WAITLIST_ADDED',
-          targetId: waitlistEntry.id,
-          details: JSON.stringify({
-            teacherId,
-            date,
-            slot,
-            subject,
-            // priority字段已移除
-            reason: 'Student added to waitlist for unavailable slot',
-          }),
-        },
-      })
+      await span('db auditLog.create', () =>
+        prisma.auditLog.create({
+          data: {
+            actorId: student.userId,
+            action: 'WAITLIST_ADDED',
+            targetId: waitlistEntry.id,
+            details: JSON.stringify({
+              teacherId,
+              date,
+              slot,
+              subject,
+              // priority字段已移除
+              reason: 'Student added to waitlist for unavailable slot',
+            }),
+          },
+        })
+      )
     }
 
     // 计算 position（基于 createdAt asc）
-    const position = await prisma.waitlist.count({
-      where: {
-        teacherId,
-        slot: slotDate,
-        createdAt: { lte: waitlistEntry.createdAt },
-      },
-    })
+    const position = await span('db waitlist.count', () =>
+      prisma.waitlist.count({
+        where: {
+          teacherId,
+          slot: slotDate,
+          createdAt: { lte: waitlistEntry.createdAt },
+        },
+      })
+    )
 
     return ok(
       { message: 'Added to waitlist successfully', id: waitlistEntry.id, position },
@@ -153,10 +166,12 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
     }
 
     // 验证权限（只能移除自己的条目）
-    const waitlistEntry = await prisma.waitlist.findUnique({
-      where: { id },
-      include: { student: { include: { user: true } } },
-    })
+    const waitlistEntry = await span('db waitlist.findUnique', () =>
+      prisma.waitlist.findUnique({
+        where: { id },
+        include: { student: { include: { user: true } } },
+      })
+    )
 
     if (!waitlistEntry) {
       return fail('Waitlist entry not found', 404, E.WAITLIST_ENTRY_NOT_FOUND)
@@ -167,21 +182,25 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
     }
 
     // 删除候补队列条目
-    await prisma.waitlist.delete({
-      where: { id },
-    })
+    await span('db waitlist.delete', () =>
+      prisma.waitlist.delete({
+        where: { id },
+      })
+    )
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        actorId: studentId,
-        action: 'WAITLIST_REMOVED',
-        targetId: id,
-        details: JSON.stringify({
-          reason: 'Student removed from waitlist',
-        }),
-      },
-    })
+    await span('db auditLog.create', () =>
+      prisma.auditLog.create({
+        data: {
+          actorId: studentId,
+          action: 'WAITLIST_REMOVED',
+          targetId: id,
+          details: JSON.stringify({
+            reason: 'Student removed from waitlist',
+          }),
+        },
+      })
+    )
 
     return ok({ message: 'Removed from waitlist successfully' })
   } catch (error) {
@@ -193,11 +212,19 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
 import { withRateLimit } from '@/lib/api/middleware'
 
 export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(
-  withRoles(['student', 'teacher'])(getWaitlistHandler)
+  withRoles(['student', 'teacher'])(withSentryRoute(getWaitlistHandler, 'api GET /api/waitlist'))
 )
 export const POST = withRateLimit({ windowMs: 60 * 1000, max: 30 })(
-  withRole('student')(withValidation(waitlistAddSchema)(addToWaitlistHandler))
+  withRole('student')(
+    withValidation(waitlistAddSchema)(
+      withSentryRoute(addToWaitlistHandler, 'api POST /api/waitlist')
+    )
+  )
 )
 export const DELETE = withRateLimit({ windowMs: 60 * 1000, max: 30 })(
-  withRole('student')(withValidation(waitlistRemoveSchema)(removeFromWaitlistHandler))
+  withRole('student')(
+    withValidation(waitlistRemoveSchema)(
+      withSentryRoute(removeFromWaitlistHandler, 'api DELETE /api/waitlist')
+    )
+  )
 )

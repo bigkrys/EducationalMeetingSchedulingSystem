@@ -27,6 +27,14 @@ const nextConfig = {
       '@': require('path').resolve(__dirname, 'src'),
     }
 
+    // 忽略 OpenTelemetry/require-in-the-middle 在 dev 下的动态依赖告警
+    // 这些告警来自依赖内部的动态 require，用于运行时探测，功能不受影响
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      { module: /@opentelemetry\/instrumentation/, message: /Critical dependency/ },
+      { module: /require-in-the-middle/, message: /Critical dependency/ },
+    ]
+
     return config
   },
   // 避免 Next 在 build 时以已弃用的选项调用 ESLint 导致噪音警告
@@ -35,5 +43,18 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 }
+// 使用 Sentry 的 Next.js 集成，在构建时上传 Source Maps 并绑定 Release
+// 需要环境变量：SENTRY_AUTH_TOKEN、SENTRY_ORG、SENTRY_PROJECT（仅在构建机可用）
+const { withSentryConfig } = require('@sentry/nextjs')
 
-module.exports = nextConfig
+const sentryWebpackPluginOptions = {
+  // 读取环境提供的 org/project/authToken；本地未设置时不会上传
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // 在本地开发静默处理（不报错）
+  silent: true,
+  // 自动使用 Vercel 的 VERCEL_GIT_COMMIT_SHA 作为 release（集成会自动处理）
+}
+
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions)

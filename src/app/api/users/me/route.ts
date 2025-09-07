@@ -12,6 +12,7 @@ const USER_ME_TTL_MS = 5 * 1000 // 5 seconds
 async function handler(request: AuthenticatedRequest) {
   try {
     const userId = request.user!.userId
+    const role = request.user!.role
 
     // serve from short-lived cache when available
     const cached = userMeCache.get(userId)
@@ -19,40 +20,31 @@ async function handler(request: AuthenticatedRequest) {
       return ok(cached.data)
     }
 
-    // 从数据库获取用户信息
-    // select narrowly to reduce join cost and payload
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        name: true,
-        student: {
-          select: {
-            id: true,
-            serviceLevel: true,
-            monthlyMeetingsUsed: true,
-            // studentSubjects -> subject.name
-            studentSubjects: {
-              select: {
-                subject: { select: { name: true } },
-              },
-            },
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            maxDailyMeetings: true,
-            bufferMinutes: true,
-            teacherSubjects: {
-              select: { subject: { select: { name: true } } },
-            },
-          },
-        },
-      },
-    })
+    // 根据角色裁剪选择字段，减少不必要的关联查询
+    const selectBase: any = { id: true, email: true, role: true, name: true }
+    const selectStudent = {
+      id: true,
+      serviceLevel: true,
+      monthlyMeetingsUsed: true,
+      studentSubjects: { select: { subject: { select: { name: true } } } },
+    }
+    const selectTeacher = {
+      id: true,
+      maxDailyMeetings: true,
+      bufferMinutes: true,
+      teacherSubjects: { select: { subject: { select: { name: true } } } },
+    }
+
+    const select: any = { ...selectBase }
+    if (role === 'student') select.student = { select: selectStudent }
+    else if (role === 'teacher') select.teacher = { select: selectTeacher }
+    else {
+      // 对 admin/superadmin 默认不取重型关联，页面通常不依赖这些字段
+      select.student = { select: { id: true } }
+      select.teacher = { select: { id: true } }
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select })
 
     if (!user) {
       return fail('User not found', 404, 'USER_NOT_FOUND')
@@ -87,7 +79,29 @@ async function handler(request: AuthenticatedRequest) {
       userMeCache.set(userId, { expiresAt: Date.now() + USER_ME_TTL_MS, data: userData })
     } catch (_) {}
 
-    return ok(userData)
+    // ETag 支持：便于浏览器/边缘做 304 短路
+    const body = JSON.stringify({ ok: true, ...userData })
+    const etag = `W/"${Buffer.from(String(userData.id)).toString('base64')}.${body.length}"`
+
+    const ifNoneMatch = request.headers.get('if-none-match')
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null as any, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+        },
+      })
+    }
+
+    return new NextResponse(body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        ETag: etag,
+        'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+      },
+    })
   } catch (error: any) {
     // If Prisma reports that DB is unreachable (P1001) or initialization error, return 503
     logger.error('user.me.exception', { ...getRequestMeta(request), error: String(error) })

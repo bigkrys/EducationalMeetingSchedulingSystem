@@ -10,9 +10,10 @@ import {
   sendAppointmentRequestSubmittedNotification,
 } from '@/lib/api/email'
 import { promoteForSlotTx } from '@/lib/waitlist/promotion'
+import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
 
 // 提升候补队列中的学生
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const rawBody = await request.text()
     const authCheck = await authorizeJobRequest(request, rawBody)
@@ -39,8 +40,8 @@ export async function POST(request: NextRequest) {
     const dateStr = slotDate.toISOString().split('T')[0]
 
     // 并发安全晋升（内部处理创建或复用已取消的预约行）
-    const result = await prisma.$transaction((tx) =>
-      promoteForSlotTx(tx, teacherId, slotDate, subject)
+    const result = await span('db waitlist.promote.tx', () =>
+      prisma.$transaction((tx) => promoteForSlotTx(tx, teacherId, slotDate, subject))
     )
 
     if (result.promoted === 0) {
@@ -49,14 +50,16 @@ export async function POST(request: NextRequest) {
 
     // 发送通知（事务外）
     try {
-      const appt = await prisma.appointment.findUnique({
-        where: { id: (result as any).appointmentId },
-        include: {
-          student: { include: { user: true } },
-          teacher: { include: { user: true } },
-          subject: true,
-        },
-      })
+      const appt = await span('db appointment.findUnique', () =>
+        prisma.appointment.findUnique({
+          where: { id: (result as any).appointmentId },
+          include: {
+            student: { include: { user: true } },
+            teacher: { include: { user: true } },
+            subject: true,
+          },
+        })
+      )
       if (appt && appt.student?.user && appt.teacher?.user) {
         const scheduledLocal = slotDate.toLocaleString('zh-CN', {
           year: 'numeric',
@@ -128,3 +131,5 @@ export async function POST(request: NextRequest) {
 }
 
 // subjectId 查找已迁移到 promotion helper
+
+export const POST = withSentryRoute(postHandler, 'api POST /api/waitlist/promote')

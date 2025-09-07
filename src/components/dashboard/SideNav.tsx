@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Layout, Menu } from 'antd'
 import {
@@ -11,12 +11,13 @@ import {
   BarChartOutlined,
   TeamOutlined,
   ClockCircleOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons'
 import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
-
+import { clearUserCache } from '@/lib/api/user-service'
 const { Sider } = Layout
-
+import { useRouter } from 'next/navigation'
 export default function DashboardSideNav({
   collapsed,
   onCollapse,
@@ -28,7 +29,7 @@ export default function DashboardSideNav({
   const [role, setRole] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const pathname = usePathname()
-
+  const router = useRouter()
   useEffect(() => {
     setMounted(true)
     if (isAuthenticated()) setRole(getCurrentUserRole())
@@ -40,6 +41,19 @@ export default function DashboardSideNav({
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  const handleLogout = useCallback(async () => {
+    try {
+      clearUserCache()
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('userRole')
+      fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/')
+    } catch (_) {
+      router.push('/')
+    }
+  }, [router])
 
   if (!mounted) return null
 
@@ -93,6 +107,7 @@ export default function DashboardSideNav({
     ...commonItems,
     ...(role === 'student' ? studentItems : []),
     ...(role === 'teacher' ? teacherItems : []),
+    { key: 'logout', icon: <LogoutOutlined />, label: <span onClick={handleLogout}>登出</span> },
   ]
 
   const selectedKey = items

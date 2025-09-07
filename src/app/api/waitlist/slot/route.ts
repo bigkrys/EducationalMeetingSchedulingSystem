@@ -3,6 +3,7 @@ import { prisma } from '@/lib/api/db'
 import { withRateLimit, withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute, span } from '@/lib/monitoring/sentry'
 
 // 获取特定 teacherId+slot 的候补队列详情
 async function getHandler(request: NextRequest) {
@@ -18,14 +19,18 @@ async function getHandler(request: NextRequest) {
 
     const slotDate = new Date(slot)
 
-    const items = await prisma.waitlist.findMany({
-      where: { teacherId, slot: slotDate },
-      include: { student: { select: { user: true, serviceLevel: true } } },
-      orderBy: [{ createdAt: 'asc' }],
-      take: 200,
-    })
+    const items = await span('db waitlist.findMany', () =>
+      prisma.waitlist.findMany({
+        where: { teacherId, slot: slotDate },
+        include: { student: { select: { user: true, serviceLevel: true } } },
+        orderBy: [{ createdAt: 'asc' }],
+        take: 200,
+      })
+    )
 
-    const total = await prisma.waitlist.count({ where: { teacherId, slot: slotDate } })
+    const total = await span('db waitlist.count', () =>
+      prisma.waitlist.count({ where: { teacherId, slot: slotDate } })
+    )
 
     let myPosition: number | null = null
     if (studentId) {
@@ -37,17 +42,21 @@ async function getHandler(request: NextRequest) {
       }
       // 不在前200名时，可额外查询计数
       if (myPosition === null) {
-        const me = await prisma.waitlist.findFirst({
-          where: { teacherId, slot: slotDate, studentId },
-        })
-        if (me) {
-          const ahead = await prisma.waitlist.count({
-            where: {
-              teacherId,
-              slot: slotDate,
-              createdAt: { lt: me.createdAt },
-            },
+        const me = await span('db waitlist.findFirst', () =>
+          prisma.waitlist.findFirst({
+            where: { teacherId, slot: slotDate, studentId },
           })
+        )
+        if (me) {
+          const ahead = await span('db waitlist.count', () =>
+            prisma.waitlist.count({
+              where: {
+                teacherId,
+                slot: slotDate,
+                createdAt: { lt: me.createdAt },
+              },
+            })
+          )
           myPosition = ahead + 1
         }
       }
@@ -67,7 +76,14 @@ async function getHandler(request: NextRequest) {
       studentName: it.student?.user?.name,
     }))
 
-    return ok({ total, waitlist, myPosition })
+    return ok(
+      { total, waitlist, myPosition },
+      {
+        headers: {
+          'Cache-Control': 'public, max-age=15, s-maxage=60, stale-while-revalidate=60',
+        },
+      }
+    )
   } catch (error) {
     logger.error('waitlist.slot.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to fetch waitlist slot', 500, 'INTERNAL_ERROR')
@@ -75,5 +91,7 @@ async function getHandler(request: NextRequest) {
 }
 
 export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(
-  withRoles(['student', 'teacher', 'admin'])(getHandler as any)
+  withRoles(['student', 'teacher', 'admin'])(
+    withSentryRoute(getHandler as any, 'api GET /api/waitlist/slot')
+  )
 )
