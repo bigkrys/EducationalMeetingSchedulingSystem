@@ -188,7 +188,7 @@ export default function AppointmentsManagement() {
     {
       title: isTeacher ? '学生' : '学生/教师',
       key: 'participants',
-      responsive: ['sm'],
+      responsive: ['sm' as any],
       render: (_: any, record: Appointment) => (
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
@@ -208,7 +208,7 @@ export default function AppointmentsManagement() {
       title: '时间',
       dataIndex: 'scheduledTime',
       key: 'scheduledTime',
-      responsive: ['sm'],
+      responsive: ['sm' as any],
       render: (scheduledTime: string) => (
         <div
           className="flex items-center space-x-2"
@@ -223,7 +223,7 @@ export default function AppointmentsManagement() {
       title: '时长',
       dataIndex: 'durationMinutes',
       key: 'durationMinutes',
-      responsive: ['md'],
+      responsive: ['md' as any],
       render: (duration: number) => <span>{duration} 分钟</span>,
     },
     {
@@ -236,7 +236,7 @@ export default function AppointmentsManagement() {
       title: '备注',
       dataIndex: 'notes',
       key: 'notes',
-      responsive: ['lg'],
+      responsive: ['lg' as any],
       render: (notes: string) =>
         notes ? (
           <span className="text-gray-600 text-sm max-w-xs truncate block" title={notes}>

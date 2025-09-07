@@ -68,6 +68,11 @@ export default function DashboardSideNav({
 
   const teacherItems: any[] = [
     {
+      key: '/dashboard/waitlist',
+      icon: <ClockCircleOutlined />,
+      label: <Link href="/dashboard/waitlist">候补队列</Link>,
+    },
+    {
       key: '/dashboard/availability',
       icon: <SettingOutlined />,
       label: <Link href="/dashboard/availability">设置可用性</Link>,

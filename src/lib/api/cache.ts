@@ -33,10 +33,13 @@ class MemoryCache {
     this.cache.clear()
   }
 
-  // 删除匹配模式的缓存键
+  // 删除匹配模式的缓存键（支持简单通配符 * ）
   deletePattern(pattern: string) {
+    // 将简单 glob 模式转换成正则：仅支持 * -> .*
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp('^' + escaped.replace(/\*/g, '.*') + '$')
     for (const key of this.cache.keys()) {
-      if (key.includes(pattern)) {
+      if (regex.test(key)) {
         this.cache.delete(key)
       }
     }

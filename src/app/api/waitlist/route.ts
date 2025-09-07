@@ -25,7 +25,7 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
     const waitlistItems = await prisma.waitlist.findMany({
       where,
       include: {
-        student: { include: { user: true } },
+        student: { select: { user: true, serviceLevel: true } },
         teacher: { include: { user: true } },
       },
       orderBy: [{ createdAt: 'asc' }],
@@ -42,11 +42,12 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
         slot: item.slot.toISOString(),
         priority:
           item.student?.serviceLevel === 'premium'
-            ? 100
+            ? 200
             : item.student?.serviceLevel === 'level1'
-              ? 50
-              : 10, // 动态计算优先级
-        // status字段在Waitlist模型中不存在
+              ? 100
+              : item.student?.serviceLevel === 'level2'
+                ? 50
+                : 0,
         createdAt: item.createdAt.toISOString(),
       })),
     })
@@ -59,7 +60,7 @@ async function getWaitlistHandler(request: NextRequest, context?: any) {
 // 添加到候补队列
 async function addToWaitlistHandler(request: NextRequest, context?: any) {
   try {
-    const body = await request.json()
+    const body = (request as any).validatedBody ?? (await request.json().catch(() => ({})))
     const { teacherId, date, slot, studentId, subject } = body
 
     if (!teacherId || !date || !slot || !studentId || !subject) {
@@ -80,7 +81,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
       return fail('Student already in waitlist for this slot', 409, E.WAITLIST_DUPLICATE_ENTRY)
     }
 
-    // 获取学生信息，包括服务级别和userId
+    // 获取学生信息（服务级别、userId 等）
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       select: {
@@ -89,13 +90,17 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
       },
     })
 
-    // 创建候补队列条目（优先级将通过查询时的排序来实现）
+    // 计算实际 date（UTC 基准）
+    const slotDate = new Date(slot)
+    const dateStr = slotDate.toISOString().slice(0, 10)
+
+    // 创建候补队列条目
     const waitlistEntry = await prisma.waitlist.create({
       data: {
         teacherId,
         studentId,
-        date,
-        slot: new Date(slot),
+        date: dateStr,
+        slot: slotDate,
       },
     })
 
@@ -118,7 +123,19 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
       })
     }
 
-    return ok({ message: 'Added to waitlist successfully', id: waitlistEntry.id }, { status: 201 })
+    // 计算 position（基于 createdAt asc）
+    const position = await prisma.waitlist.count({
+      where: {
+        teacherId,
+        slot: slotDate,
+        createdAt: { lte: waitlistEntry.createdAt },
+      },
+    })
+
+    return ok(
+      { message: 'Added to waitlist successfully', id: waitlistEntry.id, position },
+      { status: 201 }
+    )
   } catch (error) {
     logger.error('waitlist.add.exception', { ...getRequestMeta(request), error: String(error) })
     return fail('Failed to add to waitlist', 500, E.INTERNAL_ERROR)
@@ -128,7 +145,7 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
 // 从候补队列移除
 async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
   try {
-    const body = await request.json()
+    const body = (request as any).validatedBody ?? (await request.json().catch(() => ({})))
     const { id, studentId } = body
 
     if (!id || !studentId) {

@@ -7,19 +7,23 @@ import {
   sendAppointmentApprovedNotification,
   sendAppointmentCancelledNotification,
   sendAppointmentRejectedNotification,
+  sendNewAppointmentRequestNotification,
+  sendAppointmentRequestSubmittedNotification,
 } from '@/lib/api/email'
+import { promoteForSlotTx } from '@/lib/waitlist/promotion'
 import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 更新预约状态
-async function updateAppointmentHandler(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function updateAppointmentHandler(request: NextRequest, context: { params?: any }) {
   try {
-    const appointmentId = params.id
+    const routeParamsMaybePromise = context?.params
+    const routeParams = routeParamsMaybePromise?.then
+      ? await routeParamsMaybePromise
+      : routeParamsMaybePromise
+    const appointmentId = routeParams?.id
     const body = await request.json()
     const validatedData = updateAppointmentSchema.parse(body)
 
@@ -295,7 +299,108 @@ async function updateAppointmentHandler(
         })
 
         if (subject) {
-          // 异步调用候补队列提升（不阻塞响应）
+          // 方式一：本地直接调用事务（避免 HTTP/job-auth 问题），不阻塞响应
+          ;(async () => {
+            try {
+              const res = await prisma.$transaction((tx) =>
+                promoteForSlotTx(
+                  tx,
+                  appointment.teacherId as string,
+                  appointment.scheduledTime as Date,
+                  subject.name
+                )
+              )
+              if (res.promoted > 0) {
+                await deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+
+                // 直接晋升成功后，发送相同的通知邮件（不依赖 HTTP 路由）
+                try {
+                  const appt = await prisma.appointment.findUnique({
+                    where: { id: res.appointmentId as string },
+                    include: {
+                      student: { include: { user: true } },
+                      teacher: { include: { user: true } },
+                      subject: true,
+                    },
+                  })
+                  if (appt && appt.student?.user && appt.teacher?.user) {
+                    const scheduledLocal = (appointment.scheduledTime as Date).toLocaleString(
+                      'zh-CN',
+                      {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: (appt.teacher as any)?.timezone || 'UTC',
+                      }
+                    )
+
+                    if (res.status === 'pending') {
+                      const p1 = sendNewAppointmentRequestNotification(appt.teacher.user.email, {
+                        studentName: appt.student.user.name,
+                        subject: appt.subject.name,
+                        scheduledTime: scheduledLocal,
+                        durationMinutes: appt.durationMinutes,
+                        studentEmail: appt.student.user.email,
+                      })
+                      const p2 = sendAppointmentRequestSubmittedNotification(
+                        appt.student.user.email,
+                        {
+                          studentName: appt.student.user.name,
+                          teacherName: appt.teacher.user.name,
+                          subject: appt.subject.name,
+                          scheduledTime: scheduledLocal,
+                          durationMinutes: appt.durationMinutes,
+                        }
+                      )
+                      if (process.env.SEND_EMAIL_SYNC === 'true') {
+                        await p1
+                        await p2
+                      } else {
+                        p1.catch((e) =>
+                          logger.error('waitlist.promote.email.request_failed', {
+                            error: String(e),
+                          })
+                        )
+                        p2.catch((e) =>
+                          logger.error('waitlist.promote.email.request_student_failed', {
+                            error: String(e),
+                          })
+                        )
+                      }
+                    } else {
+                      const fn = async () =>
+                        await sendAppointmentApprovedNotification(
+                          appt.student.user.email,
+                          appt.teacher.user.email,
+                          {
+                            studentName: appt.student.user.name,
+                            teacherName: appt.teacher.user.name,
+                            subject: appt.subject.name,
+                            scheduledTime: scheduledLocal,
+                            durationMinutes: appt.durationMinutes,
+                          }
+                        )
+                      if (process.env.SEND_EMAIL_SYNC === 'true') await fn()
+                      else
+                        fn().catch((e) =>
+                          logger.error('waitlist.promote.email.approved_failed', {
+                            error: String(e),
+                          })
+                        )
+                    }
+                  }
+                } catch (e) {
+                  logger.error('waitlist.promote.email.direct.exception', { error: String(e) })
+                }
+              }
+            } catch (err) {
+              logger.error('waitlist.promote.invoke_direct_failed', { error: String(err) })
+            }
+          })()
+
+          // 方式二：HTTP 触发（作为冗余，某些部署更易观测日志与鉴权）
           setTimeout(async () => {
             try {
               const response = await fetch(
@@ -304,7 +409,9 @@ async function updateAppointmentHandler(
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${process.env.INTERNAL_API_KEY || 'internal-key'}`,
+                    // Use job-auth compatible secret; fallback to INTERNAL_API_KEY for local
+                    Authorization: `Bearer ${process.env.JOB_TRIGGER_SECRET || process.env.INTERNAL_API_KEY || 'internal-key'}`,
+                    'x-job-secret': `${process.env.JOB_TRIGGER_SECRET || ''}`,
                   },
                   body: JSON.stringify({
                     teacherId: appointment.teacherId,
@@ -325,7 +432,7 @@ async function updateAppointmentHandler(
             } catch (error) {
               logger.error('waitlist.promote.invoke_failed', { error: String(error) })
             }
-          }, 1000) // 延迟1秒执行，确保预约更新完成
+          }, 500) // 轻微延迟，确保上面的更新已提交
         }
       } catch (error) {
         logger.error('waitlist.promote.trigger_failed', { error: String(error) })
