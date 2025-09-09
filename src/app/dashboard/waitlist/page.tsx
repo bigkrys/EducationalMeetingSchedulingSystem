@@ -19,14 +19,18 @@ import {
 } from 'antd'
 import dayjs from 'dayjs'
 import Link from 'next/link'
+import * as Sentry from '@sentry/nextjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { Title, Text } = Typography
 
 export default function WaitlistPage() {
-  const token = useMemo(
-    () => (typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null),
-    []
-  )
+  const [token, setToken] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setToken(localStorage.getItem('accessToken'))
+    }
+  }, [])
   const [me, setMe] = useState<any>(null)
   const [teachers, setTeachers] = useState<any[]>([])
   const [myWaitlist, setMyWaitlist] = useState<any[]>([])
@@ -54,10 +58,9 @@ export default function WaitlistPage() {
   const fetchMyWaitlist = async () => {
     try {
       // 需要 studentId，后端基于传入的 studentId 过滤
-      const me = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${token}` } })
-      const meJson = await me.json()
-      setMe(meJson)
-      const sid = meJson?.student?.id
+      const meJson = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
+      setMe(meJson as any)
+      const sid = (meJson as any)?.student?.id
       if (!sid) return
       const res = await fetch(`/api/waitlist?studentId=${sid}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -70,8 +73,15 @@ export default function WaitlistPage() {
   }
 
   useEffect(() => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
     fetchTeachers()
-    fetchMyWaitlist()
+    fetchMyWaitlist().finally(() => {
+      try {
+        const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+        Sentry.metrics.distribution('waitlist_page_load_ms', Math.max(0, t1 - t0))
+        incr('biz.page.view', 1, { page: 'waitlist' })
+      } catch {}
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -109,6 +119,9 @@ export default function WaitlistPage() {
 
   const openTeacherSlotWaitlist = async (slotIso: string) => {
     try {
+      try {
+        incr('biz.waitlist.teacher.open_slot', 1)
+      } catch {}
       const res = await fetch(
         `/api/waitlist/slot?teacherId=${me.teacher.id}&slot=${encodeURIComponent(slotIso)}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -122,6 +135,9 @@ export default function WaitlistPage() {
   const clearThisSlotWaitlist = async () => {
     try {
       if (!wlModal.slot || !me?.teacher?.id) return
+      try {
+        incr('biz.waitlist.teacher.clear_slot', 1)
+      } catch {}
       const res = await fetch('/api/waitlist/cleanup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -158,10 +174,12 @@ export default function WaitlistPage() {
   const addToWaitlist = async () => {
     try {
       if (!teacherId || !date || !time) return message.error('请选择教师、日期与时间')
+      try {
+        incr('biz.waitlist.join.from_page', 1)
+      } catch {}
       setLoading(true)
-      const me = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${token}` } })
-      const meJson = await me.json()
-      const sid = meJson?.student?.id
+      const meJson = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
+      const sid = (meJson as any)?.student?.id
       if (!sid) return message.error('仅学生可加入候补')
 
       const slot = dayjs(date.format('YYYY-MM-DD') + ' ' + time.format('HH:mm')).toISOString()
@@ -190,10 +208,12 @@ export default function WaitlistPage() {
 
   const removeFromWaitlist = async (row: any) => {
     try {
+      try {
+        incr('biz.waitlist.leave.from_page', 1)
+      } catch {}
       setLoading(true)
-      const me = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${token}` } })
-      const meJson = await me.json()
-      const sid = meJson?.student?.id
+      const meJson = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
+      const sid = (meJson as any)?.student?.id
       if (!sid) return
       const res = await fetch('/api/waitlist', {
         method: 'DELETE',

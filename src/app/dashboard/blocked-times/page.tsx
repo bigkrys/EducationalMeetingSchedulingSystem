@@ -7,6 +7,7 @@ import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { getCurrentUserId } from '@/lib/api/auth'
 import dayjs from 'dayjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { RangePicker } = DatePicker
 
@@ -43,20 +44,12 @@ export default function BlockedTimes() {
         return
       }
 
-      const response = await fetch('/api/users/me', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      })
-
-      if (response.ok) {
-        const userData = await response.json()
-        if (userData.teacher && userData.teacher.id) {
-          setTeacherId(userData.teacher.id)
-        } else {
-          showErrorMessage('用户不是教师')
-          router.push('/dashboard')
-        }
+      const me = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
+      if (me?.teacher?.id) {
+        setTeacherId(me.teacher.id)
+      } else {
+        showErrorMessage('用户不是教师')
+        router.push('/dashboard')
       }
     } catch (error) {
       console.error('获取用户信息失败:', error)
@@ -209,7 +202,12 @@ export default function BlockedTimes() {
           </Button>
           <Popconfirm
             title="确定要删除这个阻塞时间吗？"
-            onConfirm={() => handleDelete(record.id)}
+            onConfirm={() => {
+              try {
+                incr('biz.blocked_times.delete.confirm', 1)
+              } catch {}
+              handleDelete(record.id)
+            }}
             okText="确定"
             cancelText="取消"
           >

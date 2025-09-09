@@ -3,6 +3,7 @@ import { prisma } from '@/lib/api/db'
 import { withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function postHandler(request: NextRequest) {
   try {
@@ -45,4 +46,6 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withRoles(['teacher', 'admin'])(postHandler as any)
+export const POST = withRoles(['teacher', 'admin'])(
+  withSentryRoute(postHandler as any, 'api POST /api/waitlist/cleanup')
+)

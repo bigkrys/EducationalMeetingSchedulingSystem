@@ -6,6 +6,7 @@ import { testEmailSchema } from '@/lib/api/schemas'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 const getHandler = async function GET(request: NextRequest) {
   try {
@@ -95,7 +96,7 @@ const postHandler = async function POST(request: NextRequest) {
   }
 }
 
-export const GET = withRateLimit()(getHandler)
+export const GET = withRateLimit()(withSentryRoute(getHandler, 'api GET /api/test-email'))
 export const POST = withRateLimit({ windowMs: 60 * 1000, max: 6 })(
-  withValidation(testEmailSchema)(postHandler)
+  withValidation(testEmailSchema)(withSentryRoute(postHandler, 'api POST /api/test-email'))
 )

@@ -5,6 +5,7 @@ import { createTeacherSchema } from '@/lib/api/schemas'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 获取教师列表
 async function getTeachersHandler(request: AuthenticatedRequest, context?: any) {
@@ -156,7 +157,11 @@ async function createTeacherHandler(request: AuthenticatedRequest, context?: any
 }
 
 // 导出处理函数
-export const GET = withRoles(['student', 'teacher', 'admin'])(getTeachersHandler)
+export const GET = withRoles(['student', 'teacher', 'admin'])(
+  withSentryRoute(getTeachersHandler, 'api GET /api/teachers')
+)
 export const POST = withRoles(['admin', 'superadmin'])(
-  withValidation(createTeacherSchema)(createTeacherHandler)
+  withValidation(createTeacherSchema)(
+    withSentryRoute(createTeacherHandler, 'api POST /api/teachers')
+  )
 )

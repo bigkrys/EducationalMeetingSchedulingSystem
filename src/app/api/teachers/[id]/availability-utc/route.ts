@@ -278,6 +278,14 @@ function hasTimeOverlap(start1: string, end1: string, start2: string, end2: stri
 }
 
 // 导出处理函数
-export const GET = withRole('teacher')(getAvailabilityHandler)
-export const POST = withRole('teacher')(setAvailabilityHandler)
-export const PUT = withRole('teacher')(batchSetAvailabilityHandler)
+import { withSentryRoute } from '@/lib/monitoring/sentry'
+
+export const GET = withRole('teacher')(
+  withSentryRoute(getAvailabilityHandler as any, 'api GET /api/teachers/[id]/availability-utc')
+)
+export const POST = withRole('teacher')(
+  withSentryRoute(setAvailabilityHandler as any, 'api POST /api/teachers/[id]/availability-utc')
+)
+export const PUT = withRole('teacher')(
+  withSentryRoute(batchSetAvailabilityHandler as any, 'api PUT /api/teachers/[id]/availability-utc')
+)

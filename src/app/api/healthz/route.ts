@@ -4,8 +4,9 @@ import { getRedisClient, initRedis } from '@/lib/api/cache'
 import { testEmailConnection } from '@/lib/api/email'
 import { env } from '@/lib/env'
 import { ok, fail } from '@/lib/api/response'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
-export async function GET() {
+async function getHandler() {
   const started = Date.now()
   const checks: any = { app: { ok: true, time: new Date().toISOString() } }
 
@@ -61,3 +62,5 @@ export async function GET() {
   }
   return ok({ ...checks, total_ms: Date.now() - started })
 }
+
+export const GET = withSentryRoute(getHandler as any, 'api GET /api/healthz')

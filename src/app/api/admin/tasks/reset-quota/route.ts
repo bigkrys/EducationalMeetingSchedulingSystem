@@ -3,6 +3,7 @@ import { prisma } from '@/lib/api/db'
 import { ok, fail } from '@/lib/api/response'
 import { withRoles } from '@/lib/api/middleware'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function handler(request: NextRequest) {
   try {
@@ -68,4 +69,6 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const POST = withRoles(['admin', 'superadmin'])(handler)
+export const POST = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(handler as any, 'api POST /api/admin/tasks/reset-quota')
+)

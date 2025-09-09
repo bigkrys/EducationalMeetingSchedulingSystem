@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ok } from '@/lib/api/response'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 简单的健康检查/占位路由，避免构建失败（可按需扩展为用户时区设置接口）
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
     return ok({ timezone: tz })
@@ -10,3 +11,5 @@ export async function GET(req: NextRequest) {
     return ok({ timezone: 'UTC' })
   }
 }
+
+export const GET = withSentryRoute(getHandler as any, 'api GET /api/users/timezone')

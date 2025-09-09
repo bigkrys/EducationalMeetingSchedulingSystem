@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Layout, Button } from 'antd'
 import { MenuOutlined } from '@ant-design/icons'
 import DashboardSideNav from '@/components/dashboard/SideNav'
+import { userService } from '@/lib/api/user-service'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(true)
@@ -12,6 +13,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     setMounted(true)
+    // 预取当前用户信息，命中 userService 的 30s 缓存，跨页面复用，避免每次路由都请求 /api/users/me
+    userService.getCurrentUser().catch(() => {})
     const onResize = () => {
       const width = typeof window !== 'undefined' ? window.innerWidth : 1200
       const isLg = width >= 992

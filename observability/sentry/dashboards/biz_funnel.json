@@ -1,0 +1,54 @@
+{
+  "title": "Business Funnel",
+  "widgets": [
+    {
+      "title": "Booking Funnel (view → select → submit → success)",
+      "displayType": "area",
+      "interval": "10m",
+      "queries": [
+        {
+          "name": "view",
+          "fields": ["sum(biz.calendar.view)", "count()"],
+          "query": "event.type:metric metric:biz.calendar.view"
+        },
+        {
+          "name": "select",
+          "fields": ["sum(biz.calendar.select_slot)"],
+          "query": "event.type:metric metric:biz.calendar.select_slot"
+        },
+        {
+          "name": "submit",
+          "fields": ["sum(biz.booking.submit)"],
+          "query": "event.type:metric metric:biz.booking.submit"
+        },
+        {
+          "name": "success",
+          "fields": ["sum(biz.booking.success)"],
+          "query": "event.type:metric metric:biz.booking.success"
+        }
+      ]
+    },
+    {
+      "title": "Waitlist Trend",
+      "displayType": "line",
+      "interval": "10m",
+      "queries": [
+        {
+          "name": "join",
+          "fields": ["sum(biz.waitlist.join)"],
+          "query": "event.type:metric metric:biz.waitlist.join"
+        },
+        {
+          "name": "leave",
+          "fields": ["sum(biz.waitlist.leave)"],
+          "query": "event.type:metric metric:biz.waitlist.leave"
+        },
+        {
+          "name": "promote",
+          "fields": ["sum(biz.waitlist.promote.success)"],
+          "query": "event.type:metric metric:biz.waitlist.promote.success"
+        }
+      ]
+    }
+  ]
+}

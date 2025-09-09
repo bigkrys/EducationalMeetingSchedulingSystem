@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { userService, User, clearUserCache } from '@/lib/api/user-service'
 import PageLoader from '@/components/shared/PageLoader'
 import DashboardContent from '@/components/dashboard/DashboardContent'
+import * as Sentry from '@sentry/nextjs'
+import { incr } from '@/lib/frontend/metrics'
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null)
@@ -13,6 +15,7 @@ export default function Dashboard() {
   const router = useRouter()
 
   useEffect(() => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
     let mounted = true
 
     const load = async () => {
@@ -24,6 +27,11 @@ export default function Dashboard() {
         console.error('Failed to load user in dashboard:', err)
       } finally {
         if (mounted) setLoading(false)
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          Sentry.metrics.distribution('dashboard_home_load_ms', Math.max(0, t1 - t0))
+          incr('biz.page.view', 1, { page: 'dashboard_home' })
+        } catch {}
       }
     }
 

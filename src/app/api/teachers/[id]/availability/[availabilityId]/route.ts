@@ -4,6 +4,7 @@ import { withRole, AuthenticatedRequest } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 删除教师可用性
 async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?: any) {
@@ -73,4 +74,9 @@ async function deleteAvailabilityHandler(request: AuthenticatedRequest, context?
 }
 
 // 导出处理函数
-export const DELETE = withRole('teacher')(deleteAvailabilityHandler)
+export const DELETE = withRole('teacher')(
+  withSentryRoute(
+    deleteAvailabilityHandler as any,
+    'api DELETE /api/teachers/[id]/availability/[availabilityId]'
+  )
+)

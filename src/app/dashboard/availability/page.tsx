@@ -27,10 +27,16 @@ import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { userService } from '@/lib/api/user-service'
-import TeacherAvailabilityCalendar from '@/components/teacher/TeacherAvailabilityCalendar'
+import dynamic from 'next/dynamic'
+const TeacherAvailabilityCalendar = dynamic(
+  () => import('@/components/teacher/TeacherAvailabilityCalendar'),
+  { ssr: false, loading: () => null }
+)
 import { TeacherGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
 import { showErrorMessage } from '@/lib/api/global-error-handler'
+import * as Sentry from '@sentry/nextjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { Option } = Select
 const { Title, Text } = Typography
@@ -67,6 +73,7 @@ export default function TeacherAvailability() {
   const router = useRouter()
 
   useEffect(() => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
     ;(async () => {
       try {
         const userId = getCurrentUserId()
@@ -96,6 +103,11 @@ export default function TeacherAvailability() {
         setError('网络错误')
       } finally {
         setLoading(false)
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          Sentry.metrics.distribution('availability_load_ms', Math.max(0, t1 - t0))
+          incr('biz.page.view', 1, { page: 'availability' })
+        } catch {}
       }
     })()
   }, [router])

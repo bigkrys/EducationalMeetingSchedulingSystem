@@ -16,6 +16,14 @@ async function getBcrypt() {
   return _bcrypt
 }
 
+// 预热 bcrypt 模块，降低首个请求的动态加载开销（在 Serverless 冷启动场景下尤为明显）
+// 忽略错误，以免影响冷启动路径
+void (async () => {
+  try {
+    await getBcrypt()
+  } catch {}
+})()
+
 export async function hashPassword(password: string): Promise<string> {
   const bcrypt = await getBcrypt()
   const saltRounds = 10
