@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/node'
 import { NextResponse } from 'next/server'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 export const runtime = 'nodejs' // 指定使用 Node.js 运行时（而非 Edge）
 
@@ -16,7 +17,7 @@ function initSentry() {
   sentryInited = true
 }
 
-export async function GET() {
+async function getHandler() {
   initSentry()
 
   // 构造一个带若干 span 的模拟事务，便于在 Performance 面板看到
@@ -43,3 +44,5 @@ export async function GET() {
     sent: hasClient,
   })
 }
+
+export const GET = withSentryRoute(getHandler as any, 'api GET /api/sentry/debug')

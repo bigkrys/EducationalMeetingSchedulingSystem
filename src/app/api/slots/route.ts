@@ -5,7 +5,7 @@ import { calculateAvailableSlots } from '@/lib/scheduling'
 import { withRateLimit } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
-import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
+import { withSentryRoute, span, metricsIncrement } from '@/lib/monitoring/sentry'
 
 const getHandler = async function GET(request: NextRequest) {
   try {
@@ -94,7 +94,7 @@ const getHandler = async function GET(request: NextRequest) {
     memoryCache.set(cacheKey, result, 5 * 60 * 1000)
 
     try {
-      metrics.increment('biz.slots.view', 1)
+      metricsIncrement('biz.slots.view', 1)
     } catch {}
     return ok(result, {
       headers: {

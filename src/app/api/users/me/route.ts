@@ -3,6 +3,7 @@ import { withAuth, AuthenticatedRequest } from '@/lib/api/middleware'
 import { prisma } from '@/lib/api/db'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // very small in-process cache to speed up repeated /api/users/me calls during short periods
 // NOTE: in production (serverless) this may not be effective across instances; use Redis for multi-instance caching
@@ -44,7 +45,7 @@ async function handler(request: AuthenticatedRequest) {
       select.teacher = { select: { id: true } }
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select })
+    const user = (await prisma.user.findUnique({ where: { id: userId }, select })) as any
 
     if (!user) {
       return fail('User not found', 404, 'USER_NOT_FOUND')
@@ -62,7 +63,7 @@ async function handler(request: AuthenticatedRequest) {
         id: user.student.id,
         serviceLevel: user.student.serviceLevel,
         monthlyMeetingsUsed: user.student.monthlyMeetingsUsed,
-        enrolledSubjects: user.student.studentSubjects.map((ss: any) => ss.subject.name),
+        enrolledSubjects: (user.student.studentSubjects || []).map((ss: any) => ss.subject.name),
       }
     }
     if (user.teacher) {
@@ -70,7 +71,7 @@ async function handler(request: AuthenticatedRequest) {
         id: user.teacher.id,
         maxDailyMeetings: user.teacher.maxDailyMeetings,
         bufferMinutes: user.teacher.bufferMinutes,
-        subjects: user.teacher.teacherSubjects.map((ts: any) => ts.subject.name),
+        subjects: (user.teacher.teacherSubjects || []).map((ts: any) => ts.subject.name),
       }
     }
 
@@ -116,4 +117,4 @@ async function handler(request: AuthenticatedRequest) {
   }
 }
 
-export const GET = withAuth(handler)
+export const GET = withAuth(withSentryRoute(handler as any, 'api GET /api/users/me'))

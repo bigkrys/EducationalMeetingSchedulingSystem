@@ -6,7 +6,7 @@ import { withRateLimit } from '@/lib/api/middleware'
 import { prisma } from '@/lib/api/db'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
-import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
+import { withSentryRoute, span, metricsIncrement } from '@/lib/monitoring/sentry'
 
 const postHandler = async function POST(request: NextRequest) {
   try {
@@ -19,7 +19,7 @@ const postHandler = async function POST(request: NextRequest) {
 
     if (!result) {
       try {
-        metrics.increment('biz.auth.login.fail', 1, { reason: 'invalid_credentials' as any })
+        metricsIncrement('biz.auth.login.fail', 1, { reason: 'invalid_credentials' })
       } catch {}
       return fail('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
     }
@@ -58,7 +58,7 @@ const postHandler = async function POST(request: NextRequest) {
     })()
 
     try {
-      metrics.increment('biz.auth.login.success', 1, { role: (result.user as any).role as any })
+      metricsIncrement('biz.auth.login.success', 1, { role: (result.user as any).role })
     } catch {}
 
     return response
@@ -78,7 +78,7 @@ const postHandler = async function POST(request: NextRequest) {
       ) {
         logger.error('login.db_unreachable', { ...getRequestMeta(request), error: String(errAny) })
         try {
-          metrics.increment('biz.auth.login.fail', 1, { reason: 'db_unreachable' as any })
+          metricsIncrement('biz.auth.login.fail', 1, { reason: 'db_unreachable' })
         } catch {}
         return fail('Database is unreachable. Please try again later.', 503, 'DB_UNAVAILABLE')
       }
@@ -86,7 +86,7 @@ const postHandler = async function POST(request: NextRequest) {
 
     logger.error('login.exception', { ...getRequestMeta(request), error: String(error) })
     try {
-      metrics.increment('biz.auth.login.fail', 1, { reason: 'exception' as any })
+      metricsIncrement('biz.auth.login.fail', 1, { reason: 'exception' })
     } catch {}
     return fail('Login failed', 500, 'INVALID')
   }

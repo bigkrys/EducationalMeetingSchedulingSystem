@@ -4,6 +4,7 @@ import { withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function getAuditLogsHandler(request: NextRequest, context?: any) {
   try {
@@ -80,4 +81,6 @@ async function getAuditLogsHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRoles(['admin', 'superadmin'])(getAuditLogsHandler)
+export const GET = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(getAuditLogsHandler, 'api GET /api/admin/audit-logs')
+)

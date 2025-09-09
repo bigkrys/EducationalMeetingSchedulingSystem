@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Card, Typography, Row, Col, Statistic, Space, Segmented, Table, message } from 'antd'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
-const Pie = dynamic(() => import('@/components/charts/Pie'), {
+import nextDynamic from 'next/dynamic'
+const Pie = nextDynamic(() => import('@/components/charts/Pie'), {
   ssr: false,
   loading: () => null,
 })

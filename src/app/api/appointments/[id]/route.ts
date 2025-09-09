@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withSentryRoute, metrics, span } from '@/lib/monitoring/sentry'
+import { withSentryRoute, metricsIncrement, span } from '@/lib/monitoring/sentry'
 import { prisma } from '@/lib/api/db'
 import { updateAppointmentSchema } from '@/lib/api/validation'
 import { withRoles } from '@/lib/api/middleware'
@@ -149,11 +149,11 @@ async function updateAppointmentHandler(
     // 业务计数：根据动作计数成功操作
     try {
       const action = validatedData.action
-      if (action === 'approve') metrics.increment('biz.appointment.approve', 1)
-      if (action === 'reject') metrics.increment('biz.appointment.reject', 1)
-      if (action === 'cancel') metrics.increment('biz.appointment.cancel', 1)
-      if (action === 'complete') metrics.increment('biz.appointment.complete', 1)
-      if (action === 'no_show') metrics.increment('biz.appointment.no_show', 1)
+      if (action === 'approve') metricsIncrement('biz.appointment.approve', 1)
+      if (action === 'reject') metricsIncrement('biz.appointment.reject', 1)
+      if (action === 'cancel') metricsIncrement('biz.appointment.cancel', 1)
+      if (action === 'complete') metricsIncrement('biz.appointment.complete', 1)
+      if (action === 'no_show') metricsIncrement('biz.appointment.no_show', 1)
     } catch {}
 
     // 清除相关缓存

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/api/db'
 import { ok, fail } from '@/lib/api/response'
 import { withRoles } from '@/lib/api/middleware'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { addHours, subHours } from 'date-fns'
 
@@ -106,4 +107,6 @@ async function sendReminder(appointment: any, offsetHours: number): Promise<void
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
-export const POST = withRoles(['admin', 'superadmin'])(handler)
+export const POST = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(handler as any, 'api POST /api/admin/tasks/remind')
+)

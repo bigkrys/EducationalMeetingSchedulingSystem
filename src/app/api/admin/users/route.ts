@@ -5,6 +5,7 @@ import { createUserSchema, updateUserSchema } from '@/lib/api/schemas'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function getUsersHandler(request: NextRequest, context?: any) {
   try {
@@ -211,10 +212,12 @@ async function updateUserHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRoles(['admin', 'superadmin'])(getUsersHandler)
+export const GET = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(getUsersHandler, 'api GET /api/admin/users')
+)
 export const POST = withRoles(['admin', 'superadmin'])(
-  withValidation(createUserSchema)(createUserHandler)
+  withValidation(createUserSchema)(withSentryRoute(createUserHandler, 'api POST /api/admin/users'))
 )
 export const PUT = withRoles(['admin', 'superadmin'])(
-  withValidation(updateUserSchema)(updateUserHandler)
+  withValidation(updateUserSchema)(withSentryRoute(updateUserHandler, 'api PUT /api/admin/users'))
 )

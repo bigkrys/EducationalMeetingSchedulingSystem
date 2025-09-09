@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { logger, getRequestMeta } from '@/lib/logger'
-import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
+import { withSentryRoute, span, metricsIncrement } from '@/lib/monitoring/sentry'
 
 // 学生注册验证 schema
 const studentRegisterSchema = z.object({
@@ -128,7 +128,7 @@ async function postHandler(request: NextRequest) {
       )
 
       try {
-        metrics.increment('biz.auth.register.success', 1, { role: 'student' as any })
+        metricsIncrement('biz.auth.register.success', 1, { role: 'student' })
       } catch {}
       return ok({ userId: user.id, role: 'student' }, { status: 201 })
     } else if (validatedData.role === 'teacher') {
@@ -164,7 +164,7 @@ async function postHandler(request: NextRequest) {
       )
 
       try {
-        metrics.increment('biz.auth.register.success', 1, { role: 'teacher' as any })
+        metricsIncrement('biz.auth.register.success', 1, { role: 'teacher' })
       } catch {}
       return ok({ userId: user.id, role: 'teacher' }, { status: 201 })
     }
@@ -195,7 +195,7 @@ async function postHandler(request: NextRequest) {
       })
 
       try {
-        metrics.increment('biz.auth.register.error', 1, { reason: 'validation' as any })
+        metricsIncrement('biz.auth.register.error', 1, { reason: 'validation' })
       } catch {}
       return fail('输入数据验证失败', 400, E.BAD_REQUEST, friendlyErrors)
     }
@@ -207,12 +207,12 @@ async function postHandler(request: NextRequest) {
       const prismaError = error as any
       if (prismaError.code === 'P2002') {
         try {
-          metrics.increment('biz.auth.register.error', 1, { reason: 'email_exists' as any })
+          metricsIncrement('biz.auth.register.error', 1, { reason: 'email_exists' })
         } catch {}
         return fail('该邮箱已被注册', 409, 'EMAIL_EXISTS')
       } else if (prismaError.code === 'P2003') {
         try {
-          metrics.increment('biz.auth.register.error', 1, { reason: 'invalid_relation' as any })
+          metricsIncrement('biz.auth.register.error', 1, { reason: 'invalid_relation' })
         } catch {}
         return fail('关联数据无效，请检查科目选择', 400, E.BAD_REQUEST)
       }
@@ -227,7 +227,7 @@ async function postHandler(request: NextRequest) {
     }
 
     try {
-      metrics.increment('biz.auth.register.error', 1, { reason: 'exception' as any })
+      metricsIncrement('biz.auth.register.error', 1, { reason: 'exception' })
     } catch {}
     return fail(errorMessage, 500, E.INTERNAL_ERROR)
   }

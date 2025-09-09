@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+async function getHandler() {
   // 暴露最少且非敏感的客户端初始化配置
   // 说明：Sentry DSN 不是密钥（仅用于上报），公开无安全风险
   const dsn = process.env.SENTRY_DSN || ''
@@ -12,3 +13,5 @@ export async function GET() {
 
   return NextResponse.json({ dsn, environment, tunnel })
 }
+
+export const GET = withSentryRoute(getHandler as any, 'api GET /api/sentry/config')

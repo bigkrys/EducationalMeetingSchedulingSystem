@@ -7,6 +7,7 @@ import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { getCurrentUserId } from '@/lib/api/auth'
 import dayjs from 'dayjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { RangePicker } = DatePicker
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withSentryRoute, span, metrics } from '@/lib/monitoring/sentry'
+import { withSentryRoute, span, metrics, metricsIncrement } from '@/lib/monitoring/sentry'
 import { prisma } from '@/lib/api/db'
 import { createAppointmentSchema, appointmentsQuerySchema } from '@/lib/api/validation'
 import { withRole, withRoles } from '@/lib/api/middleware'
@@ -59,7 +59,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
     if (queryData.role === 'student' && queryData.studentId) {
       // 如果是学生角色，需要根据User ID查找对应的Student ID
       const student = await span('db student.findUnique', () =>
-        prisma.student.findUnique({ where: { userId: queryData.studentId } })
+        prisma.student.findUnique({ where: { userId: queryData.studentId! } })
       )
 
       if (!student) {
@@ -70,7 +70,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
     } else if (queryData.role === 'teacher' && queryData.teacherId) {
       // 如果是教师角色，需要根据User ID查找对应的Teacher ID
       const teacher = await span('db teacher.findUnique', () =>
-        prisma.teacher.findUnique({ where: { userId: queryData.teacherId } })
+        prisma.teacher.findUnique({ where: { userId: queryData.teacherId! } })
       )
 
       if (!teacher) {
@@ -544,7 +544,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     if (emailDebug) responseBody.emailDebug = emailDebug
 
     try {
-      metrics.increment('biz.booking.create.success')
+      metricsIncrement('biz.booking.create.success')
     } catch {}
     return ok(responseBody, { status: 201 })
   } catch (error) {
@@ -564,7 +564,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
     }
 
     try {
-      metrics.increment('biz.booking.create.error')
+      metricsIncrement('biz.booking.create.error')
     } catch {}
     return fail(errorMessage, 500, 'INTERNAL_ERROR')
   }

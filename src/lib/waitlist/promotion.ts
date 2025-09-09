@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import { metrics } from '@/lib/monitoring/sentry'
+import { metricsIncrement } from '@/lib/monitoring/sentry'
 import * as Sentry from '@sentry/nextjs'
 export type Tx = Prisma.TransactionClient
 
@@ -30,7 +30,7 @@ export async function promoteForSlotTx(
 ): Promise<{ promoted: 0 | 1; appointmentId?: string; status?: 'pending' | 'approved' }> {
   return await Sentry.startSpan({ name: 'waitlist.promote', op: 'task' }, async () => {
     for (let attempt = 0; attempt < MAX_PROMOTE_ATTEMPTS; attempt++) {
-      metrics.increment('biz.waitlist.promote.attempt', 1)
+      metricsIncrement('biz.waitlist.promote.attempt', 1)
       const rows = (await tx.$queryRawUnsafe(
         `SELECT "id", "studentId", "createdAt" FROM "waitlists"
        WHERE "teacherId" = $1 AND "slot" = $2
@@ -145,11 +145,11 @@ export async function promoteForSlotTx(
         },
       })
 
-      metrics.increment('biz.waitlist.promote.success', 1, { tags: { status } as any })
+      metricsIncrement('biz.waitlist.promote.success', 1, { status })
       return { promoted: 1, appointmentId: appointment.id, status }
     }
 
-    metrics.increment('biz.waitlist.promote.empty', 1)
+    metricsIncrement('biz.waitlist.promote.empty', 1)
     return { promoted: 0 }
   })
 }
