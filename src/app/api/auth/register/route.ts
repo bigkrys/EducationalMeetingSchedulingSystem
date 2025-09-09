@@ -3,6 +3,8 @@ import { prisma } from '@/lib/api/db'
 import { hashPassword } from '@/lib/api/auth.server'
 import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
+
+export const dynamic = 'force-dynamic'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { withSentryRoute, span, metricsIncrement } from '@/lib/monitoring/sentry'
@@ -233,5 +235,4 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const dynamic = 'force-dynamic'
 export const POST = withSentryRoute(postHandler as any, 'api POST /api/auth/register')
