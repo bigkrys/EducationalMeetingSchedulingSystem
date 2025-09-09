@@ -1,7 +1,8 @@
 import * as Sentry from '@sentry/nextjs'
+import { getSentryEnvironment } from '@/lib/monitoring/environment'
 
 const dsn = process.env.SENTRY_DSN
-const environment = process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development'
+const environment = getSentryEnvironment()
 
 if (dsn) {
   Sentry.init({

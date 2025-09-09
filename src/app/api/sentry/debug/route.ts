@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node'
 import { NextResponse } from 'next/server'
 import { withSentryRoute } from '@/lib/monitoring/sentry'
+import { getSentryEnvironment } from '@/lib/monitoring/environment'
 
 export const runtime = 'nodejs' // 指定使用 Node.js 运行时（而非 Edge）
 
@@ -11,7 +12,7 @@ function initSentry() {
   if (!dsn) return // 未配置 DSN 时直接跳过初始化
   Sentry.init({
     dsn,
-    environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+    environment: getSentryEnvironment(),
     tracesSampleRate: 1.0,
   })
   sentryInited = true
@@ -40,7 +41,7 @@ async function getHandler() {
 
   return NextResponse.json({
     ok: true,
-    environment: process.env.SENTRY_ENVIRONMENT || null,
+    environment: getSentryEnvironment(),
     sent: hasClient,
   })
 }
