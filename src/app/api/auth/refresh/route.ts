@@ -11,8 +11,8 @@ import crypto from 'crypto'
 import { prisma as prismaClient } from '@/lib/api/db'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
-
-export async function POST(request: NextRequest) {
+import { withSentryRoute } from '@/lib/monitoring/sentry'
+async function postHandler(request: NextRequest) {
   try {
     // 从 cookie 或 header 获取 refresh token
     const refreshToken =
@@ -91,3 +91,5 @@ export async function POST(request: NextRequest) {
     return fail('Token refresh failed', 500, 'INVALID')
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/auth/refresh')

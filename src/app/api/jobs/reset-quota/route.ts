@@ -3,8 +3,9 @@ import { prisma } from '@/lib/api/db'
 import { authorizeJobRequest } from '@/lib/api/job-auth'
 import { ok, fail } from '@/lib/api/response'
 import { logger } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const rawBody = await request.text().catch(() => '')
     // 统一授权检查（根据环境在内部调度器/私有调用中更严格），支持 HMAC 校验
@@ -83,3 +84,5 @@ export async function POST(request: NextRequest) {
     return fail('Failed to reset monthly quotas', 500, 'INTERNAL_ERROR')
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/jobs/reset-quota')

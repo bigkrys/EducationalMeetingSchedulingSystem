@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revokeRefreshToken } from '@/lib/api/jwt'
 import crypto from 'crypto'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest): Promise<NextResponse> {
   try {
     const refreshToken =
       request.cookies.get('refreshToken')?.value || request.headers.get('refresh-token')
@@ -27,3 +28,9 @@ export async function POST(request: NextRequest) {
     return response
   }
 }
+
+// 明确给导出函数加上类型，确保 Next.js 路由类型检查能正确推断返回值
+export const POST: (request: NextRequest) => Promise<NextResponse> = withSentryRoute(
+  postHandler,
+  'api POST /api/auth/logout'
+) as any

@@ -6,8 +6,9 @@ import { deleteCachePattern } from '@/lib/api/cache'
 import { DEFAULT_EXPIRE_HOURS } from '@/constants'
 import { ok, fail } from '@/lib/api/response'
 import { logger } from '@/lib/logger'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const rawBody = await request.text().catch(() => '')
     // 统一授权检查（根据环境在内部调度器/私有调用中更严格）
@@ -164,3 +165,5 @@ export async function POST(request: NextRequest) {
     return fail('Failed to expire pending appointments', 500, 'INTERNAL_ERROR')
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/jobs/expire-pending')

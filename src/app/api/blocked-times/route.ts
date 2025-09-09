@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 验证模式
 const blockedTimeSchema = z.object({
@@ -235,6 +236,12 @@ async function deleteBlockedTimeHandler(request: AuthenticatedRequest, context?:
 }
 
 // 导出处理函数
-export const GET = withRole('teacher')(getBlockedTimesHandler)
-export const POST = withRole('teacher')(createBlockedTimeHandler)
-export const DELETE = withRole('teacher')(deleteBlockedTimeHandler)
+export const GET = withRole('teacher')(
+  withSentryRoute(getBlockedTimesHandler, 'api GET /api/blocked-times')
+)
+export const POST = withRole('teacher')(
+  withSentryRoute(createBlockedTimeHandler, 'api POST /api/blocked-times')
+)
+export const DELETE = withRole('teacher')(
+  withSentryRoute(deleteBlockedTimeHandler, 'api DELETE /api/blocked-times')
+)

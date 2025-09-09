@@ -5,6 +5,7 @@ import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { sendAppointmentExpiredNotification } from '@/lib/api/email'
 import { deleteCachePattern } from '@/lib/api/cache'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 import { DEFAULT_EXPIRE_HOURS } from '@/constants'
 
 async function handler(request: NextRequest) {
@@ -125,4 +126,6 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const POST = withRoles(['admin', 'superadmin'])(handler)
+export const POST = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(handler as any, 'api POST /api/admin/tasks/expire-pending')
+)

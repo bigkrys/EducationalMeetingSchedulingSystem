@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withSentryRoute, metricsIncrement, span } from '@/lib/monitoring/sentry'
 import { prisma } from '@/lib/api/db'
 import { updateAppointmentSchema } from '@/lib/api/validation'
 import { withRoles } from '@/lib/api/middleware'
@@ -17,24 +18,25 @@ import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 
 // 更新预约状态
-async function updateAppointmentHandler(request: NextRequest, context: { params?: any }) {
+async function updateAppointmentHandler(
+  request: NextRequest,
+  context: { params?: { id?: string } }
+) {
   try {
-    const routeParamsMaybePromise = context?.params
-    const routeParams = routeParamsMaybePromise?.then
-      ? await routeParamsMaybePromise
-      : routeParamsMaybePromise
-    const appointmentId = routeParams?.id
+    const appointmentId = (context as any)?.params?.id
     const body = await request.json()
     const validatedData = updateAppointmentSchema.parse(body)
 
     // 获取预约信息
-    const appointment = await prisma.appointment.findUnique({
-      where: { id: appointmentId },
-      include: {
-        student: { include: { user: true } },
-        teacher: { include: { user: true } },
-      },
-    })
+    const appointment = await span('db appointment.findUnique', () =>
+      prisma.appointment.findUnique({
+        where: { id: appointmentId },
+        include: {
+          student: { include: { user: true } },
+          teacher: { include: { user: true } },
+        },
+      })
+    )
 
     if (!appointment) {
       return fail('Appointment not found', 404, E.NOT_FOUND)
@@ -44,9 +46,9 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     const user = (request as any).user
     if (user.role === 'student') {
       // 查找当前用户对应的学生记录
-      const currentStudent = await prisma.student.findUnique({
-        where: { userId: user.userId },
-      })
+      const currentStudent = await span('db student.findUnique', () =>
+        prisma.student.findUnique({ where: { userId: user.userId } })
+      )
 
       if (!currentStudent) {
         return fail('Student record not found', 403, E.FORBIDDEN)
@@ -59,9 +61,9 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
 
     if (user.role === 'teacher') {
       // 查找当前用户对应的教师记录
-      const currentTeacher = await prisma.teacher.findUnique({
-        where: { userId: user.userId },
-      })
+      const currentTeacher = await span('db teacher.findUnique', () =>
+        prisma.teacher.findUnique({ where: { userId: user.userId } })
+      )
 
       if (!currentTeacher) {
         return fail('Teacher record not found', 403, E.FORBIDDEN)
@@ -140,22 +142,33 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     }
 
     // 更新预约
-    const updatedAppointment = await prisma.appointment.update({
-      where: { id: appointmentId },
-      data: updateData,
-    })
+    const updatedAppointment = await span('db appointment.update', () =>
+      prisma.appointment.update({ where: { id: appointmentId }, data: updateData })
+    )
+
+    // 业务计数：根据动作计数成功操作
+    try {
+      const action = validatedData.action
+      if (action === 'approve') metricsIncrement('biz.appointment.approve', 1)
+      if (action === 'reject') metricsIncrement('biz.appointment.reject', 1)
+      if (action === 'cancel') metricsIncrement('biz.appointment.cancel', 1)
+      if (action === 'complete') metricsIncrement('biz.appointment.complete', 1)
+      if (action === 'no_show') metricsIncrement('biz.appointment.no_show', 1)
+    } catch {}
 
     // 清除相关缓存
     const dateStr = appointment.scheduledTime.toISOString().split('T')[0]
-    await deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+    await span('cache deletePattern', () =>
+      deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+    )
 
     // 发送邮件通知
     if (validatedData.action === 'approve' && appointment.status === 'pending') {
       try {
         // 获取科目名称
-        const subject = await prisma.subject.findUnique({
-          where: { id: appointment.subjectId },
-        })
+        const subject = await span('db subject.findUnique', () =>
+          prisma.subject.findUnique({ where: { id: appointment.subjectId } })
+        )
 
         if (subject) {
           const _sendApprovalNotifications = async () => {
@@ -184,7 +197,7 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
-            await _sendApprovalNotifications()
+            await span('email send.approval', _sendApprovalNotifications)
           } else {
             _sendApprovalNotifications().catch((err) =>
               logger.error('appointment.notify.approval.async_failed', { error: String(err) })
@@ -200,9 +213,9 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     if (validatedData.action === 'reject' && appointment.status === 'pending') {
       try {
         // 获取科目名称
-        const subject = await prisma.subject.findUnique({
-          where: { id: appointment.subjectId },
-        })
+        const subject = await span('db subject.findUnique', () =>
+          prisma.subject.findUnique({ where: { id: appointment.subjectId } })
+        )
 
         if (subject) {
           const _sendRejectionNotifications = async () => {
@@ -231,7 +244,7 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
-            await _sendRejectionNotifications()
+            await span('email send.reject', _sendRejectionNotifications)
           } else {
             _sendRejectionNotifications().catch((err) =>
               logger.error('appointment.notify.reject.async_failed', { error: String(err) })
@@ -247,9 +260,9 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     if (validatedData.action === 'cancel' && appointment.status !== 'cancelled') {
       try {
         // 获取科目名称
-        const subject = await prisma.subject.findUnique({
-          where: { id: appointment.subjectId },
-        })
+        const subject = await span('db subject.findUnique', () =>
+          prisma.subject.findUnique({ where: { id: appointment.subjectId } })
+        )
 
         if (subject) {
           const _sendCancelNotifications = async () => {
@@ -278,7 +291,7 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
           }
 
           if (process.env.SEND_EMAIL_SYNC === 'true') {
-            await _sendCancelNotifications()
+            await span('email send.cancel', _sendCancelNotifications)
           } else {
             _sendCancelNotifications().catch((err) =>
               logger.error('appointment.notify.cancel.async_failed', { error: String(err) })
@@ -294,35 +307,41 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     if (validatedData.action === 'cancel' && appointment.status !== 'cancelled') {
       try {
         // 获取科目名称
-        const subject = await prisma.subject.findUnique({
-          where: { id: appointment.subjectId },
-        })
+        const subject = await span('db subject.findUnique', () =>
+          prisma.subject.findUnique({ where: { id: appointment.subjectId } })
+        )
 
         if (subject) {
           // 方式一：本地直接调用事务（避免 HTTP/job-auth 问题），不阻塞响应
           ;(async () => {
             try {
-              const res = await prisma.$transaction((tx) =>
-                promoteForSlotTx(
-                  tx,
-                  appointment.teacherId as string,
-                  appointment.scheduledTime as Date,
-                  subject.name
+              const res = await span('db waitlist.promote.tx', () =>
+                prisma.$transaction((tx) =>
+                  promoteForSlotTx(
+                    tx,
+                    appointment.teacherId as string,
+                    appointment.scheduledTime as Date,
+                    subject.name
+                  )
                 )
               )
               if (res.promoted > 0) {
-                await deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+                await span('cache deletePattern', () =>
+                  deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+                )
 
                 // 直接晋升成功后，发送相同的通知邮件（不依赖 HTTP 路由）
                 try {
-                  const appt = await prisma.appointment.findUnique({
-                    where: { id: res.appointmentId as string },
-                    include: {
-                      student: { include: { user: true } },
-                      teacher: { include: { user: true } },
-                      subject: true,
-                    },
-                  })
+                  const appt = await span('db appointment.findUnique', () =>
+                    prisma.appointment.findUnique({
+                      where: { id: res.appointmentId as string },
+                      include: {
+                        student: { include: { user: true } },
+                        teacher: { include: { user: true } },
+                        subject: true,
+                      },
+                    })
+                  )
                   if (appt && appt.student?.user && appt.teacher?.user) {
                     const scheduledLocal = (appointment.scheduledTime as Date).toLocaleString(
                       'zh-CN',
@@ -403,22 +422,24 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
           // 方式二：HTTP 触发（作为冗余，某些部署更易观测日志与鉴权）
           setTimeout(async () => {
             try {
-              const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/waitlist/promote`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    // Use job-auth compatible secret; fallback to INTERNAL_API_KEY for local
-                    Authorization: `Bearer ${process.env.JOB_TRIGGER_SECRET || process.env.INTERNAL_API_KEY || 'internal-key'}`,
-                    'x-job-secret': `${process.env.JOB_TRIGGER_SECRET || ''}`,
-                  },
-                  body: JSON.stringify({
-                    teacherId: appointment.teacherId,
-                    slot: appointment.scheduledTime.toISOString(),
-                    subject: subject.name,
-                  }),
-                }
+              const response = await span('http waitlist.promote.fetch', () =>
+                fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/waitlist/promote`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      // Use job-auth compatible secret; fallback to INTERNAL_API_KEY for local
+                      Authorization: `Bearer ${process.env.JOB_TRIGGER_SECRET || process.env.INTERNAL_API_KEY || 'internal-key'}`,
+                      'x-job-secret': `${process.env.JOB_TRIGGER_SECRET || ''}`,
+                    },
+                    body: JSON.stringify({
+                      teacherId: appointment.teacherId,
+                      slot: appointment.scheduledTime.toISOString(),
+                      subject: subject.name,
+                    }),
+                  }
+                )
               )
 
               if (response.ok) {
@@ -426,7 +447,9 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
 
                 // 如果成功提升，清除相关缓存
                 if (result.promoted > 0) {
-                  await deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+                  await span('cache deletePattern', () =>
+                    deleteCachePattern(`slots:${appointment.teacherId}:${dateStr}:*`)
+                  )
                 }
               }
             } catch (error) {
@@ -440,19 +463,21 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
     }
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        actorId: user.userId,
-        action: `appointment_${validatedData.action}`,
-        targetId: appointmentId,
-        details: JSON.stringify({
-          previousStatus: appointment.status,
-          newStatus: updatedAppointment.status,
-          reason: validatedData.reason,
-          waitlistPromotionTriggered: validatedData.action === 'cancel',
-        }),
-      },
-    })
+    await span('db auditLog.create', () =>
+      prisma.auditLog.create({
+        data: {
+          actorId: user.userId,
+          action: `appointment_${validatedData.action}`,
+          targetId: appointmentId,
+          details: JSON.stringify({
+            previousStatus: appointment.status,
+            newStatus: updatedAppointment.status,
+            reason: validatedData.reason,
+            waitlistPromotionTriggered: validatedData.action === 'cancel',
+          }),
+        },
+      })
+    )
 
     return ok()
   } catch (error) {
@@ -468,4 +493,6 @@ async function updateAppointmentHandler(request: NextRequest, context: { params?
   }
 }
 
-export const PATCH = withRoles(['student', 'teacher'])(updateAppointmentHandler)
+export const PATCH = withRoles(['student', 'teacher'])(
+  withSentryRoute(updateAppointmentHandler, 'api PATCH /api/appointments/[id]')
+)

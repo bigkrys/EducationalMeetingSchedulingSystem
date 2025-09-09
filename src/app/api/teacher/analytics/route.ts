@@ -4,6 +4,7 @@ import { withRoles, AuthenticatedRequest } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function handler(request: AuthenticatedRequest) {
   try {
@@ -112,4 +113,6 @@ async function handler(request: AuthenticatedRequest) {
   }
 }
 
-export const GET = withRoles(['teacher', 'admin', 'superadmin'])(handler)
+export const GET = withRoles(['teacher', 'admin', 'superadmin'])(
+  withSentryRoute(handler, 'api GET /api/teacher/analytics')
+)

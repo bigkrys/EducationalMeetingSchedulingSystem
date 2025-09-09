@@ -4,11 +4,12 @@ import { authorizeJobRequest } from '@/lib/api/job-auth'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 清理已被占用槽位（pending/approved）的候补记录
 // 典型用法：定时触发，清除残留 waitlist
 // body: { limit?: number } 每次处理的 teacherId+slot 组合上限（默认 500）
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const rawBody = await request.text().catch(() => '')
     const authCheck = await authorizeJobRequest(request, rawBody)
@@ -62,3 +63,5 @@ export async function POST(request: NextRequest) {
     return fail('Failed to cleanup waitlist', 500, E.INTERNAL_ERROR)
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/jobs/cleanup-waitlist')

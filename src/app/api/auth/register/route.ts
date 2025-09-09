@@ -3,8 +3,11 @@ import { prisma } from '@/lib/api/db'
 import { hashPassword } from '@/lib/api/auth.server'
 import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
+
+export const dynamic = 'force-dynamic'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { logger, getRequestMeta } from '@/lib/logger'
+import { withSentryRoute, span, metricsIncrement } from '@/lib/monitoring/sentry'
 
 // 学生注册验证 schema
 const studentRegisterSchema = z.object({
@@ -42,15 +45,15 @@ const adminRegisterSchema = z
     message: '管理员账户不能通过注册创建',
   })
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = registerSchema.parse(body)
 
     // 检查邮箱是否已存在
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
-    })
+    const existingUser = await span('db user.findUnique', () =>
+      prisma.user.findUnique({ where: { email: validatedData.email } })
+    )
 
     if (existingUser) {
       return fail('Email already registered', 409, 'EMAIL_EXISTS')
@@ -68,11 +71,9 @@ export async function POST(request: NextRequest) {
       subjectIds = validatedData.subjectIds
     } else {
       // 输入的是科目名称，需要转换为ID
-      const subjects = await prisma.subject.findMany({
-        where: {
-          name: { in: validatedData.subjectIds },
-        },
-      })
+      const subjects = await span('db subject.findMany', () =>
+        prisma.subject.findMany({ where: { name: { in: validatedData.subjectIds } } })
+      )
 
       if (subjects.length !== validatedData.subjectIds.length) {
         const foundNames = subjects.map((s) => s.name)
@@ -84,12 +85,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证科目ID是否存在且激活
-    const subjects = await prisma.subject.findMany({
-      where: {
-        id: { in: subjectIds },
-        isActive: true,
-      },
-    })
+    const subjects = await span('db subject.findMany', () =>
+      prisma.subject.findMany({ where: { id: { in: subjectIds }, isActive: true } })
+    )
 
     if (subjects.length !== subjectIds.length) {
       return fail('Some subjects are invalid or inactive', 400, E.BAD_REQUEST)
@@ -99,63 +97,77 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(validatedData.password)
 
     if (validatedData.role === 'student') {
-      const user = await prisma.user.create({
-        data: {
-          email: validatedData.email,
-          passwordHash,
-          name: validatedData.name,
-          role: 'student',
-          status: 'active',
-          student: {
-            create: {
-              serviceLevel: validatedData.serviceLevel,
-              monthlyMeetingsUsed: 0,
-              lastQuotaReset: new Date(),
+      const user = await span('db user.create(student)', () =>
+        prisma.user.create({
+          data: {
+            email: validatedData.email,
+            passwordHash,
+            name: validatedData.name,
+            role: 'student',
+            status: 'active',
+            student: {
+              create: {
+                serviceLevel: validatedData.serviceLevel,
+                monthlyMeetingsUsed: 0,
+                lastQuotaReset: new Date(),
+              },
             },
           },
-        },
-        include: {
-          student: true,
-        },
-      })
+          include: {
+            student: true,
+          },
+        })
+      )
 
       // 创建学生-科目关联
-      await prisma.studentSubject.createMany({
-        data: subjectIds.map((subjectId) => ({
-          studentId: user.student!.id,
-          subjectId,
-        })),
-      })
+      await span('db studentSubject.createMany', () =>
+        prisma.studentSubject.createMany({
+          data: subjectIds.map((subjectId) => ({
+            studentId: user.student!.id,
+            subjectId,
+          })),
+        })
+      )
 
+      try {
+        metricsIncrement('biz.auth.register.success', 1, { role: 'student' })
+      } catch {}
       return ok({ userId: user.id, role: 'student' }, { status: 201 })
     } else if (validatedData.role === 'teacher') {
-      const user = await prisma.user.create({
-        data: {
-          email: validatedData.email,
-          passwordHash,
-          name: validatedData.name,
-          role: 'teacher',
-          status: 'active',
-          teacher: {
-            create: {
-              maxDailyMeetings: validatedData.maxDailyMeetings,
-              bufferMinutes: validatedData.bufferMinutes,
+      const user = await span('db user.create(teacher)', () =>
+        prisma.user.create({
+          data: {
+            email: validatedData.email,
+            passwordHash,
+            name: validatedData.name,
+            role: 'teacher',
+            status: 'active',
+            teacher: {
+              create: {
+                maxDailyMeetings: validatedData.maxDailyMeetings,
+                bufferMinutes: validatedData.bufferMinutes,
+              },
             },
           },
-        },
-        include: {
-          teacher: true,
-        },
-      })
+          include: {
+            teacher: true,
+          },
+        })
+      )
 
       // 创建教师-科目关联
-      await prisma.teacherSubject.createMany({
-        data: subjectIds.map((subjectId) => ({
-          teacherId: user.teacher!.id,
-          subjectId,
-        })),
-      })
+      await span('db teacherSubject.createMany', () =>
+        prisma.teacherSubject.createMany({
+          data: subjectIds.map((subjectId) => ({
+            teacherId: user.teacher!.id,
+            subjectId,
+          })),
+        })
+      )
 
+      try {
+        metricsIncrement('biz.auth.register.success', 1, { role: 'teacher' })
+      } catch {}
       return ok({ userId: user.id, role: 'teacher' }, { status: 201 })
     }
 
@@ -184,6 +196,9 @@ export async function POST(request: NextRequest) {
         }
       })
 
+      try {
+        metricsIncrement('biz.auth.register.error', 1, { reason: 'validation' })
+      } catch {}
       return fail('输入数据验证失败', 400, E.BAD_REQUEST, friendlyErrors)
     }
 
@@ -193,8 +208,14 @@ export async function POST(request: NextRequest) {
     if (error && typeof error === 'object' && 'code' in error) {
       const prismaError = error as any
       if (prismaError.code === 'P2002') {
+        try {
+          metricsIncrement('biz.auth.register.error', 1, { reason: 'email_exists' })
+        } catch {}
         return fail('该邮箱已被注册', 409, 'EMAIL_EXISTS')
       } else if (prismaError.code === 'P2003') {
+        try {
+          metricsIncrement('biz.auth.register.error', 1, { reason: 'invalid_relation' })
+        } catch {}
         return fail('关联数据无效，请检查科目选择', 400, E.BAD_REQUEST)
       }
     }
@@ -207,6 +228,11 @@ export async function POST(request: NextRequest) {
       errorMessage = error
     }
 
+    try {
+      metricsIncrement('biz.auth.register.error', 1, { reason: 'exception' })
+    } catch {}
     return fail(errorMessage, 500, E.INTERNAL_ERROR)
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/auth/register')

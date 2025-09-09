@@ -4,6 +4,7 @@ import { withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 获取所有服务策略
 async function getPoliciesHandler(request: NextRequest, context?: any) {
@@ -116,5 +117,9 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRoles(['admin', 'superadmin'])(getPoliciesHandler)
-export const PUT = withRoles(['admin', 'superadmin'])(updatePoliciesHandler)
+export const GET = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(getPoliciesHandler, 'api GET /api/policies')
+)
+export const PUT = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(updatePoliciesHandler, 'api PUT /api/policies')
+)

@@ -1,0 +1,58 @@
+{
+  "title": "Perf Overview",
+  "widgets": [
+    {
+      "title": "Frontend Web Vitals (p75)",
+      "displayType": "line",
+      "interval": "5m",
+      "queries": [
+        {
+          "name": "LCP",
+          "fields": ["p75(measurements.lcp)", "count()"],
+          "query": "event.type:transaction has:measurements.lcp",
+          "aggregates": ["p75(measurements.lcp)"]
+        },
+        {
+          "name": "INP",
+          "fields": ["p75(measurements.inp)", "count()"],
+          "query": "event.type:transaction has:measurements.inp",
+          "aggregates": ["p75(measurements.inp)"]
+        },
+        {
+          "name": "CLS",
+          "fields": ["p75(measurements.cls)", "count()"],
+          "query": "event.type:transaction has:measurements.cls",
+          "aggregates": ["p75(measurements.cls)"]
+        }
+      ]
+    },
+    {
+      "title": "API p95",
+      "displayType": "line",
+      "interval": "5m",
+      "queries": [
+        {
+          "name": "GET /api/slots",
+          "fields": ["p95(transaction.duration)"],
+          "query": "event.type:transaction transaction:\"api GET /api/slots\""
+        },
+        {
+          "name": "POST /api/appointments",
+          "fields": ["p95(transaction.duration)"],
+          "query": "event.type:transaction transaction:\"api POST /api/appointments\""
+        },
+        {
+          "name": "PATCH /api/appointments/[id]",
+          "fields": ["p95(transaction.duration)"],
+          "query": "event.type:transaction transaction:\"api PATCH /api/appointments/[id]\""
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "displayType": "line",
+      "interval": "5m",
+      "queries": [{ "name": "Errors", "fields": ["failure_rate()"], "query": "event.type:error" }]
+    }
+  ]
+}

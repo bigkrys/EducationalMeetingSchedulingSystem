@@ -17,6 +17,8 @@ import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { StudentGuard } from '@/components/shared/AuthGuard'
+import { incr } from '@/lib/frontend/metrics'
+import * as Sentry from '@sentry/nextjs'
 import PageLoader from '@/components/shared/PageLoader'
 
 const { Option } = Select
@@ -69,13 +71,23 @@ export default function MyAppointments() {
   }, [router])
 
   useEffect(() => {
-    fetchAppointments()
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
+    fetchAppointments().finally(() => {
+      try {
+        const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+        Sentry.metrics.distribution('my_appointments_load_ms', Math.max(0, t1 - t0))
+        incr('biz.page.view', 1, { page: 'my_appointments' })
+      } catch {}
+    })
   }, [fetchAppointments])
 
   const handleCancelAppointment = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
     setCancelModalVisible(true)
     setCancelReason('')
+    try {
+      incr('biz.appointment.cancel.open', 1)
+    } catch {}
   }
 
   const confirmCancel = async () => {
@@ -92,12 +104,18 @@ export default function MyAppointments() {
       })
 
       showSuccessMessage('预约取消成功')
+      try {
+        incr('biz.appointment.cancel.success', 1)
+      } catch {}
       setCancelModalVisible(false)
       setSelectedAppointment(null)
       setCancelReason('')
       fetchAppointments() // 刷新列表
     } catch (error: any) {
       showApiError({ message: error?.message })
+      try {
+        incr('biz.appointment.cancel.error', 1)
+      } catch {}
     } finally {
       setCancelling(false)
     }
@@ -305,7 +323,16 @@ export default function MyAppointments() {
                 </Select>
               </div>
 
-              <Button icon={<ReloadOutlined />} onClick={fetchAppointments} loading={loading}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  try {
+                    incr('biz.my_appointments.refresh', 1)
+                  } catch {}
+                  fetchAppointments()
+                }}
+                loading={loading}
+              >
                 刷新
               </Button>
             </div>

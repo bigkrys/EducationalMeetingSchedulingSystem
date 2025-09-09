@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { ok, fail } from '@/lib/api/response'
 import { logger } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 // 科目验证 schema
 const subjectSchema = z.object({
@@ -32,7 +33,9 @@ const getHandler = async function GET() {
   }
 }
 
-export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(getHandler)
+export const GET = withRateLimit({ windowMs: 60 * 1000, max: 120 })(
+  withSentryRoute(getHandler as any, 'api GET /api/subjects')
+)
 
 // 创建新科目
 async function createSubjectHandler(request: NextRequest, context?: any) {
@@ -77,4 +80,6 @@ async function createSubjectHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const POST = withRole('admin')(createSubjectHandler)
+export const POST = withRole('admin')(
+  withSentryRoute(createSubjectHandler, 'api POST /api/subjects')
+)

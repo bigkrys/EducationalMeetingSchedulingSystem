@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Card, Button, Space, DatePicker, Modal, Form, Select } from 'antd'
 import {
   showApiError,
@@ -15,6 +15,9 @@ import {
   BookOutlined,
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import * as Sentry from '@sentry/nextjs'
+import dayjs from 'dayjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { Option } = Select
 
@@ -39,6 +42,7 @@ export default function StudentBookingCalendar({
   onBookingSuccess,
 }: StudentBookingCalendarProps) {
   const router = useRouter()
+  const mountStartRef = useRef<number>(typeof performance !== 'undefined' ? performance.now() : 0)
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTeacher, setSelectedTeacher] = useState<string>('')
   const [selectedSubject, setSelectedSubject] = useState<string>('')
@@ -118,53 +122,10 @@ export default function StudentBookingCalendar({
   // 获取学生已注册的科目
   const fetchStudentSubjects = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
-
-      const response = await fetch('/api/users/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const userData = await response.json()
-
-        let subjects = []
-        if (userData.student && userData.student.enrolledSubjects) {
-          // 处理不同的科目数据格式
-          if (Array.isArray(userData.student.enrolledSubjects)) {
-            // 如果已经是数组，直接使用
-            subjects = userData.student.enrolledSubjects
-          } else if (typeof userData.student.enrolledSubjects === 'string') {
-            // 如果是字符串，转换为数组（支持逗号分隔或单个科目）
-            subjects = userData.student.enrolledSubjects
-              .split(',')
-              .map((s: string) => s.trim())
-              .filter((s: string) => s.length > 0)
-          } else {
-            console.warn(
-              '学生科目数据格式不支持:',
-              userData.student.enrolledSubjects,
-              '类型:',
-              typeof userData.student.enrolledSubjects
-            )
-            subjects = []
-          }
-        } else {
-          subjects = []
-        }
-
-        setStudentSubjects(subjects)
-        return subjects
-      } else {
-        console.error('获取学生信息失败')
-        setStudentSubjects([])
-        return []
-      }
+      const me = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
+      const subjects = me?.student?.enrolledSubjects ?? []
+      setStudentSubjects(subjects)
+      return subjects
     } catch (error) {
       console.error('获取学生科目失败:', error)
       setStudentSubjects([])
@@ -212,6 +173,14 @@ export default function StudentBookingCalendar({
         console.error('初始数据加载失败:', error)
       } finally {
         setInitialLoading(false) // 完成初始加载
+        try {
+          const end = typeof performance !== 'undefined' ? performance.now() : 0
+          const duration = Math.max(0, end - mountStartRef.current)
+          Sentry.metrics.distribution('calendar_init_ms', duration, {
+            tags: { page: 'book_appointment' },
+          })
+          incr('biz.calendar.view', 1, { page: 'book_appointment' })
+        } catch {}
       }
     }
 
@@ -223,6 +192,7 @@ export default function StudentBookingCalendar({
 
     try {
       setLoading(true)
+      const t0 = typeof performance !== 'undefined' ? performance.now() : 0
 
       const token = localStorage.getItem('accessToken')
       if (!token) {
@@ -268,12 +238,28 @@ export default function StudentBookingCalendar({
         })
         setBookedSlots(booked)
         setWaitlistCountMap(wlMap)
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          const dur = Math.max(0, t1 - t0)
+          Sentry.metrics.distribution('slots_fetch_ms', dur, {
+            tags: { page: 'book_appointment', ok: 'true' },
+          })
+          incr('biz.calendar.slots_fetch', 1, { ok: true })
+        } catch {}
       } else {
         const errorData = await response.json()
         showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
         setTimeSlots([])
         setBookedSlots([])
         setWaitlistCountMap({})
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          const dur = Math.max(0, t1 - t0)
+          Sentry.metrics.distribution('slots_fetch_ms', dur, {
+            tags: { page: 'book_appointment', ok: 'false' },
+          })
+          incr('biz.calendar.slots_fetch', 1, { ok: false })
+        } catch {}
       }
     } catch (error) {
       showErrorMessage('获取可用时间失败')
@@ -289,6 +275,9 @@ export default function StudentBookingCalendar({
     setWaitlistLoading(true)
     setWaitlistSlotIso(slotIso)
     try {
+      incr('biz.waitlist.view_slot', 1)
+    } catch {}
+    try {
       const token = localStorage.getItem('accessToken')
       const res = await fetch(
         `/api/waitlist/slot?teacherId=${encodeURIComponent(selectedTeacher)}&slot=${encodeURIComponent(
@@ -296,7 +285,13 @@ export default function StudentBookingCalendar({
         )}&studentId=${encodeURIComponent(studentId)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '获取候补失败' })
         return
@@ -334,7 +329,13 @@ export default function StudentBookingCalendar({
           subject: selectedSubject,
         }),
       })
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '加入候补失败' })
         return
@@ -344,6 +345,9 @@ export default function StudentBookingCalendar({
       // 刷新候补列表与等待人数
       await openWaitlistModal(waitlistSlotIso)
       await fetchTimeSlots()
+      try {
+        incr('biz.waitlist.join', 1)
+      } catch {}
     } catch (e) {
       showErrorMessage('加入候补失败')
     }
@@ -358,7 +362,13 @@ export default function StudentBookingCalendar({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id: myWaitEntryId, studentId }),
       })
-      const json = await res.json().catch(() => ({}))
+      let json: any
+      try {
+        json = await res.json()
+      } catch (parseError) {
+        showErrorMessage('服务器返回了无效的JSON数据')
+        return
+      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '移除候补失败' })
         return
@@ -367,6 +377,9 @@ export default function StudentBookingCalendar({
       // 刷新候补列表与等待人数
       await openWaitlistModal(waitlistSlotIso)
       await fetchTimeSlots()
+      try {
+        incr('biz.waitlist.leave', 1)
+      } catch {}
     } catch (e) {
       showErrorMessage('移除候补失败')
     }
@@ -381,12 +394,18 @@ export default function StudentBookingCalendar({
   const handleDateSelect = (date: any) => {
     setSelectedDate(date.format('YYYY-MM-DD'))
     setTimeSlots([])
+    try {
+      incr('biz.calendar.select_date')
+    } catch {}
   }
 
   const handleTeacherChange = (teacherId: string) => {
     setSelectedTeacher(teacherId)
     setSelectedSubject('')
     setTimeSlots([])
+    try {
+      incr('biz.calendar.select_teacher', 1, { teacherId })
+    } catch {}
 
     if (teacherId) {
       const teacher = filteredTeachers.find((t) => t.id === teacherId)
@@ -415,6 +434,9 @@ export default function StudentBookingCalendar({
   const handleSubjectChange = (subject: string) => {
     setSelectedSubject(subject)
     setTimeSlots([])
+    try {
+      incr('biz.calendar.select_subject', 1, { subject })
+    } catch {}
   }
 
   const handleSlotClick = (slot: CalendarSlot) => {
@@ -424,7 +446,6 @@ export default function StudentBookingCalendar({
     }
 
     // 将ISO时间字符串转换为dayjs对象
-    const dayjs = require('dayjs')
     const scheduledTime = dayjs(slot.startTime)
 
     form.setFieldsValue({
@@ -434,6 +455,9 @@ export default function StudentBookingCalendar({
       durationMinutes: 30, // 固定为30分钟
     })
     setBookingModalVisible(true)
+    try {
+      incr('biz.calendar.select_slot', 1)
+    } catch {}
   }
 
   const handleBooking = async (values: any) => {
@@ -442,6 +466,9 @@ export default function StudentBookingCalendar({
     try {
       setBookingSubmitting(true)
       setLoading(true)
+      try {
+        incr('biz.booking.submit', 1)
+      } catch {}
 
       const token = localStorage.getItem('accessToken')
       if (!token) {
@@ -484,6 +511,9 @@ export default function StudentBookingCalendar({
         setBookingModalVisible(false)
         form.resetFields()
         onBookingSuccess?.()
+        try {
+          incr('biz.booking.success', 1)
+        } catch {}
 
         // 延迟跳转，让用户看到成功消息
         setTimeout(() => {
@@ -505,9 +535,15 @@ export default function StudentBookingCalendar({
         } else {
           showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
         }
+        try {
+          incr('biz.booking.error', 1)
+        } catch {}
       }
     } catch (error) {
       showErrorMessage('预约失败，请重试')
+      try {
+        incr('biz.booking.error', 1)
+      } catch {}
     } finally {
       setBookingSubmitting(false)
       setLoading(false)

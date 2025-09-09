@@ -4,6 +4,7 @@ import { withRoles } from '@/lib/api/middleware'
 import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
 async function getAdminDashboardHandler(request: NextRequest, context?: any) {
   try {
@@ -82,4 +83,6 @@ async function getAdminDashboardHandler(request: NextRequest, context?: any) {
   }
 }
 
-export const GET = withRoles(['admin', 'superadmin'])(getAdminDashboardHandler)
+export const GET = withRoles(['admin', 'superadmin'])(
+  withSentryRoute(getAdminDashboardHandler, 'api GET /api/admin/dashboard')
+)

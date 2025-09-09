@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Table, Tag, Button, Space, Modal, Select, Empty, Alert, Input } from 'antd'
 import {
@@ -18,6 +18,8 @@ import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/gl
 import { getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
 import AuthGuard from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
+import * as Sentry from '@sentry/nextjs'
+import { incr } from '@/lib/frontend/metrics'
 
 const { Option } = Select
 
@@ -42,6 +44,7 @@ export default function AppointmentsManagement() {
   const [error, setError] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchText, setSearchText] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [approveModalVisible, setApproveModalVisible] = useState(false)
   const [rejectModalVisible, setRejectModalVisible] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -79,14 +82,27 @@ export default function AppointmentsManagement() {
   }, [router, isTeacher])
 
   useEffect(() => {
-    fetchAppointments()
-  }, [fetchAppointments])
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
+    fetchAppointments().finally(() => {
+      try {
+        const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+        Sentry.metrics.distribution('appointments_mgmt_load_ms', Math.max(0, t1 - t0))
+        incr('biz.page.view', 1, {
+          page: 'appointments_mgmt',
+          role: isTeacher ? 'teacher' : 'admin',
+        })
+      } catch {}
+    })
+  }, [fetchAppointments, isTeacher])
 
-  const handleApprove = async (appointment: Appointment) => {
-    if (processing) return
-    setSelectedAppointment(appointment)
-    setApproveModalVisible(true)
-  }
+  const handleApprove = useCallback(
+    (appointment: Appointment) => {
+      if (processing) return
+      setSelectedAppointment(appointment)
+      setApproveModalVisible(true)
+    },
+    [processing]
+  )
 
   const confirmApprove = async () => {
     if (!selectedAppointment) return
@@ -108,12 +124,15 @@ export default function AppointmentsManagement() {
     }
   }
 
-  const handleReject = async (appointment: Appointment) => {
-    if (processing) return
-    setSelectedAppointment(appointment)
-    setRejectModalVisible(true)
-    setRejectReason('')
-  }
+  const handleReject = useCallback(
+    (appointment: Appointment) => {
+      if (processing) return
+      setSelectedAppointment(appointment)
+      setRejectModalVisible(true)
+      setRejectReason('')
+    },
+    [processing]
+  )
 
   const confirmReject = async () => {
     if (!selectedAppointment || !rejectReason.trim()) {
@@ -178,116 +197,132 @@ export default function AppointmentsManagement() {
     }
   }
 
-  const columns = [
-    {
-      title: '科目',
-      dataIndex: 'subject',
-      key: 'subject',
-      render: (subject: string) => <span className="font-medium">{subject}</span>,
-    },
-    {
-      title: isTeacher ? '学生' : '学生/教师',
-      key: 'participants',
-      responsive: ['sm' as any],
-      render: (_: any, record: Appointment) => (
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <UserOutlined className="text-blue-600" />
-            <span className="text-sm">学生：{record.studentName}</span>
-          </div>
-          {!isTeacher && (
+  const columns = useMemo(
+    () => [
+      {
+        title: '科目',
+        dataIndex: 'subject',
+        key: 'subject',
+        render: (subject: string) => <span className="font-medium">{subject}</span>,
+      },
+      {
+        title: isTeacher ? '学生' : '学生/教师',
+        key: 'participants',
+        responsive: ['sm' as any],
+        render: (_: any, record: Appointment) => (
+          <div className="space-y-1">
             <div className="flex items-center space-x-2">
-              <UserOutlined className="text-green-600" />
-              <span className="text-sm">教师：{record.teacherName}</span>
+              <UserOutlined className="text-blue-600" />
+              <span className="text-sm">学生：{record.studentName}</span>
             </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: '时间',
-      dataIndex: 'scheduledTime',
-      key: 'scheduledTime',
-      responsive: ['sm' as any],
-      render: (scheduledTime: string) => (
-        <div
-          className="flex items-center space-x-2"
-          title={format(parseISO(scheduledTime), 'yyyy年MM月dd日 HH:mm')}
-        >
-          <CalendarOutlined className="text-green-600" />
-          <span className="text-sm">{format(parseISO(scheduledTime), 'MM-dd HH:mm')}</span>
-        </div>
-      ),
-    },
-    {
-      title: '时长',
-      dataIndex: 'durationMinutes',
-      key: 'durationMinutes',
-      responsive: ['md' as any],
-      render: (duration: number) => <span>{duration} 分钟</span>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>,
-    },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      key: 'notes',
-      responsive: ['lg' as any],
-      render: (notes: string) =>
-        notes ? (
-          <span className="text-gray-600 text-sm max-w-xs truncate block" title={notes}>
-            {notes}
-          </span>
-        ) : (
-          <span className="text-gray-400 text-sm">无</span>
+            {!isTeacher && (
+              <div className="flex items-center space-x-2">
+                <UserOutlined className="text-green-600" />
+                <span className="text-sm">教师：{record.teacherName}</span>
+              </div>
+            )}
+          </div>
         ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: Appointment) => (
-        <Space>
-          {record.status === 'pending' && isTeacher && (
-            <>
-              <Button
-                type="text"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApprove(record)}
-                size="small"
-                className="text-green-600"
-              >
-                确认
-              </Button>
-              <Button
-                type="text"
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleReject(record)}
-                size="small"
-              >
-                拒绝
-              </Button>
-            </>
-          )}
-        </Space>
-      ),
-    },
-  ]
+      },
+      {
+        title: '时间',
+        dataIndex: 'scheduledTime',
+        key: 'scheduledTime',
+        responsive: ['sm' as any],
+        render: (scheduledTime: string) => (
+          <div
+            className="flex items-center space-x-2"
+            title={format(parseISO(scheduledTime), 'yyyy年MM月dd日 HH:mm')}
+          >
+            <CalendarOutlined className="text-green-600" />
+            <span className="text-sm">{format(parseISO(scheduledTime), 'MM-dd HH:mm')}</span>
+          </div>
+        ),
+      },
+      {
+        title: '时长',
+        dataIndex: 'durationMinutes',
+        key: 'durationMinutes',
+        responsive: ['md' as any],
+        render: (duration: number) => <span>{duration} 分钟</span>,
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status: string) => (
+          <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
+        ),
+      },
+      {
+        title: '备注',
+        dataIndex: 'notes',
+        key: 'notes',
+        responsive: ['lg' as any],
+        render: (notes: string) =>
+          notes ? (
+            <span className="text-gray-600 text-sm max-w-xs truncate block" title={notes}>
+              {notes}
+            </span>
+          ) : (
+            <span className="text-gray-400 text-sm">无</span>
+          ),
+      },
+      {
+        title: '操作',
+        key: 'action',
+        render: (_: any, record: Appointment) => (
+          <Space>
+            {record.status === 'pending' && isTeacher && (
+              <>
+                <Button
+                  type="text"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleApprove(record)}
+                  size="small"
+                  className="text-green-600"
+                >
+                  确认
+                </Button>
+                <Button
+                  type="text"
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => handleReject(record)}
+                  size="small"
+                >
+                  拒绝
+                </Button>
+              </>
+            )}
+          </Space>
+        ),
+      },
+    ],
+    [isTeacher, handleApprove, handleReject]
+  )
 
   // 过滤和搜索
-  const filteredAppointments = appointments
-    .filter((app) => filterStatus === 'all' || app.status === filterStatus)
-    .filter(
-      (app) =>
-        searchText === '' ||
-        app.subject.toLowerCase().includes(searchText.toLowerCase()) ||
-        app.studentName.toLowerCase().includes(searchText.toLowerCase()) ||
-        app.teacherName.toLowerCase().includes(searchText.toLowerCase())
-    )
+  // 防抖搜索，减少大列表过滤时的重渲染与计算
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchText), 300)
+    return () => clearTimeout(t)
+  }, [searchText])
+
+  const filteredAppointments = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    const byStatus = filterStatus
+    if (!appointments?.length) return []
+    return appointments
+      .filter((app) => byStatus === 'all' || app.status === byStatus)
+      .filter(
+        (app) =>
+          q === '' ||
+          app.subject.toLowerCase().includes(q) ||
+          app.studentName.toLowerCase().includes(q) ||
+          app.teacherName.toLowerCase().includes(q)
+      )
+  }, [appointments, filterStatus, debouncedSearch])
 
   if (loading) {
     return <PageLoader message="正在加载预约数据" description="正在获取预约列表和状态信息" />

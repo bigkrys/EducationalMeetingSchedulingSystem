@@ -10,6 +10,8 @@ import { userService } from '@/lib/api/user-service'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
 import { showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
+import * as Sentry from '@sentry/nextjs'
+import { incr } from '@/lib/frontend/metrics'
 
 export default function BookAppointment() {
   const [studentId, setStudentId] = useState<string>('')
@@ -20,6 +22,7 @@ export default function BookAppointment() {
   const router = useRouter()
 
   useEffect(() => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
     // 获取当前用户信息
     const fetchUserInfo = async () => {
       try {
@@ -41,6 +44,11 @@ export default function BookAppointment() {
         setError('网络错误')
       } finally {
         setLoading(false)
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          Sentry.metrics.distribution('book_appointment_load_ms', Math.max(0, t1 - t0))
+          incr('biz.page.view', 1, { page: 'book_appointment' })
+        } catch {}
       }
     }
 

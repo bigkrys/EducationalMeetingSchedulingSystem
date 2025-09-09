@@ -4,7 +4,8 @@
 import '@ant-design/v5-patch-for-react-19'
 
 import { useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
+import { incr } from '@/lib/frontend/metrics'
 import {
   isAuthenticated,
   getStoredTokens,
@@ -20,6 +21,7 @@ interface AuthListenerProps {
 
 const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
   const router = useRouter()
+  const pathname = usePathname()
   const refreshTimeoutRef = useRef<NodeJS.Timeout>()
   const activityTimeoutRef = useRef<NodeJS.Timeout>()
   const lastActivityRef = useRef<number>(Date.now())
@@ -147,6 +149,14 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
       console.error('全局错误处理器初始化失败:', error)
     }
 
+    // 如果已登录，记录一次会话开始与当前页面浏览
+    try {
+      if (isAuthenticated()) {
+        incr('biz.login.session_start')
+        incr('biz.page.view', 1, { page: window.location.pathname })
+      }
+    } catch {}
+
     // 使用节流的事件监听，减少性能开销
     let timeoutId: NodeJS.Timeout | null = null
     const throttledHandleUserActivity = () => {
@@ -198,7 +208,13 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     if (typeof window !== 'undefined' && isAuthenticated()) {
       setupTokenRefresh()
     }
-  }, [router, setupTokenRefresh])
+    // 记录页面浏览
+    if (typeof window !== 'undefined') {
+      try {
+        incr('biz.page.view', 1, { page: pathname || '/' })
+      } catch {}
+    }
+  }, [router, setupTokenRefresh, pathname])
 
   return <>{children}</>
 }

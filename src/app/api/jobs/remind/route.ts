@@ -5,8 +5,9 @@ import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { addHours, subHours } from 'date-fns'
+import { withSentryRoute } from '@/lib/monitoring/sentry'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // 读取原始 body 用于 HMAC 校验（如果启用），并在解析 JSON 前执行授权检查
     const rawBody = await request.text().catch(() => '')
@@ -104,6 +105,8 @@ export async function POST(request: NextRequest) {
     return fail('Failed to send reminders', 500, E.INTERNAL_ERROR)
   }
 }
+
+export const POST = withSentryRoute(postHandler as any, 'api POST /api/jobs/remind')
 
 // 获取已经发送过提醒的预约ID列表
 async function getAlreadyRemindedAppointments(offsetHours: number): Promise<string[]> {
