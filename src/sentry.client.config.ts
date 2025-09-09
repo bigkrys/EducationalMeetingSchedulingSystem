@@ -1,9 +1,34 @@
 'use client'
 import * as Sentry from '@sentry/nextjs'
-import { getSentryEnvironment } from '@/lib/monitoring/environment'
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN
-const environment = getSentryEnvironment()
+
+// 客户端环境判断 - 只能访问 NEXT_PUBLIC_ 开头的环境变量
+function getClientSentryEnvironment(): string {
+  // 如果明确设置了客户端环境变量
+  if (process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT) {
+    return process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT
+  }
+
+  // 在 Vercel 环境中，使用 NEXT_PUBLIC_VERCEL_ENV
+  if (process.env.NEXT_PUBLIC_VERCEL_ENV) {
+    switch (process.env.NEXT_PUBLIC_VERCEL_ENV) {
+      case 'production':
+        return 'production'
+      case 'preview':
+        return 'preview'
+      case 'development':
+        return 'development'
+      default:
+        return process.env.NEXT_PUBLIC_VERCEL_ENV
+    }
+  }
+
+  // 回退到 NODE_ENV
+  return process.env.NODE_ENV || 'development'
+}
+
+const environment = getClientSentryEnvironment()
 
 if (dsn) {
   Sentry.init({
