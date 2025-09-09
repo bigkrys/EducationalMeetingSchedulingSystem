@@ -35,14 +35,15 @@ if (dsn) {
     dsn,
     environment,
     tracesSampleRate: Number(
-      process.env.SENTRY_TRACES_SAMPLE_RATE || (environment === 'development' ? 0.2 : 0.05)
+      process.env.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE ||
+        (environment === 'development' ? 0.2 : 0.05)
     ),
     integrations: [
       // 保护性判断：若意外在非浏览器环境执行，避免调用不存在的集成
-      typeof (Sentry as any).browserTracingIntegration === 'function'
-        ? (Sentry as any).browserTracingIntegration()
-        : undefined,
-    ].filter(Boolean) as any,
+      ...(typeof Sentry.browserTracingIntegration === 'function'
+        ? [Sentry.browserTracingIntegration()]
+        : []),
+    ],
     // 客户端默认不发送 PII（个人敏感信息）
     sendDefaultPii: false,
     beforeSend(event) {

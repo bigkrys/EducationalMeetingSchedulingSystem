@@ -20,7 +20,11 @@ export async function getSubjectIdByNameTx(tx: Tx, subjectName: string): Promise
   return subject.id
 }
 
-const MAX_PROMOTE_ATTEMPTS = parseInt(process.env.WAITLIST_PROMOTE_MAX_ATTEMPTS || '5', 10)
+const DEFAULT_MAX_PROMOTE_ATTEMPTS = 5
+const MAX_PROMOTE_ATTEMPTS = parseInt(
+  process.env.WAITLIST_PROMOTE_MAX_ATTEMPTS || DEFAULT_MAX_PROMOTE_ATTEMPTS.toString(),
+  10
+)
 
 export async function promoteForSlotTx(
   tx: Tx,

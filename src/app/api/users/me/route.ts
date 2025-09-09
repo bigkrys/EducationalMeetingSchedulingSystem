@@ -86,7 +86,7 @@ async function handler(request: AuthenticatedRequest) {
 
     const ifNoneMatch = request.headers.get('if-none-match')
     if (ifNoneMatch && ifNoneMatch === etag) {
-      return new NextResponse(null as any, {
+      return new NextResponse(undefined, {
         status: 304,
         headers: {
           ETag: etag,

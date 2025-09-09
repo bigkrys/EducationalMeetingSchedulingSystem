@@ -445,7 +445,7 @@ export default function StudentBookingCalendar({
       return
     }
 
-    // 将ISO时间字符串转换为dayjs对象（避免动态 require 开销）
+    // 将ISO时间字符串转换为dayjs对象
     const scheduledTime = dayjs(slot.startTime)
 
     form.setFieldsValue({

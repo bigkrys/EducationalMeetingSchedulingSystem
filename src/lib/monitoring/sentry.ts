@@ -24,7 +24,8 @@ export function withSentryRoute<H extends (...args: any[]) => any>(handler: H, n
 
       // Sentry.startSpan 将返回 handler 的返回值，无论是同步值还是 Promise，
       // 因此 wrapped 的返回类型与 handler 的返回类型一致。
-      // We intentionally do not make this function async to preserve the original return type shape.
+      // We intentionally do not make this function async because doing so would change the return type
+      // from T to Promise<T>, breaking type compatibility with the original handler.
       return Sentry.startSpan({ name: txnName, op: 'http.server' }, () =>
         handler(...(args as any))
       ) as ReturnType<H>
