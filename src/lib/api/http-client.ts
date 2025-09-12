@@ -1,6 +1,9 @@
 // 通用的HTTP客户端，自动添加token到请求头
 // 支持全局错误拦截和消息提示
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
+import { fetchWithAuth } from '@/lib/frontend/useFetch'
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
+import { storeTokens, clearStoredTokens } from '@/lib/api/auth'
 export class ApiClient {
   // 全局错误处理开关
   private static globalErrorHandling = true
@@ -79,7 +82,7 @@ export class ApiClient {
     }
   }
   private static getAuthHeaders(): HeadersInit {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    const token = getAuthToken()
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -127,85 +130,56 @@ export class ApiClient {
     options: RequestInit = {},
     skipErrorHandling = false
   ): Promise<Response> {
-    const headers = this.getAuthHeaders()
-
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...headers,
-          ...options.headers,
-        },
-      })
+      // 首先尝试使用 fetchWithAuth 工具（它会注入 token）
+      const { res } = await fetchWithAuth(url, options as any)
 
-      // 如果返回401，可能是token过期，尝试刷新
-      if (response.status === 401) {
+      if (res.status === 401) {
+        // 尝试刷新逻辑：向后端请求刷新（如果后端使用 httpOnly refresh cookie 也可直接调用 /api/auth/refresh 无需 body）
         try {
-          // 尝试刷新token
-          const refreshToken = localStorage.getItem('refreshToken')
-          if (refreshToken) {
-            const refreshResponse = await fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refreshToken }),
-            })
-
-            if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json()
-              localStorage.setItem('accessToken', refreshData.accessToken)
+          const refreshResponse = await fetch('/api/auth/refresh', { method: 'POST' })
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json().catch(() => null)
+            if (refreshData?.accessToken) {
+              setAuthToken(refreshData.accessToken)
               if (refreshData.refreshToken) {
-                localStorage.setItem('refreshToken', refreshData.refreshToken)
+                // 兼容老逻辑：使用集中 helper 存储 refreshToken（逐步迁移）
+                try {
+                  storeTokens(refreshData.accessToken, refreshData.refreshToken)
+                } catch (_) {}
               }
-
-              // 使用新token重试原请求
-              const newHeaders = this.getAuthHeaders()
-              const retryResponse = await fetch(url, {
-                ...options,
-                headers: {
-                  ...newHeaders,
-                  ...options.headers,
-                },
-              })
-
-              // 检查重试后的响应
-              if (!retryResponse.ok && !skipErrorHandling) {
-                // clone so we don't consume the original response body (caller may want to read it)
-                const clone = retryResponse.clone()
-                const errorMessage = await this.parseErrorResponse(clone)
-                this.showError(errorMessage)
-              }
-
-              return retryResponse
-            } else {
+              // 重试原请求
+              const { res: retryRes } = await fetchWithAuth(url, options as any)
+              return retryRes
             }
           }
-        } catch (error) {
-          console.error('Token refresh error:', error)
+        } catch (err) {
+          // 刷新失败
         }
 
-        // 刷新失败，清除token并重定向到登录页
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
+        // 刷新失败，清理并跳转登录
+        clearAuthToken()
+        try {
+          clearStoredTokens()
+        } catch (_) {}
         this.showError('登录已过期，请重新登录')
         if (typeof window !== 'undefined') {
           setTimeout(() => {
             window.location.href = '/'
           }, 1500)
         }
-        return response
+        return res
       }
 
       // 处理其他HTTP错误
-      if (!response.ok && !skipErrorHandling) {
-        // clone so caller can still read response.json()
-        const clone = response.clone()
+      if (!res.ok && !skipErrorHandling) {
+        const clone = res.clone()
         const errorMessage = await this.parseErrorResponse(clone)
         this.showError(errorMessage)
       }
 
-      return response
+      return res
     } catch (error) {
-      // 处理网络错误
       if (!skipErrorHandling) {
         this.showError('网络连接失败，请检查网络设置')
       }

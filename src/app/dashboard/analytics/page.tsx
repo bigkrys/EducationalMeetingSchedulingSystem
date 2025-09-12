@@ -12,31 +12,28 @@ const Pie = nextDynamic(() => import('@/components/charts/Pie'), {
 })
 import * as Sentry from '@sentry/nextjs'
 import { incr } from '@/lib/frontend/metrics'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
 
 export default function TeacherAnalyticsPage() {
   const [days, setDays] = useState(30)
+  const { fetchWithAuth } = useFetch()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>(null)
 
   const fetchData = useCallback(async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    if (!token) return message.error('未登录')
     setLoading(true)
     try {
-      const res = await fetch(`/api/teacher/analytics?days=${days}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const { res, json } = await fetchWithAuth(`/api/teacher/analytics?days=${days}`)
       if (!res.ok) throw new Error('加载失败')
-      const json = await res.json()
       setData(json)
     } catch (e) {
       message.error((e as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [days])
+  }, [days, fetchWithAuth])
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0

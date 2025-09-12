@@ -28,6 +28,7 @@ import { httpClient } from '@/lib/api/http-client'
 import { getCurrentUserId } from '@/lib/api/auth'
 import { userService } from '@/lib/api/user-service'
 import dynamic from 'next/dynamic'
+import { useFetch } from '@/lib/frontend/useFetch'
 const TeacherAvailabilityCalendar = dynamic(
   () => import('@/components/teacher/TeacherAvailabilityCalendar'),
   { ssr: false, loading: () => null }
@@ -71,6 +72,7 @@ export default function TeacherAvailability() {
   const [form] = Form.useForm()
 
   const router = useRouter()
+  const { fetchWithAuth } = useFetch()
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0
@@ -118,18 +120,11 @@ export default function TeacherAvailability() {
     setError('')
 
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        setError('未登录')
-        return
-      }
-
-      const response = await fetch(`/api/teachers/${teacher.id}/availability`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/teachers/${teacher.id}/availability`
+      )
 
       if (response.ok) {
-        const data = await response.json()
         let availabilityArray = []
         if (Array.isArray(data)) {
           availabilityArray = data
@@ -144,7 +139,7 @@ export default function TeacherAvailability() {
 
         setAvailabilities(availabilityArray)
       } else {
-        const errorData = await response.json().catch(() => ({ message: '未知错误' }))
+        const errorData = data ?? { message: '未知错误' }
         setError(errorData.message || '获取可用性数据失败')
       }
     } catch (err) {
@@ -153,7 +148,7 @@ export default function TeacherAvailability() {
     } finally {
       setLoading(false)
     }
-  }, [teacher])
+  }, [teacher, fetchWithAuth])
 
   useEffect(() => {
     if (!teacher) return

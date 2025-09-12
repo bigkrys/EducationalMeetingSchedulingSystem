@@ -3,30 +3,14 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import {
-  Card,
-  Typography,
-  Button,
-  Row,
-  Col,
-  Statistic,
-  Badge,
-  Alert,
-  Spin,
-  Space,
-  Switch,
-  message,
-} from 'antd'
+import { Card, Typography, Row, Col, Statistic, Badge, Alert, Spin, Space } from 'antd'
 import { useRouter } from 'next/navigation'
-import {
-  BarChartOutlined,
-  TeamOutlined,
-  UserOutlined,
-  FileTextOutlined,
-  SafetyCertificateOutlined,
-  ToolOutlined,
-} from '@ant-design/icons'
+import { BarChartOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
 import { clearUserCache } from '@/lib/api/user-service'
+import { useFetch } from '@/lib/frontend/useFetch'
+import { clearAuthToken } from '@/lib/frontend/auth'
+import { clearStoredTokens } from '@/lib/api/auth'
+
 const { Title, Text } = Typography
 
 interface DashboardStats {
@@ -56,22 +40,16 @@ export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [running, setRunning] = useState<string | null>(null)
   const [forceReset, setForceReset] = useState(false)
+  const { fetchWithAuth } = useFetch()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setError(null)
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-        if (!token) {
-          setError('未找到登录信息，请重新登录')
-          return
+        const { res, json } = await fetchWithAuth('/api/admin/dashboard')
+        if (!res.ok) {
+          throw new Error('加载数据失败')
         }
-        const res = await fetch('/api/admin/dashboard', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        })
-        if (!res.ok) throw new Error('加载数据失败')
-        const json = await res.json()
         setData(json)
       } catch (e) {
         setError((e as Error).message || '加载失败')
@@ -80,11 +58,11 @@ export default function AdminDashboard() {
       }
     }
     fetchData()
-  }, [])
+  }, [fetchWithAuth])
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetchWithAuth('/api/auth/logout', { method: 'POST' })
     } catch (e) {
       console.error(e)
     }
@@ -92,12 +70,13 @@ export default function AdminDashboard() {
       clearUserCache()
     } catch (_) {}
     try {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userRole')
+      clearAuthToken()
+    } catch (_) {}
+    try {
+      clearStoredTokens()
     } catch (_) {}
     router.push('/')
-  }, [router])
+  }, [router, fetchWithAuth])
 
   const healthStatus = (h: Health) => {
     const status = h === 'healthy' ? 'success' : h === 'warning' ? 'warning' : 'error'

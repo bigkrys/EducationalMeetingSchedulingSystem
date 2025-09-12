@@ -14,6 +14,8 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons'
 import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { clearAuthToken } from '@/lib/frontend/auth'
+import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
 import { clearUserCache } from '@/lib/api/user-service'
 const { Sider } = Layout
@@ -45,9 +47,13 @@ export default function DashboardSideNav({
   const handleLogout = useCallback(async () => {
     try {
       clearUserCache()
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userRole')
+      clearAuthToken()
+      try {
+        clearAuthToken()
+      } catch (_) {}
+      try {
+        clearStoredTokens()
+      } catch (_) {}
       fetch('/api/auth/logout', { method: 'POST' })
       router.push('/')
     } catch (_) {

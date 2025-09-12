@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
 import Link from 'next/link'
 import { getCurrentUserRole } from '@/lib/api/auth'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
 
@@ -34,6 +35,7 @@ interface UserRow {
 
 export default function AdminUsers() {
   const router = useRouter()
+  const { fetchWithAuth } = useFetch()
   const [loading, setLoading] = useState(false)
   const [users, setUsers] = useState<UserRow[]>([])
   const [total, setTotal] = useState(0)
@@ -54,8 +56,6 @@ export default function AdminUsers() {
     role?: string
     search?: string
   }) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    if (!token) return message.error('未找到登录信息，请重新登录')
     setLoading(true)
     try {
       const p = params?.page ?? page
@@ -67,20 +67,18 @@ export default function AdminUsers() {
       qs.set('limit', String(l))
       if (r) qs.set('role', r)
       if (s) qs.set('search', s)
-      const res = await fetch(`/api/admin/users?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('加载用户失败')
-      const json = await res.json()
+      const { res, json } = await fetchWithAuth(`/api/admin/users?${qs.toString()}`)
+      if (!res.ok) throw new Error('\u52a0\u8f7d\u7528\u6237\u5931\u8d25')
+      const dataJson = json
       setUsers(
-        (json.users || []).map((u: any) => ({
+        (dataJson.users || []).map((u: any) => ({
           ...u,
           createdAt: u.createdAt,
         }))
       )
-      setTotal(json.total || 0)
-      setPage(json.page || p)
-      setLimit(json.limit || l)
+      setTotal(dataJson.total || 0)
+      setPage(dataJson.page || p)
+      setLimit(dataJson.limit || l)
     } catch (e) {
       message.error((e as Error).message)
     } finally {
@@ -164,13 +162,8 @@ export default function AdminUsers() {
   const handleCreate = async () => {
     try {
       const values = await form.validateFields()
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(values),
-      })
-      if (!res.ok) throw new Error('创建失败')
+      const { res } = await fetchWithAuth('/api/admin/users', { method: 'POST', jsonBody: values })
+      if (!res.ok) throw new Error('\u521b\u5efa\u5931\u8d25')
       message.success('创建成功')
       setCreateOpen(false)
       form.resetFields()
@@ -184,13 +177,11 @@ export default function AdminUsers() {
     try {
       if (!editing) return
       const values = await editForm.validateFields()
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const res = await fetch('/api/admin/users', {
+      const { res } = await fetchWithAuth('/api/admin/users', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: editing.id, updates: values }),
+        jsonBody: { userId: editing.id, updates: values },
       })
-      if (!res.ok) throw new Error('更新失败')
+      if (!res.ok) throw new Error('\u66f4\u65b0\u5931\u8d25')
       message.success('更新成功')
       setEditOpen(false)
       setEditing(null)

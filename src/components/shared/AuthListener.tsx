@@ -14,6 +14,7 @@ import {
   isTokenExpiringSoon,
 } from '@/lib/api/auth'
 import { initializeGlobalErrorHandler } from '@/lib/api/global-error-handler'
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
 
 interface AuthListenerProps {
   children: React.ReactNode
@@ -63,7 +64,7 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
       if (newAccessToken) {
         // 更新存储的token
-        localStorage.setItem('accessToken', newAccessToken)
+        setAuthToken(newAccessToken)
 
         // 直接根据新 token 安排下一次刷新（提前5分钟）
         try {

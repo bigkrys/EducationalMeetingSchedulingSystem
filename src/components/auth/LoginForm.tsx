@@ -9,6 +9,8 @@ import StudentFields from '@/components/shared/StudentFields'
 import TeacherFields from '@/components/shared/TeacherFields'
 import { showApiError, showErrorMessage } from '@/lib/api/global-error-handler'
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
+import { setAuthToken } from '@/lib/frontend/auth'
+import { storeTokens } from '@/lib/api/auth'
 
 interface FormData {
   email: string
@@ -102,9 +104,14 @@ export default function LoginForm() {
 
           if (isLogin) {
             // 登录成功，存储 token
-            localStorage.setItem('accessToken', data.accessToken)
-            localStorage.setItem('refreshToken', data.refreshToken)
-            localStorage.setItem('userRole', data.role)
+            setAuthToken(data.accessToken)
+            // transitional: store both tokens via the centralized helper
+            try {
+              storeTokens(data.accessToken, data.refreshToken)
+            } catch (_) {}
+            try {
+              localStorage.setItem('userRole', data.role)
+            } catch (_) {}
 
             // 显示跳转状态
             setLoading(false)
@@ -248,7 +255,7 @@ export default function LoginForm() {
             }}
             required
             placeholder="请输入密码（8位以上，必须包含字母）"
-            className="w-full px-3 py-2 border borsder-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           {passwordError && <span className="text-red-500 text-sm mt-1">{passwordError}</span>}
         </div>

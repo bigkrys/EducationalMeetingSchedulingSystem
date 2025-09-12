@@ -6,31 +6,28 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Card, Typography, Row, Col, Statistic, Space, Segmented, Table, message } from 'antd'
 import Link from 'next/link'
 import Pie from '@/components/charts/Pie'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
 
 export default function AdminAnalyticsPage() {
+  const { fetchWithAuth } = useFetch()
   const [days, setDays] = useState(30)
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>(null)
 
   const fetchData = useCallback(async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    if (!token) return message.error('未登录')
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/analytics?days=${days}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('加载失败')
-      const json = await res.json()
+      const { res, json } = await fetchWithAuth(`/api/admin/analytics?days=${days}`)
+      if (!res.ok) throw new Error('\u52a0\u8f7d\u5931\u8d25')
       setData(json)
     } catch (e) {
       message.error((e as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [days])
+  }, [days, fetchWithAuth])
 
   useEffect(() => {
     fetchData()

@@ -1,15 +1,18 @@
 // Client-safe auth helpers (no server-only deps like bcrypt/prisma/crypto)
 // Keep token helpers here for client code imports.
-export async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
+
+export async function refreshAccessToken(refreshToken?: string): Promise<string | null> {
   try {
     const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     })
 
     if (response.ok) {
       const data = await response.json()
+      if (data?.accessToken) setAuthToken(data.accessToken)
       return data.accessToken
     }
     return null
@@ -32,28 +35,32 @@ export function isTokenExpiringSoon(token: string): boolean {
 }
 
 export function getStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
-  if (typeof window === 'undefined') return { accessToken: null, refreshToken: null }
   return {
-    accessToken: localStorage.getItem('accessToken'),
-    refreshToken: localStorage.getItem('refreshToken'),
+    accessToken: getAuthToken(),
+    refreshToken: typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null,
   }
 }
 
 export function storeTokens(accessToken: string, refreshToken: string): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('accessToken', accessToken)
-  localStorage.setItem('refreshToken', refreshToken)
+  setAuthToken(accessToken)
+  if (typeof window !== 'undefined' && refreshToken) {
+    try {
+      localStorage.setItem('refreshToken', refreshToken)
+    } catch (_) {}
+  }
 }
 
 export function clearStoredTokens(): void {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
+  clearAuthToken()
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('refreshToken')
+    } catch (_) {}
+  }
 }
 
 export function isAuthenticated(): boolean {
-  if (typeof window === 'undefined') return false
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return false
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))
@@ -65,8 +72,7 @@ export function isAuthenticated(): boolean {
 }
 
 export function getCurrentUserRole(): string | null {
-  if (typeof window === 'undefined') return null
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return null
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))
@@ -77,8 +83,7 @@ export function getCurrentUserRole(): string | null {
 }
 
 export function getCurrentUserId(): string | null {
-  if (typeof window === 'undefined') return null
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return null
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))
