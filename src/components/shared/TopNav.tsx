@@ -3,11 +3,13 @@
 import React from 'react'
 import Link from 'next/link'
 import { Button, Space } from 'antd'
-import { useAuth } from '@/components/shared/AuthProvider'
+import { useSession } from '@/lib/frontend/useSession'
 
 export default function TopNav() {
-  const { accessToken, role } = useAuth()
-  const authed = !!accessToken
+  const { data, loading } = useSession()
+  if (loading) return null
+  const authed = !!data?.loggedIn
+  const role = data?.user?.role
   if (!authed) return null
 
   const isAdmin = role === 'admin' || role === 'superadmin'

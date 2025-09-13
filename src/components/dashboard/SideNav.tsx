@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Layout, Menu } from 'antd'
+import { Layout, Menu, message } from 'antd'
 import {
   HomeOutlined,
   CalendarOutlined,
@@ -13,7 +13,8 @@ import {
   ClockCircleOutlined,
   LogoutOutlined,
 } from '@ant-design/icons'
-import { useAuth } from '@/components/shared/AuthProvider'
+import { useSession } from '@/lib/frontend/useSession'
+import { mutateSession } from '@/lib/frontend/session-store'
 import { clearAuthToken } from '@/lib/frontend/auth'
 import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
@@ -29,9 +30,11 @@ export default function DashboardSideNav({
 }) {
   const [mounted, setMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { role, loading, accessToken } = useAuth()
+  const { data, loading } = useSession()
+  const role = data?.user?.role || null
   useEffect(() => {
     setMounted(true)
     const onResize = () => {
@@ -47,20 +50,23 @@ export default function DashboardSideNav({
 
   const handleLogout = useCallback(async () => {
     try {
+      if (loggingOut) return
+      setLoggingOut(true)
+      const hide = message.loading('正在退出...', 0)
       clearUserCache()
-      clearAuthToken()
+      await fetch('/api/auth/logout', { method: 'POST' })
       try {
         clearAuthToken()
-      } catch (_) {}
-      try {
-        clearStoredTokens()
-      } catch (_) {}
-      fetch('/api/auth/logout', { method: 'POST' })
+      } catch {}
+      try { await mutateSession() } catch {}
       router.push('/')
+      try { hide() } catch {}
     } catch (_) {
       router.push('/')
+    } finally {
+      setLoggingOut(false)
     }
-  }, [router])
+  }, [router, loggingOut])
 
   if (!mounted || loading) return null
 
@@ -148,7 +154,14 @@ export default function DashboardSideNav({
     ...(role === 'student' ? studentItems : []),
     ...(role === 'teacher' ? teacherItems : []),
     ...(role === 'admin' || role === 'superadmin' ? adminItems : []),
-    { key: 'logout', icon: <LogoutOutlined />, label: <span onClick={handleLogout}>登出</span> },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      disabled: loggingOut,
+      label: (
+        <span onClick={handleLogout}>{loggingOut ? '正在退出…' : '登出'}</span>
+      ),
+    },
   ]
 
   const selectedKey = items

@@ -10,7 +10,7 @@ import {
   SafetyCertificateOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import { useAuth } from '@/components/shared/AuthProvider'
+import { useSession } from '@/lib/frontend/useSession'
 import { usePathname } from 'next/navigation'
 
 const { Sider } = Layout
@@ -24,7 +24,8 @@ export default function SideNav({
 }) {
   const [mounted, setMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const { role, loading } = useAuth()
+  const { data, loading } = useSession()
+  const role = data?.user?.role || null
   useEffect(() => {
     setMounted(true)
     const onResize = () => {
