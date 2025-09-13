@@ -120,7 +120,7 @@ async function getAppointmentsHandler(request: NextRequest, context?: any) {
           teacher: { include: { user: true } },
           subject: true,
         },
-        orderBy: { scheduledTime: 'asc' },
+        orderBy: { scheduledTime: 'desc' },
         take: take + 1, // 多取一个来判断是否有下一页
         skip,
       })

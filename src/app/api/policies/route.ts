@@ -9,9 +9,42 @@ import { withSentryRoute } from '@/lib/monitoring/sentry'
 // 获取所有服务策略
 async function getPoliciesHandler(request: NextRequest, context?: any) {
   try {
-    const policies = await prisma.servicePolicy.findMany({
-      orderBy: { level: 'asc' },
-    })
+    // 如果策略表为空，初始化默认策略
+    let policies = await prisma.servicePolicy.findMany({ orderBy: { level: 'asc' } })
+    if (!policies || policies.length === 0) {
+      const defaults = [
+        {
+          level: 'level1',
+          monthlyAutoApprove: 2,
+          priority: false,
+          expireHours: 48,
+          reminderOffsets: '24,1',
+        },
+        {
+          level: 'level2',
+          monthlyAutoApprove: 0,
+          priority: false,
+          expireHours: 48,
+          reminderOffsets: '24,1',
+        },
+        {
+          level: 'premium',
+          monthlyAutoApprove: 10000,
+          priority: true,
+          expireHours: 48,
+          reminderOffsets: '24,1',
+        },
+      ]
+      for (const p of defaults) {
+        // upsert 以避免并发初始化问题
+        await prisma.servicePolicy.upsert({
+          where: { level: p.level },
+          update: p,
+          create: p,
+        })
+      }
+      policies = await prisma.servicePolicy.findMany({ orderBy: { level: 'asc' } })
+    }
 
     return ok({
       policies: policies.map((policy) => ({

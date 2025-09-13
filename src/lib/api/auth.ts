@@ -4,11 +4,9 @@ import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
 
 export async function refreshAccessToken(refreshToken?: string): Promise<string | null> {
   try {
-    const response = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
-    })
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (refreshToken) headers['refresh-token'] = refreshToken
+    const response = await fetch('/api/auth/refresh', { method: 'POST', headers })
 
     if (response.ok) {
       const data = await response.json()
@@ -35,28 +33,16 @@ export function isTokenExpiringSoon(token: string): boolean {
 }
 
 export function getStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
-  return {
-    accessToken: getAuthToken(),
-    refreshToken: typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null,
-  }
+  // Only use in-memory access token; refresh token is HttpOnly cookie (not accessible to JS)
+  return { accessToken: getAuthToken(), refreshToken: null }
 }
 
-export function storeTokens(accessToken: string, refreshToken: string): void {
+export function storeTokens(accessToken: string): void {
   setAuthToken(accessToken)
-  if (typeof window !== 'undefined' && refreshToken) {
-    try {
-      localStorage.setItem('refreshToken', refreshToken)
-    } catch (_) {}
-  }
 }
 
 export function clearStoredTokens(): void {
   clearAuthToken()
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.removeItem('refreshToken')
-    } catch (_) {}
-  }
 }
 
 export function isAuthenticated(): boolean {

@@ -107,12 +107,6 @@ export default function AdminDashboard() {
           <Title level={3} style={{ margin: 0, fontSize: 'clamp(18px, 4vw, 22px)' }}>
             管理员控制台
           </Title>
-          <button
-            onClick={logout}
-            className="bg-red-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md hover:bg-red-700 text-sm sm:text-base"
-          >
-            登出
-          </button>
         </div>
 
         {/* 关键指标 */}

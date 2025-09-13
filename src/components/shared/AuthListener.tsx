@@ -8,7 +8,6 @@ import { useRouter, usePathname } from 'next/navigation'
 import { incr } from '@/lib/frontend/metrics'
 import {
   isAuthenticated,
-  getStoredTokens,
   refreshAccessToken,
   clearStoredTokens,
   isTokenExpiringSoon,
@@ -51,16 +50,8 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 刷新token
   const refreshTokenIfNeeded = useCallback(async () => {
-    const { refreshToken } = getStoredTokens()
-
-    if (!refreshToken) {
-      clearStoredTokens()
-      router.push('/')
-      return
-    }
-
     try {
-      const newAccessToken = await refreshAccessToken(refreshToken)
+      const newAccessToken = await refreshAccessToken()
 
       if (newAccessToken) {
         // 更新存储的token
@@ -95,11 +86,8 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 自动刷新token
   const setupTokenRefresh = useCallback(() => {
-    const { accessToken, refreshToken } = getStoredTokens()
-
-    if (!accessToken || !refreshToken) {
-      return
-    }
+    const accessToken = getAuthToken()
+    if (!accessToken) return
 
     // 检查token是否即将过期
     if (isTokenExpiringSoon(accessToken)) {

@@ -12,15 +12,17 @@ export function withAuth(
 ) {
   return async (req: NextRequest, context?: any) => {
     try {
-      const authHeader = req.headers.get('authorization')
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // Prefer HttpOnly cookie; fallback to Authorization header
+      const cookieToken = req.cookies.get('accessToken')?.value || ''
+      const authHeader = req.headers.get('authorization') || ''
+      const headerToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : ''
+      const token = cookieToken || headerToken
+      if (!token) {
         return NextResponse.json(
-          { error: 'INVALID', message: 'Missing or invalid authorization header' },
+          { error: 'INVALID', message: 'Missing credentials' },
           { status: 401 }
         )
       }
-
-      const token = authHeader.substring(7)
       const payload = verifyAccessToken(token)
 
       if (!payload) {

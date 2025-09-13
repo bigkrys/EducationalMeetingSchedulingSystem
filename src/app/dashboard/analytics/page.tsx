@@ -165,12 +165,6 @@ export default function TeacherAnalyticsPage() {
             </Card>
           </Col>
         </Row>
-
-        <div className="text-center">
-          <Link href="/dashboard">
-            <Typography.Link>返回控制台</Typography.Link>
-          </Link>
-        </div>
       </Space>
     </div>
   )

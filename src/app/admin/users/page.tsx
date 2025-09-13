@@ -199,9 +199,6 @@ export default function AdminUsers() {
             用户管理
           </Title>
           <Space>
-            <Link href="/admin">
-              <Button>返回控制台</Button>
-            </Link>
             <Button type="primary" onClick={() => setCreateOpen(true)}>
               新建用户
             </Button>

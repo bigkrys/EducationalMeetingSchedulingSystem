@@ -20,6 +20,7 @@ import * as Sentry from '@sentry/nextjs'
 import dayjs from 'dayjs'
 import { incr } from '@/lib/frontend/metrics'
 import { getAuthToken } from '@/lib/frontend/auth'
+import { getCurrentUserId } from '@/lib/api/auth'
 
 const { Option } = Select
 
@@ -182,8 +183,11 @@ export default function StudentBookingCalendar({
       setLoading(true)
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0
 
+      const userId = getCurrentUserId() || ''
       const { res: response, json: data } = await fetchWithAuth(
-        `/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30`
+        `/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30&excludeUserId=${encodeURIComponent(
+          userId
+        )}`
       )
 
       if (response.ok) {
@@ -201,7 +205,7 @@ export default function StudentBookingCalendar({
         })
 
         setTimeSlots(slots)
-        // 记录已预约与候补计数（用于展示热门时段）
+        // 记录已预约与候补计数（用于展示热门时段）；服务端已排除“我的预约”
         const booked: string[] = Array.isArray(data.bookedSlots) ? data.bookedSlots : []
         const wlArr: Array<{ slot: string; count: number }> = Array.isArray(data.waitlistCount)
           ? data.waitlistCount
@@ -212,6 +216,8 @@ export default function StudentBookingCalendar({
         })
         setBookedSlots(booked)
         setWaitlistCountMap(wlMap)
+
+        // 服务端已过滤，无需再拉取本人预约进行二次过滤
         try {
           const t1 = typeof performance !== 'undefined' ? performance.now() : 0
           const dur = Math.max(0, t1 - t0)
@@ -630,6 +636,7 @@ export default function StudentBookingCalendar({
             {bookedSlots
               .slice()
               .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
+              // 服务端已排除本人预约时段
               .slice(0, 8)
               .map((iso) => {
                 const local = new Date(iso)

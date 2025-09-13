@@ -136,9 +136,6 @@ export default function PoliciesPage() {
           <Title level={3} style={{ margin: 0 }}>
             服务策略
           </Title>
-          <Link href="/admin">
-            <Button>返回控制台</Button>
-          </Link>
         </div>
 
         {loading ? (

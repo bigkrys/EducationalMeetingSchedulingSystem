@@ -1,9 +1,8 @@
 // 通用的HTTP客户端，自动添加token到请求头
 // 支持全局错误拦截和消息提示
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
-import { fetchWithAuth } from '@/lib/frontend/useFetch'
 import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
-import { storeTokens, clearStoredTokens } from '@/lib/api/auth'
+import { storeTokens, clearStoredTokens, getStoredTokens } from '@/lib/api/auth'
 export class ApiClient {
   // 全局错误处理开关
   private static globalErrorHandling = true
@@ -82,17 +81,8 @@ export class ApiClient {
     }
   }
   private static getAuthHeaders(): HeadersInit {
-    const token = getAuthToken()
-
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    }
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    return headers
+    // Cookie-based auth: no Authorization header needed
+    return { 'Content-Type': 'application/json' }
   }
 
   static async get(url: string): Promise<Response> {
@@ -131,47 +121,52 @@ export class ApiClient {
     skipErrorHandling = false
   ): Promise<Response> {
     try {
-      // 首先尝试使用 fetchWithAuth 工具（它会注入 token）
-      const { res } = await fetchWithAuth(url, options as any)
+      // Compose headers with Authorization if present
+      const headers = {
+        ...this.getAuthHeaders(),
+        ...(options.headers || {}),
+      } as HeadersInit
+
+      const init: RequestInit = { ...options, headers }
+      let res = await fetch(url, init)
 
       if (res.status === 401) {
-        // 尝试刷新逻辑：向后端请求刷新（如果后端使用 httpOnly refresh cookie 也可直接调用 /api/auth/refresh 无需 body）
+        // 尝试刷新 accessToken 并重试
         try {
+          // 仅依赖 HttpOnly refresh cookie
           const refreshResponse = await fetch('/api/auth/refresh', { method: 'POST' })
           if (refreshResponse.ok) {
             const refreshData = await refreshResponse.json().catch(() => null)
             if (refreshData?.accessToken) {
               setAuthToken(refreshData.accessToken)
-              if (refreshData.refreshToken) {
-                // 兼容老逻辑：使用集中 helper 存储 refreshToken（逐步迁移）
-                try {
-                  storeTokens(refreshData.accessToken, refreshData.refreshToken)
-                } catch (_) {}
-              }
-              // 重试原请求
-              const { res: retryRes } = await fetchWithAuth(url, options as any)
-              return retryRes
+              // 使用新 token 重试
+              const retryHeaders = {
+                ...this.getAuthHeaders(),
+                ...(options.headers || {}),
+              } as HeadersInit
+              res = await fetch(url, { ...options, headers: retryHeaders })
             }
           }
-        } catch (err) {
-          // 刷新失败
+        } catch {
+          // ignore
         }
 
-        // 刷新失败，清理并跳转登录
-        clearAuthToken()
-        try {
-          clearStoredTokens()
-        } catch (_) {}
-        this.showError('登录已过期，请重新登录')
-        if (typeof window !== 'undefined') {
-          setTimeout(() => {
-            window.location.href = '/'
-          }, 1500)
+        // 若仍未通过认证，清理并提示
+        if (res.status === 401) {
+          clearAuthToken()
+          try {
+            clearStoredTokens()
+          } catch (_) {}
+          this.showError('登录已过期，请重新登录')
+          if (typeof window !== 'undefined') {
+            setTimeout(() => {
+              window.location.href = '/'
+            }, 1500)
+          }
         }
-        return res
       }
 
-      // 处理其他HTTP错误
+      // 处理其他HTTP错误（保留响应体给调用方）
       if (!res.ok && !skipErrorHandling) {
         const clone = res.clone()
         const errorMessage = await this.parseErrorResponse(clone)

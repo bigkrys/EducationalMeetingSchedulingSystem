@@ -24,19 +24,31 @@ const postHandler = async function POST(request: NextRequest) {
       return fail('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
     }
 
-    // 设置信息 HttpOnly cookie
+    // 设置信息 HttpOnly cookie（access + refresh）
     const response = ok({
+      // 为兼容前端过渡，仍返回 body，但前端不再需要读取
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       role: result.user.role,
     })
 
-    // 设置 refresh token 为 HttpOnly cookie
+    // access token：短时效（与服务器生成的 exp 一致，大致按分钟）
+    const maxAgeAccess = 60 * 60 // 1h 作为上限；实际验证依赖 JWT exp
+    response.cookies.set('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: maxAgeAccess,
+      path: '/',
+    })
+
+    // refresh token：更长时效，旋转刷新
     response.cookies.set('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/',
     })
 
     // 记录审计日志（login 成功），后台写入，不阻塞响应

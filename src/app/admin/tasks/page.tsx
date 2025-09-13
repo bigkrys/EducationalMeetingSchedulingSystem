@@ -4,7 +4,12 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState } from 'react'
 import { Card, Typography, Button, Space, Switch, message, Modal, Table, Alert } from 'antd'
-import { ReloadOutlined, ClockCircleOutlined, BellOutlined } from '@ant-design/icons'
+import {
+  ReloadOutlined,
+  ClockCircleOutlined,
+  BellOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons'
 import Link from 'next/link'
 import { useFetch } from '@/lib/frontend/useFetch'
 
@@ -26,9 +31,6 @@ export default function AdminSystemTasks() {
           <Title level={2} style={{ margin: 0 }}>
             系统任务
           </Title>
-          <Link href="/admin">
-            <Button>返回控制台</Button>
-          </Link>
         </div>
 
         <Card>
@@ -156,6 +158,35 @@ export default function AdminSystemTasks() {
                 }}
               >
                 发送1小时提醒
+              </Button>
+
+              <Button
+                loading={running === 'expire-waitlist'}
+                icon={<DeleteOutlined />}
+                onClick={async () => {
+                  try {
+                    setRunning('expire-waitlist')
+                    const { res, json } = await fetchWithAuth('/api/admin/tasks/expire-waitlist', {
+                      method: 'POST',
+                    })
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
+                    message.success(`候补过期清理完成，处理 ${json.updated || 0}`)
+                    setModalTitle('候补过期清理结果')
+                    setSuccessIds(
+                      (json.results || [])
+                        .filter((r: any) => r.status === 'expired')
+                        .map((r: any) => r.id)
+                    )
+                    setFailedItems((json.results || []).filter((r: any) => r.error))
+                    setModalOpen(true)
+                  } catch (e) {
+                    message.error((e as Error).message)
+                  } finally {
+                    setRunning(null)
+                  }
+                }}
+              >
+                清理过期候补
               </Button>
             </Space>
           </Space>

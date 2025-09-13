@@ -1,7 +1,5 @@
 import { useCallback } from 'react'
-import { getAuthToken } from './auth'
 import { showErrorMessage } from '@/lib/api/global-error-handler'
-import router from 'next/router'
 type FetchOptions = RequestInit & { jsonBody?: any }
 
 export async function fetchWithAuth(url: string, options: FetchOptions = {}) {
@@ -10,15 +8,7 @@ export async function fetchWithAuth(url: string, options: FetchOptions = {}) {
     ...(options.headers as Record<string, string>),
   }
 
-  const token = getAuthToken()
-  if (!token) {
-    showErrorMessage('请先登录')
-    router.push('/login')
-    return { res: new Response(null, { status: 401 }), json: null }
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
+  // Cookie-based auth: no Authorization header; rely on same-origin cookies
 
   const init: RequestInit = {
     method: options.method || 'GET',

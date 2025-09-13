@@ -1,14 +1,13 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React from 'react'
 import Link from 'next/link'
 import { Button, Space } from 'antd'
-import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { useAuth } from '@/components/shared/AuthProvider'
 
 export default function TopNav() {
-  const authed = typeof window !== 'undefined' ? isAuthenticated() : false
-  const role = useMemo(() => (typeof window !== 'undefined' ? getCurrentUserRole() : null), [])
-
+  const { accessToken, role } = useAuth()
+  const authed = !!accessToken
   if (!authed) return null
 
   const isAdmin = role === 'admin' || role === 'superadmin'
@@ -33,19 +32,19 @@ export default function TopNav() {
         <Space>
           {isAdmin && (
             <>
-              <Link href="/admin">
+              <Link href="/dashboard/admin">
                 <Button type="link">管理员</Button>
               </Link>
-              <Link href="/admin/users">
+              <Link href="/dashboard/admin/users">
                 <Button type="link">用户</Button>
               </Link>
-              <Link href="/admin/policies">
+              <Link href="/dashboard/admin/policies">
                 <Button type="link">策略</Button>
               </Link>
-              <Link href="/admin/audit-logs">
+              <Link href="/dashboard/admin/audit-logs">
                 <Button type="link">审计</Button>
               </Link>
-              <Link href="/admin/tasks">
+              <Link href="/dashboard/admin/tasks">
                 <Button type="link">系统任务</Button>
               </Link>
             </>

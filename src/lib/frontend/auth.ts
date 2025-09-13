@@ -4,23 +4,15 @@ let tokenInMemory: string | null = null
 
 export function setAuthToken(token: string | null) {
   tokenInMemory = token
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('auth:token', { detail: { token } }))
+    } catch (_) {}
+  }
 }
 
 export function getAuthToken(): string | null {
   if (tokenInMemory) return tokenInMemory
-
-  // Backwards-compat: fall back to localStorage if present, but warn.
-  if (typeof window !== 'undefined') {
-    const t = localStorage.getItem('accessToken')
-    if (t) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[auth] using accessToken from localStorage — consider switching to HttpOnly secure cookies or in-memory token via setAuthToken()'
-      )
-      tokenInMemory = t
-      return t
-    }
-  }
 
   return null
 }
@@ -29,8 +21,7 @@ export function clearAuthToken() {
   tokenInMemory = null
   if (typeof window !== 'undefined') {
     try {
-      localStorage.removeItem('accessToken')
-      // keep refreshToken handling to app auth flow if desired
+      window.dispatchEvent(new CustomEvent('auth:token', { detail: { token: null } }))
     } catch (_) {}
   }
 }
