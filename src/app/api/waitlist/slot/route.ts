@@ -19,6 +19,12 @@ async function getHandler(request: NextRequest) {
 
     const slotDate = new Date(slot)
 
+    // Validate slot is a valid date
+    if (isNaN(slotDate.getTime())) {
+      logger.warn('waitlist.slot.invalid_slot', { ...getRequestMeta(request), slot })
+      return fail('slot is not a valid ISO datetime', 400, 'BAD_REQUEST')
+    }
+
     const items = await span('db waitlist.findMany', () =>
       prisma.waitlist.findMany({
         where: { teacherId, slot: slotDate },

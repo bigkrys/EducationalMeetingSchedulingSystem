@@ -14,6 +14,7 @@ const getHandler = async function GET(request: NextRequest) {
     const date = searchParams.get('date')
     const durationParam = searchParams.get('duration')
     const duration = parseInt(durationParam || '30')
+    const excludeUserId = searchParams.get('excludeUserId') || undefined
 
     // 验证 duration 为正整数
     if (!Number.isFinite(duration) || duration <= 0) {
@@ -25,7 +26,7 @@ const getHandler = async function GET(request: NextRequest) {
     }
 
     // 检查缓存
-    const cacheKey = `slots:${teacherId}:${date}:${duration}`
+    const cacheKey = `slots:${teacherId}:${date}:${duration}:exu:${excludeUserId || 'none'}`
     const cachedSlots = memoryCache.get(cacheKey)
     if (cachedSlots) {
       return ok(cachedSlots)
@@ -62,6 +63,12 @@ const getHandler = async function GET(request: NextRequest) {
           teacherId,
           scheduledTime: { gte: dayStart, lte: dayEnd },
           status: { in: ['pending', 'approved'] },
+          ...(excludeUserId
+            ? {
+                // 排除当前用户的预约（通过关联到 Student.userId）
+                student: { userId: { not: excludeUserId } },
+              }
+            : {}),
         },
         select: { scheduledTime: true },
       })

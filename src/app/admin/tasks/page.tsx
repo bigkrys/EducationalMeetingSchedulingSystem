@@ -4,12 +4,19 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState } from 'react'
 import { Card, Typography, Button, Space, Switch, message, Modal, Table, Alert } from 'antd'
-import { ReloadOutlined, ClockCircleOutlined, BellOutlined } from '@ant-design/icons'
+import {
+  ReloadOutlined,
+  ClockCircleOutlined,
+  BellOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons'
 import Link from 'next/link'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
 
 export default function AdminSystemTasks() {
+  const { fetchWithAuth } = useFetch()
   const [running, setRunning] = useState<string | null>(null)
   const [forceReset, setForceReset] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -24,9 +31,6 @@ export default function AdminSystemTasks() {
           <Title level={2} style={{ margin: 0 }}>
             系统任务
           </Title>
-          <Link href="/admin">
-            <Button>返回控制台</Button>
-          </Link>
         </div>
 
         <Card>
@@ -49,15 +53,17 @@ export default function AdminSystemTasks() {
                 onClick={async () => {
                   try {
                     setRunning('reset-quota')
-                    const token = localStorage.getItem('accessToken')
-                    const res = await fetch(`/api/admin/tasks/reset-quota?force=${forceReset}`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                    })
-                    const json = await res.json().catch(() => ({}))
-                    if (!res.ok) throw new Error(json.message || '执行失败')
-                    message.success(`配额重置完成，更新 ${json.updated || 0} 人`)
-                    setModalTitle('配额重置结果')
+                    const { res, json } = await fetchWithAuth(
+                      `/api/admin/tasks/reset-quota?force=${forceReset}`,
+                      {
+                        method: 'POST',
+                      }
+                    )
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
+                    message.success(
+                      `\u914d\u989d\u91cd\u7f6e\u5b8c\u6210\uff0c\u66f4\u65b0 ${json.updated || 0} \u4eba`
+                    )
+                    setModalTitle('\u914d\u989d\u91cd\u7f6e\u7ed3\u679c')
                     setSuccessIds(json.updatedIds || [])
                     setFailedItems(null)
                     setModalOpen(true)
@@ -77,15 +83,14 @@ export default function AdminSystemTasks() {
                 onClick={async () => {
                   try {
                     setRunning('expire-pending')
-                    const token = localStorage.getItem('accessToken')
-                    const res = await fetch('/api/admin/tasks/expire-pending', {
+                    const { res, json } = await fetchWithAuth('/api/admin/tasks/expire-pending', {
                       method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
                     })
-                    const json = await res.json().catch(() => ({}))
-                    if (!res.ok) throw new Error(json.message || '执行失败')
-                    message.success(`已过期标记完成，数量 ${json.updated || 0}`)
-                    setModalTitle('过期处理结果')
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
+                    message.success(
+                      `\u5df2\u8fc7\u671f\u6807\u8bb0\u5b8c\u6210\uff0c\u6570\u91cf ${json.updated || 0}`
+                    )
+                    setModalTitle('\u8fc7\u671f\u5904\u7406\u7ed3\u679c')
                     setSuccessIds(json.expiredIds || [])
                     setFailedItems(null)
                     setModalOpen(true)
@@ -105,19 +110,13 @@ export default function AdminSystemTasks() {
                 onClick={async () => {
                   try {
                     setRunning('remind-24')
-                    const token = localStorage.getItem('accessToken')
-                    const res = await fetch('/api/admin/tasks/remind', {
+                    const { res, json } = await fetchWithAuth('/api/admin/tasks/remind', {
                       method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({ offsetHours: 24 }),
+                      jsonBody: { offsetHours: 24 },
                     })
-                    const json = await res.json().catch(() => ({}))
-                    if (!res.ok) throw new Error(json.message || '执行失败')
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
                     message.success(
-                      `24小时提醒发送：成功 ${json.sent || 0}，失败 ${json.failed || 0}`
+                      `24\u5c0f\u65f6\u63d0\u9192\u53d1\u9001:\u6210\u529f ${json.sent || 0},\u5931\u8d25 ${json.failed || 0}`
                     )
                     setModalTitle('24小时提醒结果')
                     setSuccessIds(json.results?.successfulIds || [])
@@ -139,19 +138,13 @@ export default function AdminSystemTasks() {
                 onClick={async () => {
                   try {
                     setRunning('remind-1')
-                    const token = localStorage.getItem('accessToken')
-                    const res = await fetch('/api/admin/tasks/remind', {
+                    const { res, json } = await fetchWithAuth('/api/admin/tasks/remind', {
                       method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({ offsetHours: 1 }),
+                      jsonBody: { offsetHours: 1 },
                     })
-                    const json = await res.json().catch(() => ({}))
-                    if (!res.ok) throw new Error(json.message || '执行失败')
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
                     message.success(
-                      `1小时提醒发送：成功 ${json.sent || 0}，失败 ${json.failed || 0}`
+                      `1\u5c0f\u65f6\u63d0\u9192\u53d1\u9001:\u6210\u529f ${json.sent || 0},\u5931\u8d25 ${json.failed || 0}`
                     )
                     setModalTitle('1小时提醒结果')
                     setSuccessIds(json.results?.successfulIds || [])
@@ -165,6 +158,35 @@ export default function AdminSystemTasks() {
                 }}
               >
                 发送1小时提醒
+              </Button>
+
+              <Button
+                loading={running === 'expire-waitlist'}
+                icon={<DeleteOutlined />}
+                onClick={async () => {
+                  try {
+                    setRunning('expire-waitlist')
+                    const { res, json } = await fetchWithAuth('/api/admin/tasks/expire-waitlist', {
+                      method: 'POST',
+                    })
+                    if (!res.ok) throw new Error(json?.message || '\u6267\u884c\u5931\u8d25')
+                    message.success(`候补过期清理完成，处理 ${json.updated || 0}`)
+                    setModalTitle('候补过期清理结果')
+                    setSuccessIds(
+                      (json.results || [])
+                        .filter((r: any) => r.status === 'expired')
+                        .map((r: any) => r.id)
+                    )
+                    setFailedItems((json.results || []).filter((r: any) => r.error))
+                    setModalOpen(true)
+                  } catch (e) {
+                    message.error((e as Error).message)
+                  } finally {
+                    setRunning(null)
+                  }
+                }}
+              >
+                清理过期候补
               </Button>
             </Space>
           </Space>

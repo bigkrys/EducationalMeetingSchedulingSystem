@@ -13,7 +13,9 @@ import {
   ClockCircleOutlined,
   LogoutOutlined,
 } from '@ant-design/icons'
-import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { useAuth } from '@/components/shared/AuthProvider'
+import { clearAuthToken } from '@/lib/frontend/auth'
+import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
 import { clearUserCache } from '@/lib/api/user-service'
 const { Sider } = Layout
@@ -26,28 +28,33 @@ export default function DashboardSideNav({
   onCollapse: (c: boolean) => void
 }) {
   const [mounted, setMounted] = useState(false)
-  const [role, setRole] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const { role, loading, accessToken } = useAuth()
   useEffect(() => {
     setMounted(true)
-    if (isAuthenticated()) setRole(getCurrentUserRole())
     const onResize = () => {
       const width = typeof window !== 'undefined' ? window.innerWidth : 1200
       setIsMobile(width < 992)
     }
     onResize()
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+    }
   }, [])
 
   const handleLogout = useCallback(async () => {
     try {
       clearUserCache()
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userRole')
+      clearAuthToken()
+      try {
+        clearAuthToken()
+      } catch (_) {}
+      try {
+        clearStoredTokens()
+      } catch (_) {}
       fetch('/api/auth/logout', { method: 'POST' })
       router.push('/')
     } catch (_) {
@@ -55,7 +62,7 @@ export default function DashboardSideNav({
     }
   }, [router])
 
-  if (!mounted) return null
+  if (!mounted || loading) return null
 
   // Base items for all (student/teacher)
   const commonItems: any[] = [
@@ -103,10 +110,44 @@ export default function DashboardSideNav({
     },
   ]
 
+  const adminItems: any[] = [
+    {
+      key: '/dashboard/admin',
+      icon: <HomeOutlined />,
+      label: <Link href="/dashboard/admin">管理员</Link>,
+    },
+    {
+      key: '/dashboard/admin/users',
+      icon: <TeamOutlined />,
+      label: <Link href="/dashboard/admin/users">用户管理</Link>,
+    },
+    {
+      key: '/dashboard/admin/policies',
+      icon: <SettingOutlined />,
+      label: <Link href="/dashboard/admin/policies">服务策略</Link>,
+    },
+    {
+      key: '/dashboard/admin/audit-logs',
+      icon: <FileTextOutlined />,
+      label: <Link href="/dashboard/admin/audit-logs">审计日志</Link>,
+    },
+    {
+      key: '/dashboard/admin/tasks',
+      icon: <SettingOutlined />,
+      label: <Link href="/dashboard/admin/tasks">系统任务</Link>,
+    },
+    {
+      key: '/dashboard/admin/analytics',
+      icon: <BarChartOutlined />,
+      label: <Link href="/dashboard/admin/analytics">分析</Link>,
+    },
+  ]
+
   const items = [
     ...commonItems,
     ...(role === 'student' ? studentItems : []),
     ...(role === 'teacher' ? teacherItems : []),
+    ...(role === 'admin' || role === 'superadmin' ? adminItems : []),
     { key: 'logout', icon: <LogoutOutlined />, label: <span onClick={handleLogout}>登出</span> },
   ]
 

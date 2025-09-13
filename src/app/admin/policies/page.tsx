@@ -19,6 +19,7 @@ import {
   Divider,
 } from 'antd'
 import Link from 'next/link'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
 
@@ -34,17 +35,14 @@ interface Policy {
 }
 
 export default function PoliciesPage() {
+  const { fetchWithAuth } = useFetch()
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState<Policy[]>([])
   const [form] = Form.useForm()
   const fetchPolicies = async () => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const res = await fetch('/api/policies', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('加载策略失败')
-      const json = await res.json()
+      const { res, json } = await fetchWithAuth('/api/policies')
+      if (!res.ok) throw new Error('\u52a0\u8f7d\u7b56\u7565\u5931\u8d25')
       const list: Policy[] = json.policies || []
       setPolicies(list)
     } catch (e) {
@@ -84,16 +82,11 @@ export default function PoliciesPage() {
         reminderOffsets: String(values[`${lvl}.reminderOffsets`] ?? '24,1'),
       }))
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const res = await fetch('/api/policies', {
+      const { res } = await fetchWithAuth('/api/policies', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ policies: payload }),
+        jsonBody: { policies: payload },
       })
-      if (!res.ok) throw new Error('保存失败')
+      if (!res.ok) throw new Error('\u4fdd\u5b58\u5931\u8d25')
       message.success('策略已保存')
       fetchPolicies()
     } catch (e) {
@@ -143,9 +136,6 @@ export default function PoliciesPage() {
           <Title level={3} style={{ margin: 0 }}>
             服务策略
           </Title>
-          <Link href="/admin">
-            <Button>返回控制台</Button>
-          </Link>
         </div>
 
         {loading ? (

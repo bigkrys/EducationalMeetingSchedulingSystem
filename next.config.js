@@ -49,6 +49,14 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+
+  // 将 /admin/* 永久重定向到 /dashboard/admin/*
+  async redirects() {
+    return [
+      { source: '/admin', destination: '/dashboard/admin', permanent: true },
+      { source: '/admin/:path*', destination: '/dashboard/admin/:path*', permanent: true },
+    ]
+  },
 }
 // 使用 Sentry 的 Next.js 集成，在构建时上传 Source Maps 并绑定 Release
 // 需要环境变量：SENTRY_AUTH_TOKEN、SENTRY_ORG、SENTRY_PROJECT（仅在构建机可用）

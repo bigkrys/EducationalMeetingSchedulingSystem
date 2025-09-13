@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Card, Button, Badge, Space, Row, Col, Statistic, Alert, Spin } from 'antd'
 import {
@@ -14,6 +14,8 @@ import {
   ExclamationCircleOutlined,
   CloseCircleOutlined,
 } from '@ant-design/icons'
+import { getAuthToken, clearAuthToken } from '@/lib/frontend/auth'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 interface User {
   id: string
@@ -44,6 +46,36 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
   const [user, setUser] = useState<User | null>(initialUser || null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { fetchWithAuth } = useFetch()
+
+  const fetchUserData = useCallback(async () => {
+    try {
+      setError(null)
+
+      // 检查是否在客户端环境
+      if (typeof window === 'undefined') {
+        return
+      }
+
+      const { res: response, json: data } = await fetchWithAuth('/api/users/me')
+
+      if (response.ok) {
+        setUser(data.user)
+      } else if (response.status === 401) {
+        setError('\u767b\\u5f55\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55')
+        // clear in-memory token and navigate to login
+        clearAuthToken()
+        window.location.href = '/'
+      } else {
+        setError('\u83b7\u53d6\u7528\u6237\u4fe1\u606f\u5931\u8d25')
+      }
+    } catch (error) {
+      console.error('Failed to fetch user data:', error)
+      setError('\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5')
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchWithAuth])
 
   useEffect(() => {
     if (initialUser) {
@@ -53,48 +85,7 @@ export default function DashboardContent({ initialUser }: { initialUser?: User }
     }
 
     fetchUserData()
-  }, [initialUser])
-
-  const fetchUserData = async () => {
-    try {
-      setError(null)
-
-      // 检查是否在客户端环境
-      if (typeof window === 'undefined') {
-        return
-      }
-
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        setError('未找到登录信息，请重新登录')
-        return
-      }
-
-      const response = await fetch('/api/users/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setUser(data.user)
-      } else if (response.status === 401) {
-        setError('登录已过期，请重新登录')
-        // 清除本地存储并跳转到登录页
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('userRole')
-        window.location.href = '/'
-      } else {
-        setError('获取用户信息失败')
-      }
-    } catch (error) {
-      console.error('Failed to fetch user data:', error)
-      setError('网络错误，请重试')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [initialUser, fetchUserData])
 
   if (loading) {
     return (

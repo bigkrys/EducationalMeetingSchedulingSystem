@@ -1,15 +1,16 @@
 // Client-safe auth helpers (no server-only deps like bcrypt/prisma/crypto)
 // Keep token helpers here for client code imports.
-export async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
+
+export async function refreshAccessToken(refreshToken?: string): Promise<string | null> {
   try {
-    const response = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (refreshToken) headers['refresh-token'] = refreshToken
+    const response = await fetch('/api/auth/refresh', { method: 'POST', headers })
 
     if (response.ok) {
       const data = await response.json()
+      if (data?.accessToken) setAuthToken(data.accessToken)
       return data.accessToken
     }
     return null
@@ -32,28 +33,20 @@ export function isTokenExpiringSoon(token: string): boolean {
 }
 
 export function getStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
-  if (typeof window === 'undefined') return { accessToken: null, refreshToken: null }
-  return {
-    accessToken: localStorage.getItem('accessToken'),
-    refreshToken: localStorage.getItem('refreshToken'),
-  }
+  // Only use in-memory access token; refresh token is HttpOnly cookie (not accessible to JS)
+  return { accessToken: getAuthToken(), refreshToken: null }
 }
 
-export function storeTokens(accessToken: string, refreshToken: string): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('accessToken', accessToken)
-  localStorage.setItem('refreshToken', refreshToken)
+export function storeTokens(accessToken: string): void {
+  setAuthToken(accessToken)
 }
 
 export function clearStoredTokens(): void {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
+  clearAuthToken()
 }
 
 export function isAuthenticated(): boolean {
-  if (typeof window === 'undefined') return false
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return false
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))
@@ -65,8 +58,7 @@ export function isAuthenticated(): boolean {
 }
 
 export function getCurrentUserRole(): string | null {
-  if (typeof window === 'undefined') return null
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return null
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))
@@ -77,8 +69,7 @@ export function getCurrentUserRole(): string | null {
 }
 
 export function getCurrentUserId(): string | null {
-  if (typeof window === 'undefined') return null
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = getAuthToken()
   if (!accessToken) return null
   try {
     const decoded = JSON.parse(atob(accessToken.split('.')[1]))

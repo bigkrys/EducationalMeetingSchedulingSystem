@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PageLoader from '@/components/shared/PageLoader'
-import { isAuthenticated, getCurrentUserId } from '@/lib/api/auth'
+import { isAuthenticated, getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -27,7 +27,7 @@ export default function AuthGuard({ children, requiredRole, redirectTo = '/' }: 
 
         // 如果需要特定角色，检查角色权限
         if (requiredRole) {
-          const userRole = localStorage.getItem('userRole')
+          const userRole = getCurrentUserRole()
           if (!userRole || userRole !== requiredRole) {
             // 角色不匹配，跳转到主控制台
             router.push('/dashboard')

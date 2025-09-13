@@ -8,12 +8,12 @@ import { useRouter, usePathname } from 'next/navigation'
 import { incr } from '@/lib/frontend/metrics'
 import {
   isAuthenticated,
-  getStoredTokens,
   refreshAccessToken,
   clearStoredTokens,
   isTokenExpiringSoon,
 } from '@/lib/api/auth'
 import { initializeGlobalErrorHandler } from '@/lib/api/global-error-handler'
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
 
 interface AuthListenerProps {
   children: React.ReactNode
@@ -50,20 +50,12 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 刷新token
   const refreshTokenIfNeeded = useCallback(async () => {
-    const { refreshToken } = getStoredTokens()
-
-    if (!refreshToken) {
-      clearStoredTokens()
-      router.push('/')
-      return
-    }
-
     try {
-      const newAccessToken = await refreshAccessToken(refreshToken)
+      const newAccessToken = await refreshAccessToken()
 
       if (newAccessToken) {
         // 更新存储的token
-        localStorage.setItem('accessToken', newAccessToken)
+        setAuthToken(newAccessToken)
 
         // 直接根据新 token 安排下一次刷新（提前5分钟）
         try {
@@ -94,11 +86,8 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 自动刷新token
   const setupTokenRefresh = useCallback(() => {
-    const { accessToken, refreshToken } = getStoredTokens()
-
-    if (!accessToken || !refreshToken) {
-      return
-    }
+    const accessToken = getAuthToken()
+    if (!accessToken) return
 
     // 检查token是否即将过期
     if (isTokenExpiringSoon(accessToken)) {

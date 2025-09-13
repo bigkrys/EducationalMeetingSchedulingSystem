@@ -7,6 +7,7 @@ import { Card, Typography, Button, Table, Space, Input, DatePicker, Tag, message
 import { useRouter } from 'next/navigation'
 import dayjs, { Dayjs } from 'dayjs'
 import Link from 'next/link'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title } = Typography
 const { RangePicker } = DatePicker
@@ -24,6 +25,7 @@ interface LogRow {
 
 export default function AdminAuditLogs() {
   const router = useRouter()
+  const { fetchWithAuth } = useFetch()
   const [loading, setLoading] = useState(false)
   const [logs, setLogs] = useState<LogRow[]>([])
   const [total, setTotal] = useState(0)
@@ -41,8 +43,6 @@ export default function AdminAuditLogs() {
     from?: string
     to?: string
   }) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    if (!token) return message.error('未找到登录信息，请重新登录')
     setLoading(true)
     try {
       const qs = new URLSearchParams()
@@ -52,11 +52,8 @@ export default function AdminAuditLogs() {
       if (params?.action ?? action) qs.set('action', String(params?.action ?? action))
       if (params?.from) qs.set('from', params.from)
       if (params?.to) qs.set('to', params.to)
-      const res = await fetch(`/api/admin/audit-logs?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('加载日志失败')
-      const json = await res.json()
+      const { res, json } = await fetchWithAuth(`/api/admin/audit-logs?${qs.toString()}`)
+      if (!res.ok) throw new Error('\u52a0\u8f7d\u65e5\u5fd7\u5931\u8d25')
       setLogs(json.logs || [])
       setTotal(json.total || 0)
       setPage(json.page || 1)
@@ -95,9 +92,6 @@ export default function AdminAuditLogs() {
           <Title level={3} style={{ margin: 0 }}>
             审计日志
           </Title>
-          <Link href="/admin">
-            <Button>返回控制台</Button>
-          </Link>
         </div>
 
         <Card>

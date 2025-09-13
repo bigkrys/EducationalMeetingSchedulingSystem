@@ -5,6 +5,7 @@ import StyledComponentsRegistry from '@/components/shared/StyledComponentsRegist
 import RouteProgress from '@/components/shared/RouteProgress'
 import SentryInit from '@/components/shared/SentryInit'
 import WebVitalsReporter from '@/components/shared/WebVitalsReporter'
+import AuthProvider from '@/components/shared/AuthProvider'
 
 export const metadata: Metadata = {
   title: '教育会议调度系统',
@@ -23,7 +24,9 @@ export default function RootLayout({
           <SentryInit />
           <WebVitalsReporter />
           <RouteProgress />
-          <AuthListener>{children}</AuthListener>
+          <AuthProvider>
+            <AuthListener>{children}</AuthListener>
+          </AuthProvider>
         </StyledComponentsRegistry>
       </body>
     </html>
