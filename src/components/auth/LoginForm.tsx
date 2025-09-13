@@ -10,6 +10,7 @@ import TeacherFields from '@/components/shared/TeacherFields'
 import { showApiError, showErrorMessage } from '@/lib/api/global-error-handler'
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
 import { setAuthToken } from '@/lib/frontend/auth'
+import { mutateSession } from '@/lib/frontend/session-store'
 
 interface FormData {
   email: string
@@ -111,9 +112,14 @@ export default function LoginForm() {
             const target =
               role === 'admin' || role === 'superadmin' ? '/dashboard/admin' : '/dashboard'
 
+            // 先刷新全局会话缓存，避免跳转后读取到旧角色
+            try {
+              await mutateSession()
+            } catch {}
+
             setTimeout(() => {
               router.push(target)
-            }, 800)
+            }, 300)
           } else {
             // 注册成功，切换到登录模式
             setIsLogin(true)
