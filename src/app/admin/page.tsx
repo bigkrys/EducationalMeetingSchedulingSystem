@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import { Card, Typography, Row, Col, Statistic, Badge, Alert, Spin, Space } from 'antd'
+import { Card, Typography, Row, Col, Statistic, Badge, Alert, Spin, Space, message } from 'antd'
 import { useRouter } from 'next/navigation'
 import { BarChartOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
 import { clearUserCache } from '@/lib/api/user-service'
@@ -61,6 +61,7 @@ export default function AdminDashboard() {
   }, [fetchWithAuth])
 
   const logout = useCallback(async () => {
+    const hide = message.loading('正在退出...', 0)
     try {
       await fetchWithAuth('/api/auth/logout', { method: 'POST' })
     } catch (e) {
@@ -75,6 +76,9 @@ export default function AdminDashboard() {
     try {
       clearStoredTokens()
     } catch (_) {}
+    try {
+      hide()
+    } catch {}
     router.push('/')
   }, [router, fetchWithAuth])
 
