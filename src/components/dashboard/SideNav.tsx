@@ -58,9 +58,13 @@ export default function DashboardSideNav({
       try {
         clearAuthToken()
       } catch {}
-      try { await mutateSession() } catch {}
+      try {
+        await mutateSession()
+      } catch {}
       router.push('/')
-      try { hide() } catch {}
+      try {
+        hide()
+      } catch {}
     } catch (_) {
       router.push('/')
     } finally {
@@ -158,9 +162,7 @@ export default function DashboardSideNav({
       key: 'logout',
       icon: <LogoutOutlined />,
       disabled: loggingOut,
-      label: (
-        <span onClick={handleLogout}>{loggingOut ? '正在退出…' : '登出'}</span>
-      ),
+      label: <span onClick={handleLogout}>{loggingOut ? '正在退出…' : '登出'}</span>,
     },
   ]
 

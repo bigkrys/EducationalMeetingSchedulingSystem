@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PageLoader from '@/components/shared/PageLoader'
-import { isAuthenticated, getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -13,46 +13,32 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children, requiredRole, redirectTo = '/' }: AuthGuardProps) {
   const router = useRouter()
-  const [checking, setChecking] = useState(true)
-  const [authorized, setAuthorized] = useState(false)
+  const { data, loading } = useSession()
+
+  const loggedIn = !!data?.loggedIn
+  const role = data?.user?.role as 'student' | 'teacher' | 'admin' | 'superadmin' | undefined
+  const roleOk =
+    !requiredRole || role === requiredRole || (requiredRole === 'admin' && role === 'superadmin')
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // 检查基本认证状态
-        if (!isAuthenticated()) {
-          router.push(redirectTo)
-          return
-        }
-
-        // 如果需要特定角色，检查角色权限
-        if (requiredRole) {
-          const userRole = getCurrentUserRole()
-          if (!userRole || userRole !== requiredRole) {
-            // 角色不匹配，跳转到主控制台
-            router.push('/dashboard')
-            return
-          }
-        }
-
-        setAuthorized(true)
-      } catch (error) {
-        console.error('Auth check failed:', error)
-        router.push(redirectTo)
-      } finally {
-        setChecking(false)
-      }
+    if (loading) return
+    if (!loggedIn) {
+      router.replace(redirectTo)
+      return
     }
+    if (!roleOk) {
+      router.replace('/dashboard')
+    }
+  }, [loading, loggedIn, roleOk, router, redirectTo])
 
-    checkAuth()
-  }, [router, requiredRole, redirectTo])
-
-  if (checking) {
+  if (loading) {
     return <PageLoader message="正在验证权限" description="请稍候，正在检查您的访问权限..." />
   }
-
-  if (!authorized) {
-    return <PageLoader message="重定向中" description="正在跳转到适当的页面..." />
+  if (!loggedIn) {
+    return <PageLoader message="未登录" description="正在跳转到登录页面" />
+  }
+  if (!roleOk) {
+    return <PageLoader message="权限不足" description="正在跳转到控制台" />
   }
 
   return <>{children}</>
