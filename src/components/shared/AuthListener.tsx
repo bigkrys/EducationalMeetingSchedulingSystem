@@ -8,12 +8,13 @@ import { useRouter, usePathname } from 'next/navigation'
 import { incr } from '@/lib/frontend/metrics'
 import {
   isAuthenticated,
-  getStoredTokens,
   refreshAccessToken,
   clearStoredTokens,
   isTokenExpiringSoon,
 } from '@/lib/api/auth'
 import { initializeGlobalErrorHandler } from '@/lib/api/global-error-handler'
+import { getAuthToken, setAuthToken, clearAuthToken } from '@/lib/frontend/auth'
+import { mutateSession } from '@/lib/frontend/session-store'
 
 interface AuthListenerProps {
   children: React.ReactNode
@@ -39,10 +40,12 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
     // 设置新的活动超时（15分钟无操作后跳转登录）
     activityTimeoutRef.current = setTimeout(
       () => {
-        if (isAuthenticated()) {
+        // 被动清理，不做导航；由页面守卫决定跳转
+        try {
           clearStoredTokens()
-          router.push('/')
-        }
+          clearAuthToken()
+          void mutateSession()
+        } catch {}
       },
       15 * 60 * 1000
     ) // 15分钟
@@ -50,20 +53,12 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 刷新token
   const refreshTokenIfNeeded = useCallback(async () => {
-    const { refreshToken } = getStoredTokens()
-
-    if (!refreshToken) {
-      clearStoredTokens()
-      router.push('/')
-      return
-    }
-
     try {
-      const newAccessToken = await refreshAccessToken(refreshToken)
+      const newAccessToken = await refreshAccessToken()
 
       if (newAccessToken) {
         // 更新存储的token
-        localStorage.setItem('accessToken', newAccessToken)
+        setAuthToken(newAccessToken)
 
         // 直接根据新 token 安排下一次刷新（提前5分钟）
         try {
@@ -81,24 +76,27 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
           console.error('Failed to parse token after refresh:', err)
         }
       } else {
-        // 刷新失败，清除token并跳转登录
+        // 刷新失败，清除本地态并更新会话，交由守卫处理
         clearStoredTokens()
-        router.push('/')
+        clearAuthToken()
+        try {
+          await mutateSession()
+        } catch {}
       }
     } catch (error) {
       console.error('Token refresh failed:', error)
       clearStoredTokens()
-      router.push('/')
+      clearAuthToken()
+      try {
+        await mutateSession()
+      } catch {}
     }
   }, [router])
 
   // 自动刷新token
   const setupTokenRefresh = useCallback(() => {
-    const { accessToken, refreshToken } = getStoredTokens()
-
-    if (!accessToken || !refreshToken) {
-      return
-    }
+    const accessToken = getAuthToken()
+    if (!accessToken) return
 
     // 检查token是否即将过期
     if (isTokenExpiringSoon(accessToken)) {
@@ -205,9 +203,8 @@ const AuthListener: React.FC<AuthListenerProps> = ({ children }) => {
 
   // 监听路由变化，重新设置token刷新
   useEffect(() => {
-    if (typeof window !== 'undefined' && isAuthenticated()) {
-      setupTokenRefresh()
-    }
+    // 仅在有内存 token 时设置刷新；无内存 token 时由页面守卫与会话源接管
+    if (typeof window !== 'undefined' && getAuthToken()) setupTokenRefresh()
     // 记录页面浏览
     if (typeof window !== 'undefined') {
       try {

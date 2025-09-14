@@ -16,14 +16,16 @@ async function postHandler(request: NextRequest): Promise<NextResponse> {
 
     const response = new NextResponse(null, { status: 204 })
 
-    // 清除 cookie
+    // 清除 cookies（access + refresh）
+    response.cookies.delete('accessToken')
     response.cookies.delete('refreshToken')
 
     return response
   } catch (error) {
     console.error('Logout error:', error)
-    // 即使出错也要清除 cookie
+    // 即使出错也要清除 cookies
     const response = new NextResponse(null, { status: 204 })
+    response.cookies.delete('accessToken')
     response.cookies.delete('refreshToken')
     return response
   }

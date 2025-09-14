@@ -5,7 +5,8 @@ import { Card, Button, DatePicker, Input, Table, Popconfirm, Space } from 'antd'
 import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import { getCurrentUserId } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
+import { useFetch } from '@/lib/frontend/useFetch'
 import dayjs from 'dayjs'
 import { incr } from '@/lib/frontend/metrics'
 
@@ -34,53 +35,45 @@ export default function BlockedTimes() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [teacherId, setTeacherId] = useState<string>('')
   const router = useRouter()
+  const { fetchWithAuth } = useFetch()
+  const { data: session, loading: sessionLoading } = useSession()
 
   const fetchUserInfo = useCallback(async () => {
     try {
-      const userId = getCurrentUserId()
-      if (!userId) {
-        showErrorMessage('请先登录')
-        router.push('/')
-        return
-      }
-
+      if (!session?.loggedIn) return
       const me = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
       if (me?.teacher?.id) {
         setTeacherId(me.teacher.id)
       } else {
         showErrorMessage('用户不是教师')
-        router.push('/dashboard')
       }
     } catch (error) {
       console.error('获取用户信息失败:', error)
     }
-  }, [router])
+  }, [session])
 
   const fetchBlockedTimes = useCallback(async () => {
     if (!teacherId) return
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/blocked-times?teacherId=${teacherId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      })
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/blocked-times?teacherId=${teacherId}`
+      )
 
       if (response.ok) {
-        const data = await response.json()
-        setBlockedTimes(data.blockedTimes || [])
+        setBlockedTimes(data?.blockedTimes || [])
       }
     } catch (error) {
       showErrorMessage('获取阻塞时间失败')
     } finally {
       setLoading(false)
     }
-  }, [teacherId])
+  }, [teacherId, fetchWithAuth])
 
   useEffect(() => {
-    fetchUserInfo()
-  }, [fetchUserInfo])
+    if (!sessionLoading) fetchUserInfo()
+  }, [fetchUserInfo, sessionLoading])
 
   useEffect(() => {
     fetchBlockedTimes()
@@ -103,13 +96,9 @@ export default function BlockedTimes() {
         reason: formData.reason,
       }
 
-      const response = await fetch('/api/blocked-times', {
+      const { res: response, json: data } = await fetchWithAuth('/api/blocked-times', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify(payload),
+        jsonBody: payload,
       })
 
       if (response.ok) {
@@ -119,7 +108,7 @@ export default function BlockedTimes() {
         setFormData({ startTime: '', endTime: '', reason: '' })
         fetchBlockedTimes()
       } else {
-        const errorData = await response.json()
+        const errorData = data ?? { message: '未知错误' }
         showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
       }
     } catch (error) {
@@ -133,18 +122,15 @@ export default function BlockedTimes() {
     if (deletingId) return
     setDeletingId(id)
     try {
-      const response = await fetch(`/api/blocked-times?id=${id}`, {
+      const { res: response, json: data } = await fetchWithAuth(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
       })
 
       if (response.ok) {
         showSuccessMessage('删除成功')
         fetchBlockedTimes()
       } else {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = data ?? {}
         showApiError({
           code: (errorData as any)?.code ?? (errorData as any)?.error,
           message: (errorData as any)?.message,

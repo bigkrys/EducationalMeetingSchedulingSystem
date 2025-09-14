@@ -11,6 +11,7 @@ import {
 import { PlusOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { api } from '@/lib/api/http-client'
+import { useFetch } from '@/lib/frontend/useFetch'
 import { createUtcDateTime } from '@/lib/utils/timezone-client'
 import AddAvailabilityModal from './AddAvailabilityModal'
 import AddBlockedTimeModal from './AddBlockedTimeModal'
@@ -56,25 +57,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
   const [conflictsVisible, setConflictsVisible] = useState(false)
   const [conflicts, setConflicts] = useState<any[]>([])
   // 获取可用性数据
+  const { fetchWithAuth } = useFetch()
+
   const fetchAvailability = React.useCallback(async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
-
-      const response = await fetch(`/api/teachers/${teacherId}/availability`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/teachers/${teacherId}/availability`
+      )
 
       if (response.ok) {
-        const data = await response.json()
-
-        // 处理不同的API返回格式
+        // data is the already-parsed json
         let availabilityArray = []
         if (Array.isArray(data)) {
           // 直接返回数组的情况
@@ -111,27 +104,17 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     } finally {
       setLoading(false)
     }
-  }, [teacherId])
+  }, [teacherId, fetchWithAuth])
 
   // 获取阻塞时间数据
   const fetchBlockedTimes = React.useCallback(async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        console.error('未登录')
-        return
-      }
-
-      const response = await fetch(`/api/blocked-times?teacherId=${teacherId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/blocked-times?teacherId=${teacherId}`
+      )
 
       if (response.ok) {
-        const data = await response.json()
-
-        // 处理不同的API返回格式
+        // data is parsed JSON
         let blockedTimesArray = []
         if (Array.isArray(data)) {
           // 直接返回数组的情况
@@ -156,7 +139,7 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     } catch (error) {
       showErrorMessage('获取阻塞时间失败')
     }
-  }, [teacherId])
+  }, [teacherId, fetchWithAuth])
 
   useEffect(() => {
     fetchAvailability()
@@ -176,13 +159,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     if (submittingAdd) return
     setSubmittingAdd(true)
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        setSubmittingAdd(false)
-        return
-      }
-
       // 处理多个时间段
       if (values.timeSlots && Array.isArray(values.timeSlots)) {
         // 批量添加多个时间段
@@ -199,11 +175,14 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             isRecurring: values.isRecurring,
           }
 
-          // 使用新的HTTP客户端，它会自动处理错误
-          const response = await api.post(
+          const { res: response, json: result } = await fetchWithAuth(
             `/api/teachers/${teacherId}/availability`,
-            availabilityData
+            {
+              method: 'POST',
+              jsonBody: availabilityData,
+            }
           )
+
           if (!response.ok) {
             // 安全解析响应体（可能不是 JSON）
             let errorData: any = null
@@ -226,7 +205,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
             throw new Error(message)
           }
 
-          const result = await response.json()
           // 如果后端返回与 blockedTime 的 warnings，提示用户（但仍视为成功）
           if (
             result &&
@@ -263,31 +241,23 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     if (deletingId) return
     setDeletingId(id)
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        setDeletingId(null)
-        return
-      }
       setLoading(true)
-
-      const response = await fetch(`/api/teachers/${teacherId}/availability/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const { res: response, json } = await fetchWithAuth(
+        `/api/teachers/${teacherId}/availability/${id}`,
+        {
+          method: 'DELETE',
+        }
+      )
       setLoading(false)
       if (response.ok) {
-        showSuccessMessage('可用性已删除')
+        showSuccessMessage('\u53ef\u7528\u6027\u5df2\u5220\u9664')
         fetchAvailability()
         onRefresh?.()
       } else {
-        const errorData = await response.json()
-        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
+        showApiError({ code: json?.code ?? json?.error, message: json?.message })
       }
     } catch (error) {
-      showErrorMessage('删除失败')
+      showErrorMessage('\u5220\u9664\u5931\u8d25')
     } finally {
       setDeletingId(null)
       setLoading(false)
@@ -301,13 +271,6 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
     }
     setSubmittingBlock(true)
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        setSubmittingBlock(false)
-        return
-      }
-
       const timeRange = values?.timeRange
       if (!Array.isArray(timeRange) || timeRange.length < 2 || !timeRange[0] || !timeRange[1]) {
         showErrorMessage('请选择开始和结束时间')
@@ -335,17 +298,12 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
 
       setLoading(true)
 
-      const response = await fetch('/api/blocked-times', {
+      const { res: response, json: result } = await fetchWithAuth('/api/blocked-times', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(blockedTimeData),
+        jsonBody: blockedTimeData,
       })
       setLoading(false)
       if (response.ok) {
-        const result = await response.json()
         // 如果后端返回 availabilityConflicts，提示用户但仍认为创建成功
         if (
           result &&
@@ -390,25 +348,15 @@ const TeacherAvailabilityCalendar: React.FC<TeacherAvailabilityCalendarProps> = 
   // 删除阻塞时间
   const handleDeleteBlockedTime = async (id: string) => {
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
-
-      const response = await fetch(`/api/blocked-times?id=${id}`, {
+      const { res: response, json } = await fetchWithAuth(`/api/blocked-times?id=${id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
 
       if (response.ok) {
-        showSuccessMessage('阻塞时间已删除')
+        showSuccessMessage('\u963b\u585e\u65f6\u95f4\u5df2\u5220\u9664')
         fetchBlockedTimes()
       } else {
-        const errorData = await response.json()
-        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
+        showApiError({ code: json?.code ?? json?.error, message: json?.message })
       }
     } catch (error) {
       showErrorMessage('删除失败')

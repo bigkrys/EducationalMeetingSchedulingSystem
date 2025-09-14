@@ -22,16 +22,37 @@ async function handler(request: NextRequest) {
       'no_show',
       'expired',
     ] as const
+    async function retry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 400): Promise<T> {
+      let lastErr: any
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn()
+        } catch (e: any) {
+          lastErr = e
+          if (e?.code === 'P1001' || /Can't reach database server/i.test(String(e))) {
+            if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs))
+            continue
+          }
+          break
+        }
+      }
+      throw lastErr
+    }
+
     const statusCounts = Object.fromEntries(
       await Promise.all(
         statuses.map(async (s) => [
           s,
-          await prisma.appointment.count({ where: { createdAt: { gte: since }, status: s } }),
+          await retry(() =>
+            prisma.appointment.count({ where: { createdAt: { gte: since }, status: s } })
+          ),
         ])
       )
     ) as Record<(typeof statuses)[number], number>
 
-    const total = await prisma.appointment.count({ where: { createdAt: { gte: since } } })
+    const total = await retry(() =>
+      prisma.appointment.count({ where: { createdAt: { gte: since } } })
+    )
 
     const approved = statusCounts.approved || 0
     const rejected = statusCounts.rejected || 0
@@ -44,12 +65,14 @@ async function handler(request: NextRequest) {
     const noShowRate = noShowBase > 0 ? noShow / noShowBase : 0
 
     // 平均审批时长（分钟）
-    const approvedApts = await prisma.appointment.findMany({
-      where: { approvedAt: { not: null }, createdAt: { gte: since } },
-      select: { createdAt: true, approvedAt: true },
-      take: 2000,
-      orderBy: { createdAt: 'desc' },
-    })
+    const approvedApts = await retry(() =>
+      prisma.appointment.findMany({
+        where: { approvedAt: { not: null }, createdAt: { gte: since } },
+        select: { createdAt: true, approvedAt: true },
+        take: 2000,
+        orderBy: { createdAt: 'desc' },
+      })
+    )
     const avgApprovalMinutes = approvedApts.length
       ? Math.round(
           approvedApts
@@ -59,17 +82,21 @@ async function handler(request: NextRequest) {
       : 0
 
     // 按教师聚合（最近周期）
-    const perTeacher = await prisma.appointment.groupBy({
-      by: ['teacherId', 'status'],
-      where: { createdAt: { gte: since } },
-      _count: { _all: true },
-    })
+    const perTeacher = await retry(() =>
+      prisma.appointment.groupBy({
+        by: ['teacherId', 'status'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      })
+    )
     // 拼接教师名称
     const teacherIds = Array.from(new Set(perTeacher.map((x) => x.teacherId)))
-    const teachers = await prisma.teacher.findMany({
-      where: { id: { in: teacherIds } },
-      include: { user: { select: { name: true } } },
-    })
+    const teachers = await retry(() =>
+      prisma.teacher.findMany({
+        where: { id: { in: teacherIds } },
+        include: { user: { select: { name: true } } },
+      })
+    )
     const teacherNameMap = Object.fromEntries(teachers.map((t) => [t.id, t.user.name])) as Record<
       string,
       string

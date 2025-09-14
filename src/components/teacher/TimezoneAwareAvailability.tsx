@@ -6,6 +6,7 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import { createUtcDateTime, getUserTimezone, getTimezoneInfo } from '@/lib/utils/timezone-client'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -42,6 +43,7 @@ export default function TimezoneAwareAvailability({
     isRecurring: true,
   })
 
+  const { fetchWithAuth } = useFetch()
   const timezoneInfo = getTimezoneInfo()
 
   // 日期选项
@@ -166,18 +168,16 @@ export default function TimezoneAwareAvailability({
 
       // console.debug('提交的可用性数据:', submitData)
 
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/teachers/${teacherId}/availability-utc`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(submitData),
-      })
+      const { res: response, json } = await fetchWithAuth(
+        `/api/teachers/${teacherId}/availability-utc`,
+        {
+          method: 'PUT',
+          jsonBody: submitData,
+        }
+      )
 
       if (response.ok) {
-        const result = await response.json()
+        const result = json
         showSuccessMessage('可用时间设置成功')
 
         // 显示设置的时间信息
@@ -191,7 +191,7 @@ export default function TimezoneAwareAvailability({
 
         onSuccess?.()
       } else {
-        const error = await response.json()
+        const error = json
         if (response.status === 409) {
           setConflicts(Array.isArray(error?.conflicts) ? error.conflicts : [])
           setConflictsVisible(true)

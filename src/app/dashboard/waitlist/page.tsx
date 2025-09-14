@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { fetchWithAuth } from '@/lib/frontend/useFetch'
 import {
   Card,
   Typography,
@@ -18,19 +19,12 @@ import {
   Modal,
 } from 'antd'
 import dayjs from 'dayjs'
-import Link from 'next/link'
 import * as Sentry from '@sentry/nextjs'
 import { incr } from '@/lib/frontend/metrics'
 
 const { Title, Text } = Typography
 
 export default function WaitlistPage() {
-  const [token, setToken] = useState<string | null>(null)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(localStorage.getItem('accessToken'))
-    }
-  }, [])
   const [me, setMe] = useState<any>(null)
   const [teachers, setTeachers] = useState<any[]>([])
   const [myWaitlist, setMyWaitlist] = useState<any[]>([])
@@ -48,11 +42,12 @@ export default function WaitlistPage() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch('/api/teachers', { headers: { Authorization: `Bearer ${token}` } })
+      const { res, json } = await fetchWithAuth('/api/teachers')
       if (!res.ok) return
-      const json = await res.json()
-      setTeachers(json.teachers || [])
-    } catch {}
+      setTeachers(json?.teachers || [])
+    } catch (e) {
+      // ignore
+    }
   }
 
   const fetchMyWaitlist = async () => {
@@ -62,10 +57,8 @@ export default function WaitlistPage() {
       setMe(meJson as any)
       const sid = (meJson as any)?.student?.id
       if (!sid) return
-      const res = await fetch(`/api/waitlist?studentId=${sid}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const json = await res.json()
+      const { res, json } = await fetchWithAuth(`/api/waitlist?studentId=${sid}`)
+      if (!res.ok) return
       setMyWaitlist(json.items || [])
     } catch (e) {
       // ignore
@@ -96,11 +89,9 @@ export default function WaitlistPage() {
   const fetchTeacherSlots = async () => {
     try {
       if (!me?.teacher?.id || !teacherDate) return
-      const res = await fetch(
-        `/api/slots?teacherId=${me.teacher.id}&date=${teacherDate.format('YYYY-MM-DD')}&duration=30`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const { res, json } = await fetchWithAuth(
+        `/api/slots?teacherId=${me.teacher.id}&date=${teacherDate.format('YYYY-MM-DD')}&duration=30`
       )
-      const json = await res.json().catch(() => ({}))
       if (!res.ok) return
       const booked: string[] = Array.isArray(json.bookedSlots) ? json.bookedSlots : []
       const wlArr: Array<{ slot: string; count: number }> = Array.isArray(json.waitlistCount)
@@ -122,11 +113,9 @@ export default function WaitlistPage() {
       try {
         incr('biz.waitlist.teacher.open_slot', 1)
       } catch {}
-      const res = await fetch(
-        `/api/waitlist/slot?teacherId=${me.teacher.id}&slot=${encodeURIComponent(slotIso)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const { res, json } = await fetchWithAuth(
+        `/api/waitlist/slot?teacherId=${me.teacher.id}&slot=${encodeURIComponent(slotIso)}`
       )
-      const json = await res.json().catch(() => ({}))
       if (!res.ok) return
       setWlModal({ open: true, slot: slotIso, items: json.waitlist || [] })
     } catch {}
@@ -138,12 +127,10 @@ export default function WaitlistPage() {
       try {
         incr('biz.waitlist.teacher.clear_slot', 1)
       } catch {}
-      const res = await fetch('/api/waitlist/cleanup', {
+      const { res, json } = await fetchWithAuth('/api/waitlist/cleanup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ teacherId: me.teacher.id, slot: wlModal.slot }),
+        jsonBody: { teacherId: me.teacher.id, slot: wlModal.slot },
       })
-      const json = await res.json().catch(() => ({}))
       if (!res.ok) return message.error(json?.message || '清空失败')
       message.success(`已清空候补（移除 ${json.removed || 0} 人）`)
       // refresh
@@ -157,12 +144,10 @@ export default function WaitlistPage() {
   const clearSlotDirect = async (slotIso: string) => {
     try {
       if (!me?.teacher?.id) return
-      const res = await fetch('/api/waitlist/cleanup', {
+      const { res, json } = await fetchWithAuth('/api/waitlist/cleanup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ teacherId: me.teacher.id, slot: slotIso }),
+        jsonBody: { teacherId: me.teacher.id, slot: slotIso },
       })
-      const json = await res.json().catch(() => ({}))
       if (!res.ok) return message.error(json?.message || '清空失败')
       message.success(`已清空候补（移除 ${json.removed || 0} 人）`)
       await fetchTeacherSlots()
@@ -183,19 +168,17 @@ export default function WaitlistPage() {
       if (!sid) return message.error('仅学生可加入候补')
 
       const slot = dayjs(date.format('YYYY-MM-DD') + ' ' + time.format('HH:mm')).toISOString()
-      const res = await fetch('/api/waitlist', {
+      const { res, json } = await fetchWithAuth('/api/waitlist', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+        jsonBody: {
           teacherId,
           date: date.format('YYYY-MM-DD'),
           slot,
           studentId: sid,
           subject: 'N/A',
-        }),
+        },
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.message || '加入候补失败')
+      if (!res.ok) throw new Error(json?.message || '加入候补失败')
       const pos = typeof json.position === 'number' ? json.position : undefined
       message.success(pos ? `已加入候补（当前排位第 ${pos} 位）` : '已加入候补')
       fetchMyWaitlist()
@@ -215,13 +198,11 @@ export default function WaitlistPage() {
       const meJson = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
       const sid = (meJson as any)?.student?.id
       if (!sid) return
-      const res = await fetch('/api/waitlist', {
+      const { res, json } = await fetchWithAuth('/api/waitlist', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: row.id, studentId: sid }),
+        jsonBody: { id: row.id, studentId: sid },
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.message || '移除失败')
+      if (!res.ok) throw new Error(json?.message || '移除失败')
       message.success('已移除候补')
       fetchMyWaitlist()
     } catch (e) {
@@ -253,7 +234,12 @@ export default function WaitlistPage() {
                 />
               </Col>
               <Col xs={12} md={8}>
-                <DatePicker style={{ width: '100%' }} value={date} onChange={setDate as any} />
+                <DatePicker
+                  minDate={dayjs().startOf('day')}
+                  style={{ width: '100%' }}
+                  value={date}
+                  onChange={setDate as any}
+                />
               </Col>
               <Col xs={12} md={8}>
                 <TimePicker

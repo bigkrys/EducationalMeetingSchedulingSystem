@@ -6,6 +6,25 @@ import { ok, fail } from '@/lib/api/response'
 import { logger, getRequestMeta } from '@/lib/logger'
 import { ApiErrorCode as E } from '@/lib/api/errors'
 import { withSentryRoute } from '@/lib/monitoring/sentry'
+import { hashPassword } from '@/lib/api/auth.server'
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 500): Promise<T> {
+  let lastErr: any
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (e: any) {
+      lastErr = e
+      // Prisma P1001: Can't reach database server — transient, retry
+      if (e?.code === 'P1001' || /Can't reach database server/i.test(String(e))) {
+        if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs))
+        continue
+      }
+      break
+    }
+  }
+  throw lastErr
+}
 
 async function getUsersHandler(request: NextRequest, context?: any) {
   try {
@@ -68,7 +87,7 @@ async function getUsersHandler(request: NextRequest, context?: any) {
 
 async function createUserHandler(request: NextRequest, context?: any) {
   try {
-    const body = await request.json()
+    const body = (request as any).validatedBody ?? (await request.json().catch(() => ({})))
     const { email, name, role, password } = body
     const reqUser = (request as any).user as { role?: string } | undefined
 
@@ -85,44 +104,45 @@ async function createUserHandler(request: NextRequest, context?: any) {
     }
 
     // 检查邮箱是否已存在
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    })
+    const existingUser = await withRetry(() => prisma.user.findUnique({ where: { email } }))
 
     if (existingUser) {
       return fail('Email already registered', 409, 'EMAIL_EXISTS')
     }
 
-    // 创建用户
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        role,
-        passwordHash: password, // 注意：实际应该哈希密码
-        status: 'active',
-      },
-    })
-
-    // 根据角色创建相应的记录
-    if (role === 'student') {
-      await prisma.student.create({
-        data: {
-          userId: user.id,
-          serviceLevel: 'level1',
-          monthlyMeetingsUsed: 0,
-          lastQuotaReset: new Date(),
-        },
+    const user = await withRetry(async () =>
+      prisma.$transaction(async (tx) => {
+        const pwdHash = await hashPassword(password)
+        const created = await tx.user.create({
+          data: {
+            email,
+            name,
+            role,
+            passwordHash: pwdHash,
+            status: 'active',
+          },
+        })
+        if (role === 'student') {
+          await tx.student.create({
+            data: {
+              userId: created.id,
+              serviceLevel: 'level1',
+              monthlyMeetingsUsed: 0,
+              lastQuotaReset: new Date(),
+            },
+          })
+        } else if (role === 'teacher') {
+          await tx.teacher.create({
+            data: {
+              userId: created.id,
+              maxDailyMeetings: 6,
+              bufferMinutes: 15,
+            },
+          })
+        }
+        return created
       })
-    } else if (role === 'teacher') {
-      await prisma.teacher.create({
-        data: {
-          userId: user.id,
-          maxDailyMeetings: 6,
-          bufferMinutes: 15,
-        },
-      })
-    }
+    )
 
     return ok(
       {
@@ -131,18 +151,25 @@ async function createUserHandler(request: NextRequest, context?: any) {
       },
       { status: 201 }
     )
-  } catch (error) {
+  } catch (error: any) {
     logger.error('admin.users.create.exception', {
       ...getRequestMeta(request),
       error: String(error),
     })
+    // 常见冲突/数据库不可达分情况返回
+    if (error?.code === 'P2002') {
+      return fail('Email already registered', 409, 'EMAIL_EXISTS')
+    }
+    if (error?.code === 'P1001' || /Can't reach database server/i.test(String(error))) {
+      return fail('Database is unreachable. Please try again later.', 503, 'DB_UNAVAILABLE')
+    }
     return fail('Failed to create user', 500, E.INTERNAL_ERROR)
   }
 }
 
 async function updateUserHandler(request: NextRequest, context?: any) {
   try {
-    const body = await request.json()
+    const body = (request as any).validatedBody ?? (await request.json().catch(() => ({})))
     const { userId, updates } = body
     const reqUser = (request as any).user as { role?: string } | undefined
 

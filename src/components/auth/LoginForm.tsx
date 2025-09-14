@@ -9,6 +9,8 @@ import StudentFields from '@/components/shared/StudentFields'
 import TeacherFields from '@/components/shared/TeacherFields'
 import { showApiError, showErrorMessage } from '@/lib/api/global-error-handler'
 import { getFriendlyErrorMessage } from '@/lib/frontend/error-messages'
+import { setAuthToken } from '@/lib/frontend/auth'
+import { mutateSession } from '@/lib/frontend/session-store'
 
 interface FormData {
   email: string
@@ -101,19 +103,23 @@ export default function LoginForm() {
           const data = await response.json()
 
           if (isLogin) {
-            // 登录成功，存储 token
-            localStorage.setItem('accessToken', data.accessToken)
-            localStorage.setItem('refreshToken', data.refreshToken)
-            localStorage.setItem('userRole', data.role)
-
-            // 显示跳转状态
+            // 登录成功：不在前端持久存 token，凭 HttpOnly cookie；触发一次页面跳转/刷新
             setLoading(false)
             setRedirecting(true)
 
-            // 短暂延迟后跳转，让用户看到成功反馈
+            // 管理员/超管跳转到管理控制台，其余跳到用户控制台
+            const role: string | undefined = data?.role
+            const target =
+              role === 'admin' || role === 'superadmin' ? '/dashboard/admin' : '/dashboard'
+
+            // 先刷新全局会话缓存，避免跳转后读取到旧角色
+            try {
+              await mutateSession()
+            } catch {}
+
             setTimeout(() => {
-              router.push('/dashboard')
-            }, 800)
+              router.push(target)
+            }, 300)
           } else {
             // 注册成功，切换到登录模式
             setIsLogin(true)
@@ -248,7 +254,7 @@ export default function LoginForm() {
             }}
             required
             placeholder="请输入密码（8位以上，必须包含字母）"
-            className="w-full px-3 py-2 border borsder-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           {passwordError && <span className="text-red-500 text-sm mt-1">{passwordError}</span>}
         </div>

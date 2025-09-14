@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useFetch } from '@/lib/frontend/useFetch'
 import { Card, Button, Space, DatePicker, Modal, Form, Select } from 'antd'
 import {
   showApiError,
@@ -18,6 +19,8 @@ import { useRouter } from 'next/navigation'
 import * as Sentry from '@sentry/nextjs'
 import dayjs from 'dayjs'
 import { incr } from '@/lib/frontend/metrics'
+import { getAuthToken } from '@/lib/frontend/auth'
+import { getCurrentUserId } from '@/lib/api/auth'
 
 const { Option } = Select
 
@@ -75,52 +78,35 @@ export default function StudentBookingCalendar({
   const [myWaitPosition, setMyWaitPosition] = useState<number | null>(null)
   const [myWaitEntryId, setMyWaitEntryId] = useState<string>('')
 
+  const { fetchWithAuth } = useFetch()
+
   // 获取教师列表
-  const fetchTeachers = async () => {
+  const fetchTeachers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
+      const { res: response, json: data } = await fetchWithAuth('/api/teachers')
 
-      const response = await fetch('/api/teachers', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-
-        // 确保数据是数组
-        let teachersData = []
-        if (Array.isArray(data)) {
-          teachersData = data
-        } else if (data && Array.isArray(data.teachers)) {
-          teachersData = data.teachers
-        } else {
-          console.warn('教师数据格式不支持:', data)
-          teachersData = []
-        }
-
-        setAllTeachers(teachersData)
-        return teachersData
+      // 确保数据是数组
+      let teachersData = []
+      if (Array.isArray(data)) {
+        teachersData = data
+      } else if (data && Array.isArray(data.teachers)) {
+        teachersData = data.teachers
       } else {
-        const errorData = await response.json()
-        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
-        setAllTeachers([])
-        return []
+        console.warn('教师数据格式不支持:', data)
+        teachersData = []
       }
-    } catch (error) {
-      showErrorMessage('获取教师列表失败')
+
+      setAllTeachers(teachersData)
+      return teachersData
+    } catch (error: any) {
+      showErrorMessage(error.message || '获取教师列表失败')
       setAllTeachers([])
       return []
     }
-  }
+  }, [fetchWithAuth])
 
   // 获取学生已注册的科目
-  const fetchStudentSubjects = async () => {
+  const fetchStudentSubjects = useCallback(async () => {
     try {
       const me = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
       const subjects = me?.student?.enrolledSubjects ?? []
@@ -131,36 +117,39 @@ export default function StudentBookingCalendar({
       setStudentSubjects([])
       return []
     }
-  }
+  }, [])
 
   // 过滤教师和科目
-  const filterTeachersAndSubjects = (teachers: any[], subjects: string[]) => {
-    if (!subjects.length) {
-      setFilteredTeachers([])
-      setAvailableSubjects([])
-      return
-    }
-
-    // 只显示能教授学生已注册科目的教师
-    const availableTeachers = teachers.filter((teacher) => {
-      if (!teacher.subjects || !Array.isArray(teacher.subjects)) {
-        return false
+  const filterTeachersAndSubjects = useCallback(
+    (teachers: any[], subjects: string[]) => {
+      if (!subjects.length) {
+        setFilteredTeachers([])
+        setAvailableSubjects([])
+        return
       }
 
-      // 检查教师是否至少能教授学生的一个科目
-      const canTeach = teacher.subjects.some((teacherSubject: string) =>
-        subjects.includes(teacherSubject)
-      )
+      // 只显示能教授学生已注册科目的教师
+      const availableTeachers = teachers.filter((teacher) => {
+        if (!teacher.subjects || !Array.isArray(teacher.subjects)) {
+          return false
+        }
 
-      return canTeach
-    })
+        // 检查教师是否至少能教授学生的一个科目
+        const canTeach = teacher.subjects.some((teacherSubject: string) =>
+          subjects.includes(teacherSubject)
+        )
 
-    // 学生可选的科目是：学生已注册的科目
-    const availableSubjects = [...subjects]
+        return canTeach
+      })
 
-    setFilteredTeachers(availableTeachers)
-    setAvailableSubjects(availableSubjects)
-  }
+      // 学生可选的科目是：学生已注册的科目
+      const availableSubjects = [...subjects]
+
+      setFilteredTeachers(availableTeachers)
+      setAvailableSubjects(availableSubjects)
+    },
+    [setFilteredTeachers, setAvailableSubjects]
+  )
 
   useEffect(() => {
     const loadData = async () => {
@@ -185,34 +174,23 @@ export default function StudentBookingCalendar({
     }
 
     loadData()
-  }, [])
+  }, [fetchTeachers, fetchStudentSubjects, filterTeachersAndSubjects])
 
-  const fetchTimeSlots = React.useCallback(async () => {
+  const fetchTimeSlots = useCallback(async () => {
     if (!selectedDate || !selectedTeacher || !selectedSubject) return
 
     try {
       setLoading(true)
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0
 
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
-
-      // 调用真实的 slots API
-      const response = await fetch(
-        `/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const userId = getCurrentUserId() || ''
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/slots?teacherId=${selectedTeacher}&date=${selectedDate}&duration=30&excludeUserId=${encodeURIComponent(
+          userId
+        )}`
       )
 
       if (response.ok) {
-        const data = await response.json()
-
         // 转换API数据格式
         const slots: CalendarSlot[] = data.slots.map((slot: string, index: number) => {
           const startTime = new Date(slot)
@@ -227,7 +205,7 @@ export default function StudentBookingCalendar({
         })
 
         setTimeSlots(slots)
-        // 记录已预约与候补计数（用于展示热门时段）
+        // 记录已预约与候补计数（用于展示热门时段）；服务端已排除“我的预约”
         const booked: string[] = Array.isArray(data.bookedSlots) ? data.bookedSlots : []
         const wlArr: Array<{ slot: string; count: number }> = Array.isArray(data.waitlistCount)
           ? data.waitlistCount
@@ -238,6 +216,8 @@ export default function StudentBookingCalendar({
         })
         setBookedSlots(booked)
         setWaitlistCountMap(wlMap)
+
+        // 服务端已过滤，无需再拉取本人预约进行二次过滤
         try {
           const t1 = typeof performance !== 'undefined' ? performance.now() : 0
           const dur = Math.max(0, t1 - t0)
@@ -247,8 +227,7 @@ export default function StudentBookingCalendar({
           incr('biz.calendar.slots_fetch', 1, { ok: true })
         } catch {}
       } else {
-        const errorData = await response.json()
-        showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
+        showApiError({ code: data?.code ?? data?.error, message: data?.message })
         setTimeSlots([])
         setBookedSlots([])
         setWaitlistCountMap({})
@@ -267,7 +246,7 @@ export default function StudentBookingCalendar({
     } finally {
       setLoading(false)
     }
-  }, [selectedDate, selectedTeacher, selectedSubject])
+  }, [selectedDate, selectedTeacher, selectedSubject, fetchWithAuth])
 
   const openWaitlistModal = async (slotIso: string) => {
     if (!selectedTeacher) return
@@ -278,20 +257,11 @@ export default function StudentBookingCalendar({
       incr('biz.waitlist.view_slot', 1)
     } catch {}
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(
+      const { res, json } = await fetchWithAuth(
         `/api/waitlist/slot?teacherId=${encodeURIComponent(selectedTeacher)}&slot=${encodeURIComponent(
           slotIso
-        )}&studentId=${encodeURIComponent(studentId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        )}&studentId=${encodeURIComponent(studentId)}`
       )
-      let json: any
-      try {
-        json = await res.json()
-      } catch (parseError) {
-        showErrorMessage('服务器返回了无效的JSON数据')
-        return
-      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '获取候补失败' })
         return
@@ -316,26 +286,17 @@ export default function StudentBookingCalendar({
       return
     }
     try {
-      const token = localStorage.getItem('accessToken')
       const dateStr = new Date(waitlistSlotIso).toISOString().slice(0, 10)
-      const res = await fetch('/api/waitlist', {
+      const { res, json } = await fetchWithAuth('/api/waitlist', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+        jsonBody: {
           teacherId: selectedTeacher,
           date: dateStr,
           slot: waitlistSlotIso,
           studentId,
           subject: selectedSubject,
-        }),
+        },
       })
-      let json: any
-      try {
-        json = await res.json()
-      } catch (parseError) {
-        showErrorMessage('服务器返回了无效的JSON数据')
-        return
-      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '加入候补失败' })
         return
@@ -356,19 +317,10 @@ export default function StudentBookingCalendar({
   const removeMyWaitlistEntry = async () => {
     if (!myWaitEntryId) return
     try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch('/api/waitlist', {
+      const { res, json } = await fetchWithAuth('/api/waitlist', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: myWaitEntryId, studentId }),
+        jsonBody: { id: myWaitEntryId, studentId },
       })
-      let json: any
-      try {
-        json = await res.json()
-      } catch (parseError) {
-        showErrorMessage('服务器返回了无效的JSON数据')
-        return
-      }
       if (!res.ok) {
         showApiError({ code: json?.code ?? json?.error, message: json?.message || '移除候补失败' })
         return
@@ -470,12 +422,6 @@ export default function StudentBookingCalendar({
         incr('biz.booking.submit', 1)
       } catch {}
 
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        showErrorMessage('请先登录')
-        return
-      }
-
       // 确保时间数据正确转换
       let scheduledTime = values.scheduledTime
       if (values.scheduledTime && typeof values.scheduledTime.toISOString === 'function') {
@@ -492,21 +438,17 @@ export default function StudentBookingCalendar({
         teacherId: values.teacherId,
         subject: values.subject,
         scheduledTime: scheduledTime,
-        durationMinutes: 30, // 固定为30分钟，与时间槽保持一致
-        idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`, // 添加幂等性键
+        durationMinutes: 30,
+        idempotencyKey: `${studentId}-${values.teacherId}-${scheduledTime}`,
       }
 
-      const response = await fetch('/api/appointments', {
+      const { res: response, json: result } = await fetchWithAuth('/api/appointments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(appointmentData),
+        jsonBody: appointmentData,
       })
 
       if (response.ok) {
-        const result = await response.json()
+        const resultData = result
         showSuccessMessage('预约成功！正在跳转到我的预约页面...')
         setBookingModalVisible(false)
         form.resetFields()
@@ -694,6 +636,7 @@ export default function StudentBookingCalendar({
             {bookedSlots
               .slice()
               .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())
+              // 服务端已排除本人预约时段
               .slice(0, 8)
               .map((iso) => {
                 const local = new Date(iso)

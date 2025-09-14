@@ -35,11 +35,14 @@ export default function SubjectSelector({
     try {
       const response = await fetch('/api/subjects')
       if (response.ok) {
-        const data = await response.json()
-        setSubjects(data)
+        const data = await response.json().catch(() => null)
+        setSubjects(Array.isArray(data) ? data : data?.subjects || [])
+      } else {
+        setSubjects([])
       }
-    } catch (error) {
-      console.error('Failed to fetch subjects:', error)
+    } catch (e) {
+      console.error('Failed to fetch subjects', e)
+      setSubjects([])
     } finally {
       setLoading(false)
     }

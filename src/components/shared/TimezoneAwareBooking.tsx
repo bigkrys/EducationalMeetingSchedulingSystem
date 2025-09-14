@@ -3,6 +3,7 @@ import { Card, List, Button, Tag, Alert, Space } from 'antd'
 import { ClockCircleOutlined, CalendarOutlined } from '@ant-design/icons'
 import { TimeSlotDisplay, AppointmentTimeDisplay } from '@/components/shared/TimezoneDisplay'
 import { getTimezoneInfo } from '@/lib/utils/timezone-client'
+import { useFetch } from '@/lib/frontend/useFetch'
 
 interface TimeSlot {
   id: string
@@ -26,6 +27,7 @@ export default function TimezoneAwareBooking({
   selectedDate,
   onSlotSelect,
 }: TimezoneAwareBookingProps) {
+  const { fetchWithAuth } = useFetch()
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [selectingSlot, setSelectingSlot] = useState(false)
@@ -36,18 +38,12 @@ export default function TimezoneAwareBooking({
     try {
       setLoading(true)
 
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(
-        `/api/slots?teacherId=${teacherId}&date=${selectedDate}&duration=30`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const { res: response, json: data } = await fetchWithAuth(
+        `/api/slots?teacherId=${teacherId}&date=${selectedDate}&duration=30`
       )
 
       if (response.ok) {
-        const data = await response.json()
-
-        // API返回的是UTC时间字符串数组
+        // data is parsed json
         const slots: TimeSlot[] = data.slots.map((utcTimeString: string, index: number) => {
           const startTime = new Date(utcTimeString)
           const endTime = new Date(startTime.getTime() + 30 * 60 * 1000)
@@ -67,7 +63,7 @@ export default function TimezoneAwareBooking({
     } finally {
       setLoading(false)
     }
-  }, [teacherId, selectedDate])
+  }, [teacherId, selectedDate, fetchWithAuth])
 
   useEffect(() => {
     if (teacherId && selectedDate) {

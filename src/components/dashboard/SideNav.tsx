@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Layout, Menu } from 'antd'
+import { Layout, Menu, message } from 'antd'
 import {
   HomeOutlined,
   CalendarOutlined,
@@ -13,7 +13,11 @@ import {
   ClockCircleOutlined,
   LogoutOutlined,
 } from '@ant-design/icons'
-import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
+import { mutateSession } from '@/lib/frontend/session-store'
+import { clearAuthToken } from '@/lib/frontend/auth'
+import { clearAllClientCaches } from '@/lib/frontend/cleanup'
+import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
 import { clearUserCache } from '@/lib/api/user-service'
 const { Sider } = Layout
@@ -26,36 +30,50 @@ export default function DashboardSideNav({
   onCollapse: (c: boolean) => void
 }) {
   const [mounted, setMounted] = useState(false)
-  const [role, setRole] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const { data, loading } = useSession()
+  const role = data?.user?.role || null
   useEffect(() => {
     setMounted(true)
-    if (isAuthenticated()) setRole(getCurrentUserRole())
     const onResize = () => {
       const width = typeof window !== 'undefined' ? window.innerWidth : 1200
       setIsMobile(width < 992)
     }
     onResize()
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+    }
   }, [])
 
   const handleLogout = useCallback(async () => {
     try {
+      if (loggingOut) return
+      setLoggingOut(true)
+      const hide = message.loading('正在退出...', 0)
       clearUserCache()
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userRole')
-      fetch('/api/auth/logout', { method: 'POST' })
+      await fetch('/api/auth/logout', { method: 'POST' })
+      try {
+        clearAllClientCaches()
+      } catch {}
+      try {
+        await mutateSession()
+      } catch {}
       router.push('/')
+      try {
+        hide()
+      } catch {}
     } catch (_) {
       router.push('/')
+    } finally {
+      setLoggingOut(false)
     }
-  }, [router])
+  }, [router, loggingOut])
 
-  if (!mounted) return null
+  if (!mounted || loading) return null
 
   // Base items for all (student/teacher)
   const commonItems: any[] = [
@@ -103,11 +121,50 @@ export default function DashboardSideNav({
     },
   ]
 
+  const adminItems: any[] = [
+    {
+      key: '/dashboard/admin',
+      icon: <HomeOutlined />,
+      label: <Link href="/dashboard/admin">管理员</Link>,
+    },
+    {
+      key: '/dashboard/admin/users',
+      icon: <TeamOutlined />,
+      label: <Link href="/dashboard/admin/users">用户管理</Link>,
+    },
+    {
+      key: '/dashboard/admin/policies',
+      icon: <SettingOutlined />,
+      label: <Link href="/dashboard/admin/policies">服务策略</Link>,
+    },
+    {
+      key: '/dashboard/admin/audit-logs',
+      icon: <FileTextOutlined />,
+      label: <Link href="/dashboard/admin/audit-logs">审计日志</Link>,
+    },
+    {
+      key: '/dashboard/admin/tasks',
+      icon: <SettingOutlined />,
+      label: <Link href="/dashboard/admin/tasks">系统任务</Link>,
+    },
+    {
+      key: '/dashboard/admin/analytics',
+      icon: <BarChartOutlined />,
+      label: <Link href="/dashboard/admin/analytics">分析</Link>,
+    },
+  ]
+
   const items = [
     ...commonItems,
     ...(role === 'student' ? studentItems : []),
     ...(role === 'teacher' ? teacherItems : []),
-    { key: 'logout', icon: <LogoutOutlined />, label: <span onClick={handleLogout}>登出</span> },
+    ...(role === 'admin' || role === 'superadmin' ? adminItems : []),
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      disabled: loggingOut,
+      label: <span onClick={handleLogout}>{loggingOut ? '正在退出…' : '登出'}</span>,
+    },
   ]
 
   const selectedKey = items

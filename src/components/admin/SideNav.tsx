@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Layout, Menu } from 'antd'
 import {
@@ -10,7 +10,7 @@ import {
   SafetyCertificateOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import { getCurrentUserRole, isAuthenticated } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { usePathname } from 'next/navigation'
 
 const { Sider } = Layout
@@ -23,11 +23,11 @@ export default function SideNav({
   onCollapse: (c: boolean) => void
 }) {
   const [mounted, setMounted] = useState(false)
-  const [role, setRole] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const { data, loading } = useSession()
+  const role = data?.user?.role || null
   useEffect(() => {
     setMounted(true)
-    setRole(getCurrentUserRole())
     const onResize = () => {
       const width = typeof window !== 'undefined' ? window.innerWidth : 1200
       setIsMobile(width < 992)
@@ -38,7 +38,7 @@ export default function SideNav({
   }, [])
   const pathname = usePathname()
 
-  if (!mounted) return null
+  if (!mounted || loading) return null
   const isAdmin = role === 'admin' || role === 'superadmin'
   if (!isAdmin) return null
 

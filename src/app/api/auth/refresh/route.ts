@@ -65,20 +65,39 @@ async function postHandler(request: NextRequest) {
     // 设置新的 HttpOnly cookie
     const response = ok({ accessToken: newAccessToken, refreshToken: newRefreshToken })
 
+    // 设置新的 access token HttpOnly cookie
+    response.cookies.set('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60, // 1h
+      path: '/',
+    })
+
     response.cookies.set('refreshToken', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/',
     })
 
     // 记录审计日志（refresh token 成功）
     try {
+      const xff =
+        request.headers.get('x-forwarded-for') ||
+        request.headers.get('x-real-ip') ||
+        request.headers.get('x-vercel-forwarded-for') ||
+        ''
+      const ipAddress = xff ? xff.split(',')[0].trim() : 'unknown'
+      const userAgent = request.headers.get('user-agent') || 'unknown'
       await prismaClient.auditLog.create({
         data: {
           actorId: payload.userId,
           action: 'refresh_token',
-          details: JSON.stringify({ ip: request.headers.get('x-forwarded-for') || 'unknown' }),
+          ipAddress,
+          userAgent,
+          details: JSON.stringify({ ip: ipAddress }),
         },
       })
     } catch (e) {
