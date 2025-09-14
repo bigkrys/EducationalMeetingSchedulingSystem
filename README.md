@@ -1042,7 +1042,6 @@ edu-scheduler/
 
 
 
-
 # 十一、 关键算法实现
 
 ## 11.1 生成可用时间段算法
@@ -1448,7 +1447,6 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
 - 工具链与代码质量：
   - TypeScript 严格模式、ESLint/Prettier、Husky pre-commit（已完成）
 
----
 
 ## 12.3 构建门禁系统（CI/CD）
 
@@ -1473,7 +1471,6 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
   - GitHub 保护分支：保护 `main`/`develop`、要求状态检查
   - GitHub Secrets：`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `NEON_STAGING_URL`, `NEON_PROD_URL`
 
----
 
 ## 12.4 数据库迁移策略
 
@@ -1481,7 +1478,6 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
 - 一致性保障：Preview/Staging 与 Production 保持同一批迁移版本（已完成）
 - 流程定位：develop 先迁移 Staging；main 合并后通过工作流迁移生产（已完成）
 
----
 
 ## 12.5 可观测性（监控/日志/指标）
 
@@ -1489,7 +1485,6 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
 - 结构化日志：`src/lib/logger.ts`（包含 `requestId` 等关键字段）（已完成）
 - 健康检查与系统面板：`/api/healthz`、管理端 Dashboard（已完成）
 
----
 
 ## 12.6 安全性与稳定性
 
@@ -1500,7 +1495,6 @@ function generateConflictSuggestions(conflicts: TimeConflict[], request: Availab
 - 漏洞扫描与依赖安全：CI 增加 CodeQL/`pnpm audit`（未落地）
 - 数据备份：Neon PITR/自动备份与恢复演练（未落地）
 
----
 
 ## 12.7 性能优化
 
