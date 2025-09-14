@@ -147,6 +147,29 @@ export default function IntroPage() {
         </div>
       </section>
 
+      {/* Demo Video */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="mb-6 text-center">
+            <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-2">视频演示</h3>
+            <p className="text-gray-600">快速了解系统的核心流程与界面</p>
+          </div>
+          <div
+            className="relative w-full overflow-hidden rounded-2xl ring-1 ring-black/10 shadow-lg"
+            style={{ paddingTop: '56.25%' }}
+          >
+            <iframe
+              className="absolute inset-0 h-full w-full"
+              src="https://www.youtube.com/embed/AVEnbHRfy6A"
+              title="Edu Scheduler 产品演示"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Reliability */}
       <section className="bg-black text-white">
         <div className="mx-auto max-w-7xl px-6 py-20">
