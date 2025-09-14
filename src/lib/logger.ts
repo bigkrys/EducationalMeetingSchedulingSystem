@@ -14,9 +14,15 @@ export function getRequestMeta(
     const method = (req as any)?.method
     const origin = headers?.get?.('origin') || undefined
     const ua = headers?.get?.('user-agent') || undefined
-    const xff = headers?.get?.('x-forwarded-for') || undefined
+    const xffRaw =
+      headers?.get?.('x-forwarded-for') ||
+      headers?.get?.('x-real-ip') ||
+      headers?.get?.('x-vercel-forwarded-for') ||
+      ''
+    const xff = xffRaw || undefined
+    const ip = xffRaw ? xffRaw.split(',')[0].trim() : undefined
     const reqId = headers?.get?.('x-request-id') || undefined
-    return { method, url, origin, ua, xff, requestId: reqId }
+    return { method, url, origin, ua, xff, ip, requestId: reqId }
   } catch {
     return {}
   }

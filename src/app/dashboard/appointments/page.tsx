@@ -15,7 +15,7 @@ import {
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
 import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
-import { getCurrentUserId, getCurrentUserRole } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import AuthGuard from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
 import * as Sentry from '@sentry/nextjs'
@@ -52,8 +52,8 @@ export default function AppointmentsManagement() {
   const [processing, setProcessing] = useState(false)
 
   const router = useRouter()
-
-  const currentUserRole = getCurrentUserRole()
+  const { data: session, loading: sessionLoading } = useSession()
+  const currentUserRole = session?.user?.role
   const isTeacher = currentUserRole === 'teacher'
 
   const fetchAppointments = useCallback(async () => {
@@ -61,14 +61,9 @@ export default function AppointmentsManagement() {
       setLoading(true)
       setError(null)
 
-      const userId = getCurrentUserId()
-      if (!userId) {
-        router.push('/')
-        return
-      }
-
+      if (!session?.loggedIn) return
       const endpoint = isTeacher
-        ? `/api/appointments?role=teacher&teacherId=${userId}`
+        ? `/api/appointments?role=teacher&teacherId=${session.user?.id}`
         : `/api/appointments?role=admin`
 
       const response = await httpClient.get(endpoint)
@@ -79,21 +74,22 @@ export default function AppointmentsManagement() {
     } finally {
       setLoading(false)
     }
-  }, [router, isTeacher])
+  }, [router, isTeacher, session])
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0
-    fetchAppointments().finally(() => {
-      try {
-        const t1 = typeof performance !== 'undefined' ? performance.now() : 0
-        Sentry.metrics.distribution('appointments_mgmt_load_ms', Math.max(0, t1 - t0))
-        incr('biz.page.view', 1, {
-          page: 'appointments_mgmt',
-          role: isTeacher ? 'teacher' : 'admin',
-        })
-      } catch {}
-    })
-  }, [fetchAppointments, isTeacher])
+    if (!sessionLoading)
+      fetchAppointments().finally(() => {
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          Sentry.metrics.distribution('appointments_mgmt_load_ms', Math.max(0, t1 - t0))
+          incr('biz.page.view', 1, {
+            page: 'appointments_mgmt',
+            role: isTeacher ? 'teacher' : 'admin',
+          })
+        } catch {}
+      })
+  }, [fetchAppointments, isTeacher, sessionLoading])
 
   const handleApprove = useCallback(
     (appointment: Appointment) => {

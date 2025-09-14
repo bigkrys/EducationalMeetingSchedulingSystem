@@ -54,14 +54,20 @@ const postHandler = async function POST(request: NextRequest) {
     // 记录审计日志（login 成功），后台写入，不阻塞响应
     ;(async () => {
       try {
+        const xff =
+          request.headers.get('x-forwarded-for') ||
+          request.headers.get('x-real-ip') ||
+          request.headers.get('x-vercel-forwarded-for') ||
+          ''
+        const ipAddress = xff ? xff.split(',')[0].trim() : 'unknown'
+        const userAgent = request.headers.get('user-agent') || 'unknown'
         await prisma.auditLog.create({
           data: {
             actorId: result.user.id,
             action: 'login',
-            details: JSON.stringify({
-              ip: request.headers.get('x-forwarded-for') || 'unknown',
-              userAgent: request.headers.get('user-agent') || 'unknown',
-            }),
+            ipAddress,
+            userAgent,
+            details: JSON.stringify({ ip: ipAddress, userAgent }),
           },
         })
       } catch (e) {

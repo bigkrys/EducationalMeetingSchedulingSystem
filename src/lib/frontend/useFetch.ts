@@ -8,12 +8,11 @@ export async function fetchWithAuth(url: string, options: FetchOptions = {}) {
     ...(options.headers as Record<string, string>),
   }
 
-  // Cookie-based auth: no Authorization header; rely on same-origin cookies
-
   const init: RequestInit = {
     method: options.method || 'GET',
     ...options,
     headers,
+    credentials: 'include',
   }
 
   if (options.jsonBody !== undefined) {

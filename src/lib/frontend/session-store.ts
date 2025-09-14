@@ -15,6 +15,9 @@ if (channel) {
   channel.onmessage = (ev) => {
     if (ev?.data?.type === 'SESSION_UPDATED') {
       void mutateSession()
+    } else if (ev?.data?.type === 'SESSION_CLEARED') {
+      current = null
+      notify()
     }
   }
 }
@@ -35,7 +38,12 @@ function notify() {
 }
 
 export async function fetchSession(): Promise<SessionData> {
-  const res = await fetch('/api/session', { method: 'GET' })
+  const res = await fetch('/api/session', {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'include',
+    headers: { 'Cache-Control': 'no-store' },
+  })
   const json = await res.json().catch(() => ({ ok: false, loggedIn: false }))
   current = json
   notify()
@@ -48,4 +56,12 @@ export async function mutateSession(): Promise<SessionData> {
     channel?.postMessage({ type: 'SESSION_UPDATED' })
   } catch {}
   return data
+}
+
+export function resetSessionLocal() {
+  current = null
+  notify()
+  try {
+    channel?.postMessage({ type: 'SESSION_CLEARED' })
+  } catch {}
 }

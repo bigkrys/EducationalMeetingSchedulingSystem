@@ -116,11 +116,22 @@ async function updatePoliciesHandler(request: NextRequest, context?: any) {
     const updatedPolicies = await Promise.all(updatePromises)
 
     // 记录审计日志
+    const actorId = (request as any)?.user?.userId || null
+    const xff =
+      request.headers.get('x-forwarded-for') ||
+      request.headers.get('x-real-ip') ||
+      request.headers.get('x-vercel-forwarded-for') ||
+      ''
+    const ipAddress = xff ? xff.split(',')[0].trim() : 'unknown'
+    const userAgent = request.headers.get('user-agent') || 'unknown'
     await prisma.auditLog.create({
       data: {
+        actorId,
         action: 'POLICIES_UPDATED',
+        ipAddress,
+        userAgent,
         details: JSON.stringify({
-          updatedPolicies: policies.map((p) => ({
+          updatedPolicies: policies.map((p: any) => ({
             level: p.level,
             monthlyAutoApprove: p.monthlyAutoApprove,
             priority: p.priority,

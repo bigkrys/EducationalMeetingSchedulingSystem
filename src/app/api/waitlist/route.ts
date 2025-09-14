@@ -121,12 +121,17 @@ async function addToWaitlistHandler(request: NextRequest, context?: any) {
             actorId: student.userId,
             action: 'WAITLIST_ADDED',
             targetId: waitlistEntry.id,
+            ipAddress:
+              request.headers.get('x-forwarded-for') ||
+              request.headers.get('x-real-ip') ||
+              request.headers.get('x-vercel-forwarded-for') ||
+              'unknown',
+            userAgent: request.headers.get('user-agent') || 'unknown',
             details: JSON.stringify({
               teacherId,
               date,
               slot,
               subject,
-              // priority字段已移除
               reason: 'Student added to waitlist for unavailable slot',
             }),
           },
@@ -195,9 +200,13 @@ async function removeFromWaitlistHandler(request: NextRequest, context?: any) {
           actorId: studentId,
           action: 'WAITLIST_REMOVED',
           targetId: id,
-          details: JSON.stringify({
-            reason: 'Student removed from waitlist',
-          }),
+          ipAddress:
+            request.headers.get('x-forwarded-for') ||
+            request.headers.get('x-real-ip') ||
+            request.headers.get('x-vercel-forwarded-for') ||
+            'unknown',
+          userAgent: request.headers.get('user-agent') || 'unknown',
+          details: JSON.stringify({ reason: 'Student removed from waitlist' }),
         },
       })
     )
