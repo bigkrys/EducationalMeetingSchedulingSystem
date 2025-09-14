@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Alert, Button } from 'antd'
-import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
+import { UserOutlined } from '@ant-design/icons'
 import StudentBookingCalendar from '@/components/student/StudentBookingCalendar'
-import { getCurrentUserId } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { userService } from '@/lib/api/user-service'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import PageLoader from '@/components/shared/PageLoader'
-import { showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
+import { showSuccessMessage } from '@/lib/api/global-error-handler'
 import * as Sentry from '@sentry/nextjs'
 import { incr } from '@/lib/frontend/metrics'
 
@@ -20,18 +20,15 @@ export default function BookAppointment() {
   const [error, setError] = useState<string>('')
 
   const router = useRouter()
+  const { data: session, loading: sessionLoading } = useSession()
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0
-    // 获取当前用户信息
+    if (sessionLoading) return
+    // 获取当前用户信息（基于服务端会话）
     const fetchUserInfo = async () => {
       try {
-        const userId = getCurrentUserId()
-        if (!userId) {
-          showErrorMessage('请先登录')
-          router.push('/')
-          return
-        }
+        if (!session?.loggedIn) return
         // 使用 userService（内存缓存 + in-flight 去重）获取当前用户
         const userData = await userService.getCurrentUser()
         if (userData && (userData as any).student && (userData as any).student.id) {
@@ -53,14 +50,14 @@ export default function BookAppointment() {
     }
 
     fetchUserInfo()
-  }, [router])
+  }, [router, session, sessionLoading])
 
   const handleBookingSuccess = () => {
     showSuccessMessage('预约成功！')
     // 可以在这里添加其他成功后的逻辑
   }
 
-  if (loading) {
+  if (loading || sessionLoading) {
     return (
       <PageLoader message="正在准备预约系统" description="正在获取您的学生信息和可预约教师列表" />
     )

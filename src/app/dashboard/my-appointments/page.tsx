@@ -15,7 +15,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
-import { getCurrentUserId } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { StudentGuard } from '@/components/shared/AuthGuard'
 import { incr } from '@/lib/frontend/metrics'
 import * as Sentry from '@sentry/nextjs'
@@ -46,20 +46,17 @@ export default function MyAppointments() {
   const [cancelling, setCancelling] = useState(false)
 
   const router = useRouter()
+  const { data: session, loading: sessionLoading } = useSession()
 
   const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true)
       setError('')
 
-      const userId = getCurrentUserId()
-      if (!userId) {
-        showErrorMessage('请先登录')
-        router.push('/')
-        return
-      }
-
-      const response = await httpClient.get(`/api/appointments?role=student&studentId=${userId}`)
+      if (!session?.loggedIn) return
+      const response = await httpClient.get(
+        `/api/appointments?role=student&studentId=${session.user?.id}`
+      )
       const data = await response.json()
 
       setAppointments(data.items || [])
@@ -68,18 +65,19 @@ export default function MyAppointments() {
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [router, session])
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0
-    fetchAppointments().finally(() => {
-      try {
-        const t1 = typeof performance !== 'undefined' ? performance.now() : 0
-        Sentry.metrics.distribution('my_appointments_load_ms', Math.max(0, t1 - t0))
-        incr('biz.page.view', 1, { page: 'my_appointments' })
-      } catch {}
-    })
-  }, [fetchAppointments])
+    if (!sessionLoading)
+      fetchAppointments().finally(() => {
+        try {
+          const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+          Sentry.metrics.distribution('my_appointments_load_ms', Math.max(0, t1 - t0))
+          incr('biz.page.view', 1, { page: 'my_appointments' })
+        } catch {}
+      })
+  }, [fetchAppointments, sessionLoading])
 
   const handleCancelAppointment = (appointment: Appointment) => {
     setSelectedAppointment(appointment)

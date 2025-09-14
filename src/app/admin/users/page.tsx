@@ -19,7 +19,7 @@ import {
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
 import Link from 'next/link'
-import { getCurrentUserRole } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { useFetch } from '@/lib/frontend/useFetch'
 
 const { Title, Text } = Typography
@@ -48,7 +48,8 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState<UserRow | null>(null)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
-  const currentRole = useMemo(() => getCurrentUserRole(), [])
+  const { data: session } = useSession()
+  const currentRole = useMemo(() => session?.user?.role || null, [session])
 
   const fetchUsers = async (params?: {
     page?: number

@@ -4,6 +4,8 @@ import { prisma } from '@/lib/api/db'
 import { verifyAccessToken } from '@/lib/api/jwt'
 import jwt from 'jsonwebtoken'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const access = request.cookies.get('accessToken')?.value || ''
@@ -29,13 +31,29 @@ export async function GET(request: NextRequest) {
       exp = decoded?.exp ? decoded.exp * 1000 : null
     } catch {}
 
-    return ok({
-      ok: true,
-      loggedIn: true,
-      user: { id: payload.userId, email: payload.email, role: payload.role, name },
-      exp,
-    })
+    return ok(
+      {
+        ok: true,
+        loggedIn: true,
+        user: { id: payload.userId, email: payload.email, role: payload.role, name },
+        exp,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
+    )
   } catch (e) {
-    return ok({ ok: false, loggedIn: false })
+    return ok(
+      { ok: false, loggedIn: false },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
+    )
   }
 }

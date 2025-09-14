@@ -16,6 +16,7 @@ import {
 import { useSession } from '@/lib/frontend/useSession'
 import { mutateSession } from '@/lib/frontend/session-store'
 import { clearAuthToken } from '@/lib/frontend/auth'
+import { clearAllClientCaches } from '@/lib/frontend/cleanup'
 import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
 import { clearUserCache } from '@/lib/api/user-service'
@@ -56,7 +57,7 @@ export default function DashboardSideNav({
       clearUserCache()
       await fetch('/api/auth/logout', { method: 'POST' })
       try {
-        clearAuthToken()
+        clearAllClientCaches()
       } catch {}
       try {
         await mutateSession()

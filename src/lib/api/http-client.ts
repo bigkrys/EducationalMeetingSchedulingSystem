@@ -127,7 +127,7 @@ export class ApiClient {
         ...(options.headers || {}),
       } as HeadersInit
 
-      const init: RequestInit = { ...options, headers }
+      const init: RequestInit = { ...options, headers, credentials: 'include' }
       let res = await fetch(url, init)
 
       if (res.status === 401) {
@@ -144,30 +144,24 @@ export class ApiClient {
                 ...this.getAuthHeaders(),
                 ...(options.headers || {}),
               } as HeadersInit
-              res = await fetch(url, { ...options, headers: retryHeaders })
+              res = await fetch(url, { ...options, headers: retryHeaders, credentials: 'include' })
             }
           }
         } catch {
           // ignore
         }
 
-        // 若仍未通过认证，清理并提示
+        // 若仍未通过认证，清理本地态并将 401 交由调用方/页面守卫处理（不在此处导航）
         if (res.status === 401) {
           clearAuthToken()
           try {
             clearStoredTokens()
           } catch (_) {}
-          this.showError('登录已过期，请重新登录')
-          if (typeof window !== 'undefined') {
-            setTimeout(() => {
-              window.location.href = '/'
-            }, 1500)
-          }
         }
       }
 
       // 处理其他HTTP错误（保留响应体给调用方）
-      if (!res.ok && !skipErrorHandling) {
+      if (!res.ok && res.status !== 401 && !skipErrorHandling) {
         const clone = res.clone()
         const errorMessage = await this.parseErrorResponse(clone)
         this.showError(errorMessage)

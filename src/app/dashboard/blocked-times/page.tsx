@@ -5,7 +5,7 @@ import { Card, Button, DatePicker, Input, Table, Popconfirm, Space } from 'antd'
 import { showApiError, showErrorMessage, showSuccessMessage } from '@/lib/api/global-error-handler'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import { getCurrentUserId } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { useFetch } from '@/lib/frontend/useFetch'
 import dayjs from 'dayjs'
 import { incr } from '@/lib/frontend/metrics'
@@ -36,27 +36,21 @@ export default function BlockedTimes() {
   const [teacherId, setTeacherId] = useState<string>('')
   const router = useRouter()
   const { fetchWithAuth } = useFetch()
+  const { data: session, loading: sessionLoading } = useSession()
 
   const fetchUserInfo = useCallback(async () => {
     try {
-      const userId = getCurrentUserId()
-      if (!userId) {
-        showErrorMessage('请先登录')
-        router.push('/')
-        return
-      }
-
+      if (!session?.loggedIn) return
       const me = await (await import('@/lib/api/user-service')).userService.getCurrentUser()
       if (me?.teacher?.id) {
         setTeacherId(me.teacher.id)
       } else {
         showErrorMessage('用户不是教师')
-        router.push('/dashboard')
       }
     } catch (error) {
       console.error('获取用户信息失败:', error)
     }
-  }, [router])
+  }, [session])
 
   const fetchBlockedTimes = useCallback(async () => {
     if (!teacherId) return
@@ -78,8 +72,8 @@ export default function BlockedTimes() {
   }, [teacherId, fetchWithAuth])
 
   useEffect(() => {
-    fetchUserInfo()
-  }, [fetchUserInfo])
+    if (!sessionLoading) fetchUserInfo()
+  }, [fetchUserInfo, sessionLoading])
 
   useEffect(() => {
     fetchBlockedTimes()

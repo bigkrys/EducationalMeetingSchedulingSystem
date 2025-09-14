@@ -25,7 +25,7 @@ import {
 } from '@ant-design/icons'
 import { format, parseISO } from 'date-fns'
 import { httpClient } from '@/lib/api/http-client'
-import { getCurrentUserId } from '@/lib/api/auth'
+import { useSession } from '@/lib/frontend/useSession'
 import { userService } from '@/lib/api/user-service'
 import dynamic from 'next/dynamic'
 import { useFetch } from '@/lib/frontend/useFetch'
@@ -72,19 +72,14 @@ export default function TeacherAvailability() {
   const [form] = Form.useForm()
 
   const router = useRouter()
+  const { data: session, loading: sessionLoading } = useSession()
   const { fetchWithAuth } = useFetch()
 
   useEffect(() => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0
     ;(async () => {
       try {
-        const userId = getCurrentUserId()
-        if (!userId) {
-          showErrorMessage('请先登录')
-          router.push('/')
-          return
-        }
-
+        if (sessionLoading || !session?.loggedIn) return
         const userData = await userService.getCurrentUser()
         if (userData && (userData as any).teacher && (userData as any).teacher.id) {
           const ud = userData as any
@@ -112,7 +107,7 @@ export default function TeacherAvailability() {
         } catch {}
       }
     })()
-  }, [router])
+  }, [router, session, sessionLoading])
 
   const refreshAvailabilities = useCallback(async () => {
     if (!teacher) return

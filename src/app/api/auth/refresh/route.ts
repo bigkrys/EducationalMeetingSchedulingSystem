@@ -84,11 +84,20 @@ async function postHandler(request: NextRequest) {
 
     // 记录审计日志（refresh token 成功）
     try {
+      const xff =
+        request.headers.get('x-forwarded-for') ||
+        request.headers.get('x-real-ip') ||
+        request.headers.get('x-vercel-forwarded-for') ||
+        ''
+      const ipAddress = xff ? xff.split(',')[0].trim() : 'unknown'
+      const userAgent = request.headers.get('user-agent') || 'unknown'
       await prismaClient.auditLog.create({
         data: {
           actorId: payload.userId,
           action: 'refresh_token',
-          details: JSON.stringify({ ip: request.headers.get('x-forwarded-for') || 'unknown' }),
+          ipAddress,
+          userAgent,
+          details: JSON.stringify({ ip: ipAddress }),
         },
       })
     } catch (e) {
