@@ -73,14 +73,31 @@ export default function DashboardSideNav({
     }
   }, [router, loggingOut])
 
+  const [teacherRadarEnabled, setTeacherRadarEnabled] = useState<boolean>(
+    isFeatureEnabled('teacherRadar')
+  )
+
+  useEffect(() => {
+    setTeacherRadarEnabled(isFeatureEnabled('teacherRadar'))
+  }, [loading, mounted])
+
+  useEffect(() => {
+    const recheck = () => setTeacherRadarEnabled(isFeatureEnabled('teacherRadar'))
+    const id = setTimeout(recheck, 0)
+    window.addEventListener('focus', recheck)
+    document.addEventListener('visibilitychange', recheck)
+    return () => {
+      clearTimeout(id)
+      window.removeEventListener('focus', recheck)
+      document.removeEventListener('visibilitychange', recheck)
+    }
+  }, [])
+
   if (!mounted || loading) return null
 
-  // Base items for all (student/teacher)
   const commonItems: any[] = [
     { key: '/dashboard', icon: <HomeOutlined />, label: <Link href="/dashboard">控制台</Link> },
   ]
-
-  const teacherRadarEnabled = isFeatureEnabled('teacherRadar')
 
   const studentItems: any[] = [
     {
