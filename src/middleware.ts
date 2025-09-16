@@ -271,7 +271,7 @@ export async function middleware(req: NextRequest, _evt?: NextFetchEvent) {
       response.cookies.set(releaseDecision.identityCookieName, releaseDecision.identity, {
         path: '/',
         httpOnly: true,
-        sameSite: 'Lax',
+        sameSite: 'lax',
         secure: true,
       })
     }
@@ -279,7 +279,7 @@ export async function middleware(req: NextRequest, _evt?: NextFetchEvent) {
     response.cookies.set(releaseDecision.variantCookieName, releaseDecision.variantCookieValue, {
       path: '/',
       httpOnly: false,
-      sameSite: 'Lax',
+      sameSite: 'lax',
       secure: true,
     })
   }
