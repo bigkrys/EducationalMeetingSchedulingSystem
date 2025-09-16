@@ -416,7 +416,7 @@ async function createAppointmentHandler(request: NextRequest, context?: any) {
         return fail('Teacher has reached maximum daily appointments', 409, 'MAX_DAILY_REACHED')
       }
       if (err?.code === 'QUOTA_EXCEEDED_TX') {
-        return fail('Monthly appointment quota exceeded', 409, 'QUOTA_EXCEEDED')
+        return fail('已超出当月预约配额', 409, 'QUOTA_EXCEEDED')
       }
       // Prisma 唯一约束错误代码 P2002
       if (err?.code === 'P2002') {

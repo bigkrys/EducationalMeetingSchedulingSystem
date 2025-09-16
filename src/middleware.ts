@@ -208,37 +208,37 @@ function decideRelease(req: NextRequest, config: CanaryEdgeConfig): ReleaseDecis
 export async function middleware(req: NextRequest, _evt?: NextFetchEvent) {
   const isApi = req.nextUrl.pathname.startsWith('/api/')
 
-  // Ensure request-id exists and propagate to downstream
   const reqId = req.headers.get('x-request-id') || crypto.randomUUID()
   const requestHeaders = new Headers(req.headers)
   requestHeaders.set('x-request-id', reqId)
 
-  // Canary decision (defaults to stable when disabled or config missing)
   let releaseDecision: ReleaseDecision | null = null
   let parsedConfig: CanaryEdgeConfig | undefined
 
-  if (!process.env.EDGE_CONFIG) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Edge Config connection string missing; skipping canary logic')
-    }
-  } else {
-    try {
-      const rawConfig = await getEdgeConfig(EDGE_CONFIG_KEY)
-      parsedConfig = parseConfig(rawConfig)
-      const enabled = parsedConfig.enabled !== false
-      if (enabled) {
-        releaseDecision = decideRelease(req, parsedConfig)
-        requestHeaders.set(
-          parsedConfig.headers?.release || 'x-release-channel',
-          releaseDecision.variant
-        )
-        requestHeaders.set(
-          parsedConfig.headers?.releaseId || 'x-release-id',
-          releaseDecision.releaseId
-        )
+  const vercelEnv = (process.env.VERCEL_ENV || '').toLowerCase()
+  const isProdEnv = vercelEnv ? vercelEnv === 'production' : process.env.NODE_ENV === 'production'
+
+  if (isProdEnv) {
+    if (!process.env.EDGE_CONFIG) {
+    } else {
+      try {
+        const rawConfig = await getEdgeConfig(EDGE_CONFIG_KEY)
+        parsedConfig = parseConfig(rawConfig)
+        const enabled = parsedConfig.enabled !== false
+        if (enabled) {
+          releaseDecision = decideRelease(req, parsedConfig)
+          requestHeaders.set(
+            parsedConfig.headers?.release || 'x-release-channel',
+            releaseDecision.variant
+          )
+          requestHeaders.set(
+            parsedConfig.headers?.releaseId || 'x-release-id',
+            releaseDecision.releaseId
+          )
+        }
+      } catch (error) {
+        console.error('Failed to read Edge Config canary settings', error)
       }
-    } catch (error) {
-      console.error('Failed to read Edge Config canary settings', error)
     }
   }
 

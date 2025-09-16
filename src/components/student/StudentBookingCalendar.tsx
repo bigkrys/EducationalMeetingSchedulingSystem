@@ -448,7 +448,6 @@ export default function StudentBookingCalendar({
       })
 
       if (response.ok) {
-        const resultData = result
         showSuccessMessage('预约成功！正在跳转到我的预约页面...')
         setBookingModalVisible(false)
         form.resetFields()
@@ -462,8 +461,8 @@ export default function StudentBookingCalendar({
           router.push('/dashboard/my-appointments')
         }, 1000)
       } else {
-        const errorData = await response.json()
-
+        const errorData = result || {}
+        console.log('预约失败，返回数据：', errorData)
         // 如果是 SLOT_TAKEN，使用更友好的提示并刷新可约时间
         if (errorData && (errorData.error === 'SLOT_TAKEN' || errorData.code === 'SLOT_TAKEN')) {
           showApiError({ code: errorData?.code ?? errorData?.error, message: errorData?.message })
@@ -482,6 +481,7 @@ export default function StudentBookingCalendar({
         } catch {}
       }
     } catch (error) {
+      console.error('预约失败，发生异常：', error)
       showErrorMessage('预约失败，请重试')
       try {
         incr('biz.booking.error', 1)
