@@ -1,0 +1,68 @@
+name: Release Staging
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: release-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (merge commit)
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test --if-present
+
+  migrate:
+    name: DB Migrate (staging)
+    needs: checks
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    environment: Staging
+    env:
+      DATABASE_URL: ${{ secrets.NEON_STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm db:generate
+      - name: Validate DATABASE_URL
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "::error::Missing secret NEON_STAGING_URL (DATABASE_URL)."
+            exit 1
+          fi
+      - name: Prisma migrate deploy
+        run: pnpm db:migrate:deploy
+      - name: Prisma migrate status
+        run: pnpm exec prisma migrate status
+
+  # Deployment step removed — Vercel auto-deploys on develop via Git integration

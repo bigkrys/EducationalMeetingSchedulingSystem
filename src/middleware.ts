@@ -217,28 +217,32 @@ export async function middleware(req: NextRequest, _evt?: NextFetchEvent) {
   let releaseDecision: ReleaseDecision | null = null
   let parsedConfig: CanaryEdgeConfig | undefined
 
-  if (!process.env.EDGE_CONFIG) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Edge Config connection string missing; skipping canary logic')
-    }
-  } else {
-    try {
-      const rawConfig = await getEdgeConfig(EDGE_CONFIG_KEY)
-      parsedConfig = parseConfig(rawConfig)
-      const enabled = parsedConfig.enabled !== false
-      if (enabled) {
-        releaseDecision = decideRelease(req, parsedConfig)
-        requestHeaders.set(
-          parsedConfig.headers?.release || 'x-release-channel',
-          releaseDecision.variant
-        )
-        requestHeaders.set(
-          parsedConfig.headers?.releaseId || 'x-release-id',
-          releaseDecision.releaseId
-        )
+  // Only apply canary logic in production deployments
+  const vercelEnv = (process.env.VERCEL_ENV || '').toLowerCase()
+  const isProdEnv = vercelEnv ? vercelEnv === 'production' : process.env.NODE_ENV === 'production'
+
+  if (isProdEnv) {
+    if (!process.env.EDGE_CONFIG) {
+      // In production without EDGE_CONFIG, proceed without canary
+    } else {
+      try {
+        const rawConfig = await getEdgeConfig(EDGE_CONFIG_KEY)
+        parsedConfig = parseConfig(rawConfig)
+        const enabled = parsedConfig.enabled !== false
+        if (enabled) {
+          releaseDecision = decideRelease(req, parsedConfig)
+          requestHeaders.set(
+            parsedConfig.headers?.release || 'x-release-channel',
+            releaseDecision.variant
+          )
+          requestHeaders.set(
+            parsedConfig.headers?.releaseId || 'x-release-id',
+            releaseDecision.releaseId
+          )
+        }
+      } catch (error) {
+        console.error('Failed to read Edge Config canary settings', error)
       }
-    } catch (error) {
-      console.error('Failed to read Edge Config canary settings', error)
     }
   }
 

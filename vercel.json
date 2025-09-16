@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" != \"canary\" ]; then echo 'Skipping Git auto deployments - controlled by GitHub Actions'; exit 0; fi; exit 1",
+  "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
@@ -17,6 +17,18 @@
     {
       "path": "/api/jobs/expire-pending",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/jobs/remind-approval",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/jobs/cleanup-waitlist",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/jobs/expire-waitlist",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

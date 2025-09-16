@@ -12,16 +12,16 @@ import {
   TeamOutlined,
   ClockCircleOutlined,
   LogoutOutlined,
+  RadarChartOutlined,
 } from '@ant-design/icons'
 import { useSession } from '@/lib/frontend/useSession'
 import { mutateSession } from '@/lib/frontend/session-store'
-import { clearAuthToken } from '@/lib/frontend/auth'
 import { clearAllClientCaches } from '@/lib/frontend/cleanup'
-import { clearStoredTokens } from '@/lib/api/auth'
 import { usePathname } from 'next/navigation'
 import { clearUserCache } from '@/lib/api/user-service'
 const { Sider } = Layout
 import { useRouter } from 'next/navigation'
+import { isFeatureEnabled } from '@/lib/frontend/featureFlags'
 export default function DashboardSideNav({
   collapsed,
   onCollapse,
@@ -80,6 +80,8 @@ export default function DashboardSideNav({
     { key: '/dashboard', icon: <HomeOutlined />, label: <Link href="/dashboard">控制台</Link> },
   ]
 
+  const teacherRadarEnabled = isFeatureEnabled('teacherRadar')
+
   const studentItems: any[] = [
     {
       key: '/dashboard/book-appointment',
@@ -96,6 +98,15 @@ export default function DashboardSideNav({
       icon: <ClockCircleOutlined />,
       label: <Link href="/dashboard/waitlist">候补队列</Link>,
     },
+    ...(teacherRadarEnabled
+      ? [
+          {
+            key: '/dashboard/insights/teacher-radar',
+            icon: <RadarChartOutlined />,
+            label: <Link href="/dashboard/insights/teacher-radar">教师雷达</Link>,
+          },
+        ]
+      : []),
   ]
 
   const teacherItems: any[] = [
