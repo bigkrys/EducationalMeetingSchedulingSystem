@@ -6,6 +6,8 @@ import RouteProgress from '@/components/shared/RouteProgress'
 import SentryInit from '@/components/shared/SentryInit'
 import WebVitalsReporter from '@/components/shared/WebVitalsReporter'
 import AuthProvider from '@/components/shared/AuthProvider'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: '教育会议调度系统',
@@ -23,6 +25,8 @@ export default function RootLayout({
         <StyledComponentsRegistry>
           <SentryInit />
           <WebVitalsReporter />
+          <SpeedInsights />
+          <Analytics />
           <RouteProgress />
           <AuthProvider>
             <AuthListener>{children}</AuthListener>
