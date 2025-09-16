@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "echo 'Skipping Git auto deployments - controlled by GitHub Actions' && exit 0",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" != \"canary\" ]; then echo 'Skipping Git auto deployments - controlled by GitHub Actions'; exit 0; fi; exit 1",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
