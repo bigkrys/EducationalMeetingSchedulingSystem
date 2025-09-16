@@ -208,22 +208,18 @@ function decideRelease(req: NextRequest, config: CanaryEdgeConfig): ReleaseDecis
 export async function middleware(req: NextRequest, _evt?: NextFetchEvent) {
   const isApi = req.nextUrl.pathname.startsWith('/api/')
 
-  // Ensure request-id exists and propagate to downstream
   const reqId = req.headers.get('x-request-id') || crypto.randomUUID()
   const requestHeaders = new Headers(req.headers)
   requestHeaders.set('x-request-id', reqId)
 
-  // Canary decision (defaults to stable when disabled or config missing)
   let releaseDecision: ReleaseDecision | null = null
   let parsedConfig: CanaryEdgeConfig | undefined
 
-  // Only apply canary logic in production deployments
   const vercelEnv = (process.env.VERCEL_ENV || '').toLowerCase()
   const isProdEnv = vercelEnv ? vercelEnv === 'production' : process.env.NODE_ENV === 'production'
 
   if (isProdEnv) {
     if (!process.env.EDGE_CONFIG) {
-      // In production without EDGE_CONFIG, proceed without canary
     } else {
       try {
         const rawConfig = await getEdgeConfig(EDGE_CONFIG_KEY)
