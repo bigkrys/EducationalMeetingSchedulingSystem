@@ -1,15 +1,23 @@
 export type AppEnv = 'development' | 'preview' | 'staging' | 'production'
 export type FeatureName = 'teacherRadar'
 
-function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null
+function getCookieValues(name: string): string[] {
+  if (typeof document === 'undefined') return []
   const prefix = name + '='
   const parts = document.cookie.split(';')
+  const values: string[] = []
   for (const part of parts) {
     const s = part.trim()
-    if (s.startsWith(prefix)) return decodeURIComponent(s.slice(prefix.length))
+    if (s.startsWith(prefix)) {
+      const raw = s.slice(prefix.length)
+      try {
+        values.push(decodeURIComponent(raw))
+      } catch {
+        values.push(raw)
+      }
+    }
   }
-  return null
+  return values
 }
 
 export function getAppEnv(): AppEnv {
@@ -32,12 +40,14 @@ export function getAppEnv(): AppEnv {
 }
 
 export function isCanaryRelease(): boolean {
-  const cookie = getCookie('edu_release')
-  if (!cookie) {
-    return false
+  const values = getCookieValues('edu_release')
+  if (values.length === 0) return false
+  // If multiple cookies exist (different Path), treat as canary if any says canary
+  for (const v of values) {
+    const variant = v.split(':')[0]
+    if (variant === 'canary') return true
   }
-  const variant = cookie.split(':')[0]
-  return variant === 'canary'
+  return false
 }
 
 export function isFeatureEnabled(name: FeatureName): boolean {
