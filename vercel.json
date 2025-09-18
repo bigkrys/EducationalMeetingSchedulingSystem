@@ -12,28 +12,23 @@
   "crons": [
     {
       "path": "/api/jobs/reset-quota",
-      "schedule": "0 0 1 * *",
-      "method": "POST"
+      "schedule": "0 0 1 * *"
     },
     {
       "path": "/api/jobs/expire-pending",
-      "schedule": "0 0 * * *",
-      "method": "POST"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/jobs/remind-approval",
-      "schedule": "0 * * * *",
-      "method": "POST"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/jobs/cleanup-waitlist",
-      "schedule": "0 2 * * *",
-      "method": "POST"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/jobs/expire-waitlist",
-      "schedule": "*/10 * * * *",
-      "method": "POST"
+      "schedule": "*/10 * * * *"
     }
   ]
 }
