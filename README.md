@@ -1,7 +1,5 @@
 # 教育调度系统设计说明
 
-> 注：我之所以选择该项目进行实践，是我本科毕业设计项目做的“选课系统的设计与实践”，两者在设计思想上有可复用的环节，下面先详细说明本系统的功能设计。
-
 # 一、 业务功能说明
 
 > 该系统是给学校使用的平台。学生在平台选择老师和预约该老师的辅导，老师在平台设置自己的可预约时间段并对学生预约进行审批；系统根据不同的“服务级别”自动/人工批准，限制每月次数，并避免冲突。
@@ -61,10 +59,10 @@ graph TD
 - **Scheduler Service**：负责预约逻辑（可用槽位计算、冲突校验、配额追踪、审批工作流）。
 - **Teacher Service**：教师可用性、阻塞时间、审批。
 - **Admin Service**：策略管理、用户管理、审计查询。
-- **Notification Service**：提醒通知、过期通知。
+- **Notification Service**：提醒通知、过期通知（当前直接由 API 调用邮件服务，无独立队列）。
 - **Database**：PostgreSQL，包含认证表、业务表、审计表。
-- **Cache**：Redis，缓存热门槽位和查询结果。
-- **Message Queue**：Kafka/RabbitMQ，处理通知、批量任务。
+- **Cache**：内存缓存为主，支持可选 Redis（配置 `REDIS_URL` 后启用）。
+- **Message Queue**：规划项，当前未落地（后续可对接 Kafka/RabbitMQ）。
 
 # 三、模块设计
 
@@ -161,6 +159,8 @@ AUTH->>DB: 创建 users(role=admin,active)
 AUTH-->>ADM: 设置密码并登录后台
 
 ```
+
+注：上述“引导口令 / 管理员邀请”流程为规划设计，当前未实现；实际管理端接口以现有的 `/api/admin/*` 路由为准。
 
 ### 3.1.4 登录/刷新/登出
 
@@ -541,7 +541,7 @@ LIMIT 5;
 - 帮你把 `vercel.json` 中的 Cron 片段加入仓库（示例，不会包含 secret），或
 - 把 README 中的该段落改为说明你已经在 `vercel.json` 中添加了 Cron（当前已完成）。
 
-````
+
 
 ## 3.13 系统｜提醒通知
 
@@ -566,45 +566,135 @@ A->>E: 批量发送提醒（含取消链接）
 
 ## 3.14 系统｜候补队列
 
-**目标**：热门时段被占时可加入候补，释放时自动顶替。
+**目标**：热门时段被占时可加入候补，释放时自动顶替（并通知相关人）。
 
-**步骤**：
+**数据结构与约束（实际实现）**：
+- 表 `waitlists`（Prisma 模型 `Waitlist`）：`teacherId,date,slot,studentId,status,priority,idempotencyKey,notifiedAt,promotedAt,expiresAt,createdAt,updatedAt`。
+- 复合唯一约束：同一 `teacherId+slot+studentId` 只能排队一次（防重复）。
+- `status`：`active | promoted | cancelled | expired`（当前主要使用 active/expired，promoted 由审计日志体现）。
+- 选取规则：按 `createdAt` 先后（FIFO）。UI 中会显示基于服务级别映射的“展示优先级”，但晋升时不参与排序。
 
-1. 候补表结构：`teacherId,date,slot,studentId,priority,status,createdAt`；
-2. 槽位释放触发器：取消/拒绝/过期事件监听；
-3. 选取规则：按优先级+时间先后；
-4. 创建预约与通知（可设置“保留时长”，逾期自动回收给下一位）。
+**接口与作业（节选）**：
+- 学生加入/移除/查询：
+  - POST `/api/waitlist`（需 body: teacherId, date, slot, studentId, subject）
+  - DELETE `/api/waitlist`（body: id, studentId）
+  - GET `/api/waitlist?studentId=...|teacherId=...`
+  - GET `/api/waitlist/slot?teacherId=...&slot=...&studentId=...`（槽位队列详情 + 我的排位）
+- 晋升：
+  - 系统内部：POST `/api/waitlist/promote`（仅作业鉴权调用），或由取消预约后直接在事务中调用晋升 helper。
+- 定时任务（Vercel Cron）：
+  - `/api/jobs/cleanup-waitlist`（每日清理已被占用槽位上的残留候补）
+  - `/api/jobs/expire-waitlist`（每 10 分钟标记已过期的 active 候补为 expired 并通知）
+
+**工作流说明**：
+- 加入候补：查重 → 写入 waitlists → 写审计（WAITLIST_ADDED）→ 返回当前排位。
+- 槽位释放自动晋升：当预约被取消时触发；在数据库事务中并发安全地选择最早候补并创建/更新预约（若 Premium 或在自动批准额度内可直接批准），删除候补重复项并写审计（WAITLIST_PROMOTED），随后发送通知。
+- 定期清理与过期：已被占用的槽位清理候补残留；slot 已过期的 active 候补标记为 expired 并通知学生（WAITLIST_EXPIRED）。
 
 ```mermaid
 sequenceDiagram
-participant U as Student
-participant W as Web
-participant A as API (Waitlist)
-participant D as DB
-participant E as Email
-U->>W: 在已满槽位点击加入候补
-W->>A: POST /api/waitlist {teacherId,date,slot,studentId}
-A->>D: 写入候补队列 (优先级: Premium > Level1 > Level2)
-Note over A,D: 监听取消/拒绝事件
-A->>D: 当槽位释放→选择候补人选并创建预约(approved/pending)
-A->>E: 通知候补成功/保留时长
+  autonumber
+  actor Student
+  participant UI as Frontend (StudentBookingCalendar)
+  participant API as API Server (Next.js)
+  participant DB as Prisma / DB
+  participant Promo as promoteForSlotTx
+  participant Email as Email Service
+  participant CronCleanup as Cron: cleanup-waitlist
+  participant CronExpire as Cron: expire-waitlist
+
+  rect rgb(245,245,245)
+  note over Student,API: 1) 学生加入候补
+  Student->>UI: 点“加入候补”
+  UI->>API: POST /api/waitlist {teacherId,date,slot,studentId,subject}
+  API->>DB: waitlist.findFirst(查重)
+  alt 已存在
+    API-->>UI: 409 Duplicate
+  else 不存在
+    API->>DB: waitlist.create()
+    API->>DB: auditLog.create(WAITLIST_ADDED)
+    API-->>UI: 201 {id, position}
+  end
+  end
+
+  rect rgb(245,245,245)
+  note over UI,Email: 2) 预约取消 → 自动晋升
+  UI->>API: PATCH /api/appointments/:id {action: cancel}
+  API->>DB: appointment.update(status=cancelled)
+
+  par 直接事务晋升
+    API->>Promo: tx promoteForSlotTx(teacherId, slot, subject)
+    alt 晋升成功
+      Promo->>DB: SELECT ... FOR UPDATE SKIP LOCKED (取最早候选)
+      Promo->>DB: 检查该槽位是否占用(pending/approved)
+      Promo->>DB: 配额/策略校验(ServicePolicy、serviceLevel)
+      Promo->>DB: create/update appointment
+      Promo->>DB: delete waitlist (+ 同学该slot重复项)
+      Promo->>DB: student.monthlyMeetingsUsed += 1
+      Promo->>DB: auditLog.create(WAITLIST_PROMOTED)
+      Promo-->>API: {promoted:1, appointmentId, status}
+      API->>DB: 清理 slots 缓存
+      API->>Email: 发送 pending/approved 对应通知
+    else 无候选
+      Promo-->>API: {promoted:0}
+    end
+  and HTTP 冗余触发
+    API->>API: POST /api/waitlist/promote (job-auth)
+  end
+  end
+
+  rect rgb(245,245,245)
+  note over CronCleanup,API: 3) 定时清理占用槽位的候补
+  CronCleanup->>API: POST /api/jobs/cleanup-waitlist
+  API->>DB: 列出若干(teacherId,slot)对
+  loop each pair
+    API->>DB: 统计该slot的预约(pending/approved)
+    alt 已占用
+      API->>DB: waitlist.deleteMany(该slot)
+    end
+  end
+  API-->>CronCleanup: {checked, removed}
+  end
+
+  rect rgb(245,245,245)
+  note over CronExpire,Email: 4) 定时过期候补并通知
+  CronExpire->>API: POST /api/jobs/expire-waitlist
+  API->>DB: waitlist.findMany(status='active', slot<now)
+  loop each item
+    API->>DB: waitlist.update(status='expired', expiresAt=now)
+    API->>DB: auditLog.create(WAITLIST_EXPIRED)
+    API->>Email: 发送过期通知
+  end
+  API-->>CronExpire: {updated, results}
+  end
+
+  rect rgb(245,245,245)
+  note over UI,API: 5) 前端查看槽位与候补详情
+  UI->>API: GET /api/slots?teacherId&date
+  API->>DB: 查预约 + 候补计数
+  API-->>UI: {slots, bookedSlots, waitlistCount}
+
+  UI->>API: GET /api/waitlist/slot?teacherId&slot&studentId
+  API->>DB: 按createdAt升序取队列
+  API-->>UI: {total, waitlist, myPosition}
+  end
 ```
 
 # 四、数据库设计
 
 ## 4.1 users（统一身份表）
 
-| 字段名        | 类型                              | 约束                       | 说明                             |
-| ------------- | --------------------------------- | -------------------------- | -------------------------------- |
-| id            | UUID                              | PK                         | 统一用户 ID                      |
-| email         | VARCHAR(255)                      | UNIQUE, NOT NULL           | 登录邮箱                         |
-| password_hash | VARCHAR(255)                      | NOT NULL                   | 密码哈希（Argon2id / bcrypt≥10） |
-| role          | ENUM('student','teacher','admin') | NOT NULL                   | 默认角色（登录后授权用）         |
-| status        | ENUM('pending','active','frozen') | NOT NULL DEFAULT 'pending' | 账户状态                         |
-| last_login_at | TIMESTAMPTZ                       |                            | 最近登录时间                     |
-| created_at    | TIMESTAMPTZ                       | DEFAULT NOW()              |                                  |
-| updated_at    | TIMESTAMPTZ                       | DEFAULT NOW()              |                                  |
-|               |                                   |                            |                                  |
+| 字段名        | 类型            | 约束                     | 说明                               |
+| ------------- | --------------- | ------------------------ | ---------------------------------- |
+| id            | UUID            | PK                       | 统一用户 ID                        |
+| email         | VARCHAR(255)    | UNIQUE, NOT NULL         | 登录邮箱                           |
+| password_hash | VARCHAR(255)    | NOT NULL                 | 密码哈希（Argon2id / bcrypt≥10）   |
+| role          | String          | NOT NULL                 | 角色：student/teacher/admin        |
+| status        | String          | NOT NULL DEFAULT 'pending' | 账户状态（pending/active/...）   |
+| name          | String          | NOT NULL                 | 显示名称                           |
+| is_active     | Boolean         | DEFAULT true             | 是否启用                           |
+| created_at    | TIMESTAMPTZ     | DEFAULT NOW()            |                                    |
+| updated_at    | TIMESTAMPTZ     | DEFAULT NOW()            |                                    |
 
 ## 4.2 students（学生扩展表）
 
@@ -614,10 +704,12 @@ A->>E: 通知候补成功/保留时长
 | user_id               | UUID                              | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定 |
 | service_level         | ENUM('level1','level2','premium') | NOT NULL                         | 服务级别          |
 | monthly_meetings_used | INT                               | DEFAULT 0                        | 当月已用配额      |
-| last_quota_reset      | DATE                              | DEFAULT CURRENT_DATE             | 上次配额重置日期  |
-| enrolled_subjects     | TEXT[]                            |                                  | 已选科目          |
+| last_quota_reset      | TIMESTAMPTZ                       | DEFAULT NOW()                    | 上次配额重置时间  |
 | grade_level           | INT                               |                                  | 年级              |
 | created_at            | TIMESTAMPTZ                       | DEFAULT NOW()                    |                   |
+| updated_at            | TIMESTAMPTZ                       | DEFAULT NOW()                    |                   |
+
+说明：学生所修科目通过关联表 `student_subjects` 维护（见 4.5）。
 
 ## 4.3 teachers（教师表）
 
@@ -625,19 +717,43 @@ A->>E: 通知候补成功/保留时长
 | ------------------ | ----------- | -------------------------------- | ----------------------------------- |
 | id                 | UUID        | PK                               |                                     |
 | user_id            | UUID        | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定                   |
-| subjects           | TEXT[]      |                                  | 授课科目（未来可拆为字典表+关联表） |
-| max_daily_meetings | INT         | DEFAULT 6                        | 每日上限                            |
+| max_daily_meetings | INT         | DEFAULT 8                        | 每日上限                            |
 | buffer_minutes     | INT         | DEFAULT 15                       | 会议缓冲分钟                        |
 | timezone           | VARCHAR(64) | NOT NULL DEFAULT 'Asia/Shanghai' | 教师所在时区                        |
 | created_at         | TIMESTAMPTZ | DEFAULT NOW()                    |                                     |
+| updated_at         | TIMESTAMPTZ | DEFAULT NOW()                    |                                     |
 
-## 4.4 admins（管理员表）
+说明：教师可授科目通过关联表 `teacher_subjects` 维护（见 4.6）。
 
-| 字段名     | 类型        | 约束                             | 说明                       |
-| ---------- | ----------- | -------------------------------- | -------------------------- |
-| id         | UUID        | PK                               |                            |
-| user_id    | UUID        | FK → users(id), UNIQUE, NOT NULL | 与 users 1:1 绑定          |
-| scope      | JSONB       |                                  | 管理范围（学院/院系/年级） |
+## 4.4 subjects（科目表）
+
+| 字段名     | 类型          | 约束               | 说明         |
+| ---------- | ------------- | ------------------ | ------------ |
+| id         | UUID          | PK                 |              |
+| name       | VARCHAR(100)  | UNIQUE, NOT NULL   | 科目名称     |
+| code       | VARCHAR(100)  | UNIQUE, NOT NULL   | 唯一编码     |
+| description| TEXT          |                    | 描述         |
+| is_active  | BOOLEAN       | DEFAULT true       | 启用状态     |
+| created_at | TIMESTAMPTZ   | DEFAULT NOW()      |              |
+| updated_at | TIMESTAMPTZ   | DEFAULT NOW()      |              |
+
+## 4.5 student_subjects（学生-科目 关联表）
+
+| 字段名     | 类型 | 约束                                   | 说明         |
+| ---------- | ---- | -------------------------------------- | ------------ |
+| id         | UUID | PK                                     |              |
+| student_id | UUID | FK → students(id)                      | 学生         |
+| subject_id | UUID | FK → subjects(id)                      | 科目         |
+| UNIQUE     |      | (student_id, subject_id)               | 防重复       |
+
+## 4.6 teacher_subjects（教师-科目 关联表）
+
+| 字段名     | 类型 | 约束                                   | 说明         |
+| ---------- | ---- | -------------------------------------- | ------------ |
+| id         | UUID | PK                                     |              |
+| teacher_id | UUID | FK → teachers(id)                      | 教师         |
+| subject_id | UUID | FK → subjects(id)                      | 科目         |
+| UNIQUE     |      | (teacher_id, subject_id)               | 防重复       |
 | created_at | TIMESTAMPTZ | DEFAULT NOW()                    |                            |
 
 ## 4.5 teacher_availability（教师可用性）
@@ -650,6 +766,7 @@ A->>E: 通知候补成功/保留时长
 | start_time   | TIME    | NOT NULL                    |              |
 | end_time     | TIME    | NOT NULL                    |              |
 | is_recurring | BOOLEAN | DEFAULT true                | 是否每周重复 |
+| is_active    | BOOLEAN | DEFAULT true                | 是否启用     |
 
 ## 4.6 blocked_times（阻塞时段）
 
@@ -664,40 +781,48 @@ A->>E: 通知候补成功/保留时长
 
 ## 4.7 appointments（预约表）
 
-| 字段名            | 类型                                                                   | 约束                                                                                         | 说明            |
-| ----------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------- |
-| id                | UUID                                                                   | PK                                                                                           |                 |
-| student_id        | UUID                                                                   | FK → students(id)                                                                            | 学生            |
-| teacher_id        | UUID                                                                   | FK → teachers(id)                                                                            | 教师            |
-| subject           | VARCHAR(100)                                                           | NOT NULL                                                                                     | 科目            |
-| scheduled_time    | TIMESTAMPTZ                                                            | NOT NULL                                                                                     | 开始时间（UTC） |
-| duration_minutes  | INT                                                                    | DEFAULT 30                                                                                   | 时长（分钟）    |
-| status            | ENUM('pending','approved','completed','cancelled','no_show','expired') | NOT NULL                                                                                     | 统一状态枚举    |
-| approval_required | BOOLEAN                                                                | NOT NULL                                                                                     | 是否需审批      |
-| approved_at       | TIMESTAMPTZ                                                            |                                                                                              | 审批时间        |
-| idempotency_key   | VARCHAR(128)                                                           | UNIQUE                                                                                       | 幂等键          |
-| created_at        | TIMESTAMPTZ                                                            | DEFAULT NOW()                                                                                |                 |
-| time_range        | TSTZRANGE                                                              | 生成列：`tstzrange(scheduled_time, scheduled_time + duration_minutes * interval '1 minute')` |                 |
-| 约束              | EXCLUDE USING GIST (teacher_id WITH =, time_range WITH &&)             | 防止时间重叠                                                                                 |                 |
+| 字段名            | 类型                                                                   | 约束                                     | 说明            |
+| ----------------- | ---------------------------------------------------------------------- | ---------------------------------------- | --------------- |
+| id                | UUID                                                                   | PK                                       |                 |
+| student_id        | UUID                                                                   | FK → students(id)                        | 学生            |
+| teacher_id        | UUID                                                                   | FK → teachers(id)                        | 教师            |
+| subject_id        | UUID                                                                   | FK → subjects(id)                        | 科目            |
+| scheduled_time    | TIMESTAMPTZ                                                            | NOT NULL                                 | 开始时间（UTC） |
+| duration_minutes  | INT                                                                    | DEFAULT 30                               | 时长（分钟）    |
+| status            | ENUM('pending','approved','completed','cancelled','no_show','expired') | NOT NULL                                 | 统一状态枚举    |
+| approval_required | BOOLEAN                                                                | NOT NULL                                 | 是否需审批      |
+| approved_at       | TIMESTAMPTZ                                                            |                                          | 审批时间        |
+| idempotency_key   | VARCHAR(128)                                                           | UNIQUE                                   | 幂等键          |
+| created_at        | TIMESTAMPTZ                                                            | DEFAULT NOW()                            |                 |
+| updated_at        | TIMESTAMPTZ                                                            | DEFAULT NOW()                            |                 |
+| 唯一索引          |                                                                        | (teacher_id, scheduled_time)             | 防止重叠创建    |
+
+备注：实际实现采用普通唯一索引 `(teacher_id, scheduled_time)`，未启用 `TSTZRANGE + GIST` 排他约束。
 
 ## 4.8 服务级别策略表（service_policies）
 
-| 字段名       | 类型    | 描述                                                                 |
-| ------------ | ------- | -------------------------------------------------------------------- |
-| policy_id    | UUID    | 策略 ID                                                              |
-| level        | Enum    | 服务级别                                                             |
-| max_daily    | Int     | 每日最大预约数（当 `teacher.max_daily_meetings` 存在时**优先生效**） |
-| expire_hours | Int     | 待审批过期时长（小时）                                               |
-| reminder     | Boolean | 是否开启提醒                                                         |
+| 字段名            | 类型   | 约束/默认         | 说明                                   |
+| ----------------- | ------ | ---------------- | -------------------------------------- |
+| id                | UUID   | PK               |                                         |
+| level             | String | UNIQUE           | 服务级别（level1/level2/premium）      |
+| monthlyAutoApprove| Int    | DEFAULT 0        | 当月自动批准配额（校验与路由使用）     |
+| priority          | Bool   | DEFAULT false    | 是否优先（展示用）                     |
+| expireHours       | Int    | DEFAULT 48       | 待审批过期时长（小时）                 |
+| reminderOffsets   | String | DEFAULT '24,1'   | 提醒偏移（逗号分隔，例如 24,1 小时）   |
+| created_at        | TIMESTAMPTZ | DEFAULT NOW() |                                         |
+| updated_at        | TIMESTAMPTZ | DEFAULT NOW() |                                         |
 
 ## 4.9 审计日志表（audit_logs）
 
 | 字段名     | 类型     | 描述        |
 | ---------- | -------- | ----------- |
-| log_id     | UUID     | 日志 ID     |
+| id         | UUID     | 日志 ID     |
 | actor_id   | UUID     | 操作者 ID   |
 | action     | String   | 动作名称    |
 | target_id  | UUID     | 目标对象 ID |
+| details    | TEXT     | 详情 JSON   |
+| ip_address | TEXT     | 来源 IP     |
+| user_agent | TEXT     | UA          |
 | created_at | DateTime | 操作时间    |
 
 # 五、接口设计
@@ -708,24 +833,29 @@ A->>E: 通知候补成功/保留时长
 
 ### 5.1.1 查询教师可用槽位
 
-- **GET** `/api/slots?teacherId={id}&date=YYYY-MM-DD&duration=30`
-- **说明**：`date` 参数**按教师时区**解释，后端换算为 UTC 存储与计算。
-- **请求参数**：
+- GET `/api/slots?teacherId={id}&date=YYYY-MM-DD&duration=30&excludeUserId={userId}`
+- 说明：`date` 参数按教师时区解释，后端换算为 UTC；`excludeUserId` 可选，用于从“已预约统计”中排除当前用户（避免误判可用性）。
+- 请求参数：
   - `teacherId` _(required)_：教师 ID
-  - `date` _(required)_：日期
+  - `date` _(required)_：日期（YYYY-MM-DD）
   - `duration` _(optional, default=30)_：会议时长（分钟）
-- **响应 200**：
+  - `excludeUserId` _(optional)_：排除该用户的预约（通过学生 userId）
+- 响应 200：
 
 ```json
 {
   "teacherId": "t_123",
   "date": "2025-08-22",
   "duration": 30,
-  "slots": ["2025-08-22T01:00:00Z", "2025-08-22T01:30:00Z"]
+  "slots": ["2025-08-22T01:00:00Z", "2025-08-22T01:30:00Z"],
+  "bookedSlots": ["2025-08-22T02:00:00Z"],
+  "waitlistCount": [
+    { "slot": "2025-08-22T01:00:00Z", "count": 2 }
+  ]
 }
 ```
 
-- **错误**：`BAD_REQUEST`、`TEACHER_NOT_FOUND`。
+- 错误：`BAD_REQUEST`、`TEACHER_NOT_FOUND`。
 
 ### 5.1.2 创建预约
 
@@ -842,28 +972,22 @@ A->>E: 通知候补成功/保留时长
 
 > 鉴权：Bearer JWT（role=admin 或后台任务令牌）。
 
-### 5.3.1 服务级别策略（可选）
+### 5.3.1 服务级别策略
 
-- **PUT** `/api/policies`
-- **请求体**：
+- PUT `/api/policies`
+- 请求体（批量 upsert）：
 
 ```json
 {
-  "level1": {
-    "monthlyAutoApprove": 2
-  },
-  "level2": {
-    "monthlyAutoApprove": 0
-  },
-  "premium": {
-    "priority": true
-  },
-  "expireHours": 48,
-  "remindOffsets": [24, 1]
+  "policies": [
+    { "level": "level1", "monthlyAutoApprove": 2, "priority": false, "expireHours": 48, "reminderOffsets": "24,1" },
+    { "level": "level2", "monthlyAutoApprove": 0, "priority": false, "expireHours": 48, "reminderOffsets": "24,1" },
+    { "level": "premium", "monthlyAutoApprove": 10000, "priority": true, "expireHours": 48, "reminderOffsets": "24,1" }
+  ]
 }
 ```
 
-- **响应 200**：`{ "ok": true }`
+- 响应 200：`{ "updated": 3, "policies": [...] }`
 
 ### 5.3.2 48 小时待审批过期 Job
 
@@ -888,17 +1012,34 @@ A->>E: 通知候补成功/保留时长
 
 ### 5.3.5 候补队列
 
-- **POST** `/api/waitlist`
-  请求体：
+- 学生加入候补：
+  - POST `/api/waitlist`
+  - 请求体：
   ```json
   {
     "teacherId": "t_1",
     "date": "2025-08-22",
     "slot": "2025-08-22T01:00:00Z",
-    "studentId": "s_1"
+    "studentId": "s_1",
+    "subject": "math"
   }
   ```
-- **POST** `/api/waitlist/promote` （系统内部，当槽位释放时触发）
+  - 响应（201）：`{ "id": "...", "position": 3 }`
+
+- 学生移除候补：
+  - DELETE `/api/waitlist`
+  - 请求体：`{ "id": "waitlist_id", "studentId": "s_1" }`
+
+- 查询候补：
+  - GET `/api/waitlist?studentId=...` 或 `?teacherId=...`
+  - GET `/api/waitlist/slot?teacherId=...&slot=...&studentId=...`（槽位详情 + 我的排位）
+
+- 系统晋升（内部调用）：
+  - POST `/api/waitlist/promote`（由预约取消或定时任务触发，需作业鉴权）
+
+- 系统作业：
+  - POST `/api/jobs/cleanup-waitlist`（清理已占用槽位的残留候补）
+  - POST `/api/jobs/expire-waitlist`（标记过期候补并通知学生）
 
 # 六、系统安全
 
@@ -908,7 +1049,7 @@ A->>E: 通知候补成功/保留时长
 - **密码策略**
   - 最少 8 位，含字母与数字。
 - **防暴力与限流**
-  - 登录与重置接口：Redis 滑动窗口限速，失败 N 次锁定账户。
+  - 生产环境采用进程内轻量限流中间件（可按需切换为 Redis 实现），防止明显滥用。
 - **邮件安全**
   - 所有邮件 Token 仅保存哈希，单次使用，短期有效。
 - **审计与RBAC**
@@ -946,7 +1087,7 @@ pnpm dev
 
 - **Node.js**: 18.x+
 - **pnpm**: 8.x+
-- **数据库**: SQLite (开发) 或 PostgreSQL (生产)
+- **数据库**: PostgreSQL（开发/生产一致，推荐 Neon 或本地 Docker）
 
 ### 详细文档
 
@@ -981,8 +1122,8 @@ NEXT_PUBLIC_APP_URL="https://your-project.vercel.app"
 
 ### 数据库推荐
 
-- **开发**: SQLite (本地文件)
-- **生产**: Supabase 或 Neon (PostgreSQL)
+- **开发**: PostgreSQL（Neon 分支/本地 Docker）
+- **生产**: Neon / Supabase (PostgreSQL)
 
 ## 7.3 项目结构
 
