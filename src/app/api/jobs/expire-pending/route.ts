@@ -167,3 +167,4 @@ async function postHandler(request: NextRequest) {
 }
 
 export const POST = withSentryRoute(postHandler as any, 'api POST /api/jobs/expire-pending')
+export const GET = withSentryRoute(postHandler as any, 'api GET /api/jobs/expire-pending')
